@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main, agent/prepare-public-release]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Run project checks
+        run: npm run check
+
+      - name: Smoke-test server and public endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HOST=127.0.0.1
+          export PORT=3999
+          export PUBLIC_BASE_URL=http://127.0.0.1:3999
+          export NOEMA_TIMEZONE=UTC
+          export ENCRYPTION_KEY=ci-only-encryption-key
+          node src/index.js > /tmp/noema-ci.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; rm -rf data' EXIT
+
+          for attempt in {1..40}; do
+            if node -e "const r=await fetch('http://127.0.0.1:3999/healthz'); if(!r.ok) process.exit(1)" 2>/dev/null; then
+              break
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              cat /tmp/noema-ci.log
+              exit 1
+            fi
+            sleep 0.25
+          done
+
+          node -e "const r=await fetch('http://127.0.0.1:3999/healthz');const j=await r.json();if(!r.ok||!j.ok)process.exit(1)"
+          node -e "const r=await fetch('http://127.0.0.1:3999/openapi.json');const j=await r.json();if(j.openapi!=='3.1.0')process.exit(1)"
+          node -e "const r=await fetch('http://127.0.0.1:3999/api/calendar?day=banana');if(r.status!==400)process.exit(1)"
+          node -e "const r=await fetch('http://127.0.0.1:3999/');if(!r.ok||!(await r.text()).includes('Noema'))process.exit(1)"

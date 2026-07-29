@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Noema — Help</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="description" content="Noema help — how the three-day board works, how tasks roll over and archive, and how to use the MCP / OpenAPI gateway with Claude, ChatGPT and Siri.">
+
+  <!-- Theme before paint (same logic as the rest of the app). -->
+  <script>
+    (function () {
+      try {
+        var manual = localStorage.getItem("noema-theme-manual");
+        var hour = new Date().getHours();
+        var autoTheme = (hour >= 19 || hour < 7) ? "dark" : "light";
+        var t = (manual === "dark" || manual === "light") ? manual : autoTheme;
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,300&family=JetBrains+Mono:wght@400;500;600&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --paper: #f7f3ec; --paper-2: #fbf8f2; --paper-3: #ffffff;
+      --ink-line: rgba(26,26,31,0.10); --ink-line-2: rgba(26,26,31,0.18);
+      --ink: #1a1a1f; --ink-2: #3d3d44; --ink-3: #6b6b73; --ink-4: #9b958a;
+      --beacon: #b87333; --beacon-2: #9c6029; --beacon-glow: rgba(184,115,51,0.16); --beacon-soft: rgba(184,115,51,0.08);
+      --signal: #4a7a5e; --ember: #c0563b; --azure: #3a6ea5;
+      --yesterday: #8a7a6b; --today: var(--beacon); --tomorrow: #5a7a8a;
+      --font-display: 'Fraunces', Georgia, serif;
+      --font-sans: 'Geist', -apple-system, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      --ocm-ease: cubic-bezier(.15, .2, .1, 1);
+      --maxw: 1100px;
+    }
+    html[data-theme="dark"] {
+      --paper: #0a0a0c; --paper-2: #0f0f12; --paper-3: #16161b;
+      --ink-line: rgba(244,239,230,0.08); --ink-line-2: rgba(244,239,230,0.14);
+      --ink: #f4efe6; --ink-2: #d8d2c4; --ink-3: #9b958a; --ink-4: #5c574f;
+      --beacon: #e8b07d; --beacon-2: #d4a574; --beacon-glow: rgba(232,176,125,0.22); --beacon-soft: rgba(232,176,125,0.10);
+      --signal: #8ab4a1; --ember: #d97757; --azure: #7fa7d9;
+      --yesterday: #b0a392; --tomorrow: var(--azure);
+    }
+    :root { color-scheme: light; }
+    html[data-theme="dark"] { color-scheme: dark; }
+    html { background: var(--paper); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--font-sans); font-size: 16px; line-height: 1.65;
+      color: var(--ink-2); background: var(--paper); min-height: 100vh;
+      transition: background 0.3s var(--ease), color 0.3s var(--ease);
+      opacity: 0;
+      animation: pageFadeIn 0.6s var(--ocm-ease) forwards;
+    }
+    @keyframes pageFadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    ::selection { background: var(--beacon); color: var(--paper); }
+
+    .wrap { max-width: var(--maxw); margin: 0 auto; padding: clamp(1.25rem,4vw,2.5rem); }
+
+    /* Top bar */
+    .top {
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      margin-bottom: clamp(1.4rem,4vw,2.2rem);
+    }
+    .back {
+      display: inline-flex; align-items: center; gap: 0.5em; text-decoration: none;
+      color: var(--ink-3); font-family: var(--font-mono); font-size: 0.78rem;
+      letter-spacing: 0.04em; padding: 0.4rem 0.7rem 0.4rem 0.5rem; border-radius: 8px;
+      border: 1px solid var(--ink-line); transition: color 0.2s, border-color 0.2s;
+    }
+    .back:hover { color: var(--beacon-2); border-color: var(--ink-line-2); }
+    .back svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+    .top-title { font-family: var(--font-display); font-weight: 300; font-size: clamp(1.4rem,4vw,2rem); color: var(--ink); }
+    /* burger-clearance: reserve room for the fixed burger so the title never sits under it. */
+    @media (max-width: 1160px) { .top { padding-right: 3.5rem; } }
+
+    /* Reading layout: sticky TOC | article */
+    .layout { display: grid; grid-template-columns: 230px 1fr; gap: clamp(1.5rem,4vw,3rem); align-items: start; }
+    @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } .toc { position: static !important; display: none; } }
+
+    /* Table of contents */
+    .toc {
+      position: sticky; top: 2rem; align-self: start;
+      font-family: var(--font-mono); font-size: 0.72rem; line-height: 1.5;
+    }
+    .toc-label {
+      font-size: 0.6rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--ink-4); margin-bottom: 0.9rem;
+    }
+    .toc a {
+      display: block; padding: 0.32rem 0 0.32rem 0.7rem; text-decoration: none;
+      color: var(--ink-3); border-left: 2px solid var(--ink-line);
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .toc a:hover { color: var(--beacon-2); border-color: var(--beacon); }
+
+    /* Article */
+    .doc { max-width: 720px; min-width: 0; }
+    .doc .lede {
+      font-family: var(--font-display); font-weight: 300; font-style: italic;
+      font-size: clamp(1.1rem, 3vw, 1.4rem); line-height: 1.5; color: var(--ink-2);
+      margin-bottom: 2.4rem; padding-bottom: 1.6rem; border-bottom: 1px solid var(--ink-line);
+    }
+    .doc section { scroll-margin-top: 1.5rem; margin-bottom: 2.8rem; }
+    .doc h2 {
+      font-family: var(--font-display); font-weight: 400; color: var(--ink);
+      font-size: clamp(1.3rem, 3.5vw, 1.7rem); line-height: 1.2; margin-bottom: 0.4rem;
+      display: flex; align-items: baseline; gap: 0.6rem;
+    }
+    .doc h2 .num {
+      font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600; color: var(--beacon-2);
+      letter-spacing: 0.05em; transform: translateY(-0.2em);
+    }
+    .doc h3 {
+      font-family: var(--font-sans); font-weight: 600; color: var(--ink);
+      font-size: 1.02rem; margin: 1.6rem 0 0.5rem;
+    }
+    .doc p { margin: 0.7rem 0; }
+    .doc ul, .doc ol { margin: 0.7rem 0 0.7rem 1.2rem; }
+    .doc li { margin: 0.4rem 0; }
+    .doc strong { color: var(--ink); font-weight: 600; }
+    .doc a.inline { color: var(--beacon-2); text-decoration: underline; text-decoration-color: var(--ink-line-2); text-underline-offset: 2px; }
+    .doc a.inline:hover { text-decoration-color: var(--beacon); }
+
+    /* Inline + block code */
+    code {
+      font-family: var(--font-mono); font-size: 0.86em;
+      color: var(--beacon-2); background: var(--beacon-soft);
+      padding: 0.1rem 0.38rem; border-radius: 5px;
+    }
+    pre {
+      margin: 1rem 0; padding: 1rem 1.1rem; overflow-x: auto;
+      background: var(--paper-3); border: 1px solid var(--ink-line); border-radius: 12px;
+    }
+    pre code { color: var(--ink-2); background: none; padding: 0; font-size: 0.8rem; line-height: 1.6; }
+
+    /* Callout */
+    .callout {
+      margin: 1.1rem 0; padding: 0.9rem 1.1rem;
+      background: var(--beacon-soft); border: 1px solid var(--ink-line);
+      border-left: 3px solid var(--beacon); border-radius: 10px;
+      font-size: 0.92rem;
+    }
+    .callout.note { border-left-color: var(--azure); }
+    .callout.warn { border-left-color: var(--ember); }
+    .callout-label {
+      font-family: var(--font-mono); font-size: 0.6rem; font-weight: 600;
+      letter-spacing: 0.12em; text-transform: uppercase; color: var(--beacon-2);
+      display: block; margin-bottom: 0.3rem;
+    }
+    .callout.note .callout-label { color: var(--azure); }
+    .callout.warn .callout-label { color: var(--ember); }
+
+    /* Day-flow diagram */
+    .flow { display: flex; align-items: stretch; gap: 0.6rem; margin: 1.2rem 0; flex-wrap: wrap; }
+    .flow-col {
+      flex: 1; min-width: 140px; padding: 0.9rem 1rem; border-radius: 12px;
+      background: var(--paper-3); border: 1px solid var(--ink-line);
+    }
+    .flow-col .fc-day {
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.4rem;
+    }
+    .flow-col.y { border-top: 2px solid var(--yesterday); } .flow-col.y .fc-day { color: var(--yesterday); }
+    .flow-col.t { border-top: 2px solid var(--today); } .flow-col.t .fc-day { color: var(--today); }
+    .flow-col.m { border-top: 2px solid var(--tomorrow); } .flow-col.m .fc-day { color: var(--tomorrow); }
+    .flow-col p { margin: 0; font-size: 0.84rem; color: var(--ink-3); }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+    thead th {
+      text-align: left; font-family: var(--font-mono); font-size: 0.62rem; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-4);
+      padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--ink-line-2);
+    }
+    tbody td { padding: 0.6rem; border-bottom: 1px solid var(--ink-line); vertical-align: top; }
+    tbody tr:hover td { background: var(--paper-2); }
+    td code { white-space: nowrap; }
+
+    /* Method pill for endpoint table */
+    .m { font-family: var(--font-mono); font-size: 0.6rem; font-weight: 600; padding: 0.1rem 0.4rem; border-radius: 4px; }
+    .m.get { color: var(--signal); background: rgba(74,122,94,0.10); }
+    .m.post { color: var(--beacon-2); background: var(--beacon-soft); }
+    .m.patch { color: var(--azure); background: rgba(58,110,165,0.10); }
+    .m.del { color: var(--ember); background: rgba(192,86,59,0.10); }
+
+    /* FOOTER (slim) — identical to the rest of the app */
+    .footer {
+      max-width: var(--maxw); margin: 0 auto; padding: 1.75rem clamp(1.25rem, 4vw, 2.5rem) 3rem;
+      border-top: 1px solid var(--ink-line);
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 1rem;
+      font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-4);
+    }
+    .footer em { font-family: var(--font-display); font-style: italic; color: var(--beacon); }
+    .footer-left { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .footer .sys-sep { color: var(--ink-line-2); }
+    .footer .sys-stats { color: var(--ink-4); letter-spacing: 0.01em; }
+    .footer .sys-stats b { color: var(--beacon-2); font-weight: 600; }
+    .footer .sys-stats:hover { color: var(--beacon-2); }
+    .footer-theme {
+      background: none; border: 1px solid var(--ink-line); cursor: pointer; color: var(--ink-4);
+      font-family: var(--font-mono); font-size: 1rem; line-height: 1;
+      display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 8px;
+      transition: color 0.2s var(--ease), border-color 0.2s var(--ease), background 0.2s var(--ease);
+    }
+    .footer-theme:hover { color: var(--beacon); border-color: var(--beacon); background: var(--beacon-soft); }
+
+    /* HAMBURGER + push menu (port "Salient reveal") */
+    .burger {
+      position: fixed; top: 1rem; right: 1rem; z-index: 1001;
+      display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 6px;
+      width: 46px; height: 46px; padding: 11px 9px;
+      background: var(--paper-3); border: 1px solid var(--ink-line-2); border-radius: 12px;
+      cursor: pointer; box-shadow: 0 4px 18px -8px rgba(0,0,0,0.30);
+      transition: border-color 0.2s var(--ease), background 0.3s var(--ease);
+    }
+    .burger:hover { border-color: var(--beacon); }
+    .burger span { display: block; width: 24px; height: 2px; background: var(--ink); border-radius: 2px; transition: all 0.3s var(--ocm-ease); }
+    .burger span:last-child { width: 16px; }
+    #shell {
+      position: relative; z-index: 2; min-height: 100vh; background: var(--paper);
+      transform-origin: center center;
+      transition: transform .8s var(--ocm-ease), border-radius .8s var(--ocm-ease), box-shadow .8s var(--ocm-ease);
+    }
+    body.menu-fixed { overflow: hidden; }
+    body.menu-fixed #shell {
+      position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100dvh;
+      overflow: hidden; border-radius: 18px;
+    }
+    body.menu-pushed #shell {
+      transform: perspective(1400px) translateX(-50vw) rotateY(11deg) scale(.84);
+      box-shadow: 0 0 90px rgba(0,0,0,.55), 0 30px 60px rgba(0,0,0,.4);
+      will-change: transform;
+    }
+    .shell-scrim {
+      position: absolute; inset: 0; background: rgba(14,14,16,.30);
+      opacity: 0; visibility: hidden;
+      transition: opacity .8s var(--ocm-ease), visibility .8s var(--ocm-ease);
+      z-index: 50000; cursor: pointer;
+    }
+    body.menu-pushed .shell-scrim { opacity: 1; visibility: visible; }
+    .menu-overlay {
+      box-sizing: border-box; position: fixed; inset: 0; z-index: 1;
+      background: #0e0e10; color: #f5f1ea;
+      display: flex; flex-direction: column; justify-content: center; align-items: flex-end;
+      text-align: right; padding: clamp(70px,11vh,110px) clamp(24px,7vw,48px);
+    }
+    .menu-close {
+      position: absolute; top: 30px; right: 26px; background: none; border: none;
+      color: #f5f1ea; cursor: pointer; padding: 10px; opacity: 0;
+      transform: translateX(20px) rotate(-90deg);
+      transition: opacity .8s var(--ocm-ease) .15s, transform .8s var(--ocm-ease) .15s;
+    }
+    .menu-overlay.is-open .menu-close { opacity: .6; transform: translateX(0) rotate(0); }
+    .menu-close:hover { opacity: 1 !important; transform: rotate(90deg); }
+    .menu-close svg { width: 28px; height: 28px; stroke-width: 1.5; }
+    .menu-eyebrow {
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: .38em; text-transform: uppercase;
+      color: #d7b584; margin-bottom: clamp(16px,3.5vh,26px);
+      opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease), transform .8s var(--ocm-ease);
+    }
+    .menu-overlay.is-open .menu-eyebrow { opacity: 1; transform: translateX(0); }
+    .menu-nav { display: flex; flex-direction: column; align-items: flex-end; gap: clamp(3px,1.1vh,10px); }
+    .menu-link {
+      font-family: var(--font-display); font-size: clamp(16px,3vw,20px); font-weight: 300; line-height: 1.1;
+      color: #f5f1ea; text-decoration: none; opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease), transform .8s var(--ocm-ease), color .25s;
+    }
+    .menu-link .ml-tag { color: #6f6a62; font-family: var(--font-mono); font-size: 0.42em; letter-spacing: 0.1em; text-transform: uppercase; margin-left: 0.7em; }
+    .menu-link:hover { color: #d7b584; }
+    .menu-overlay.is-open .menu-link { opacity: 1; transform: translateX(0); }
+    .menu-link:nth-child(1){transition-delay:.10s} .menu-link:nth-child(2){transition-delay:.14s}
+    .menu-link:nth-child(3){transition-delay:.18s} .menu-link:nth-child(4){transition-delay:.22s}
+    .menu-link:nth-child(5){transition-delay:.26s} .menu-link:nth-child(6){transition-delay:.30s}
+    .menu-link:nth-child(7){transition-delay:.34s} .menu-link:nth-child(8){transition-delay:.38s}
+    .menu-link:nth-child(9){transition-delay:.42s}
+    .menu-archive {
+      margin-top: clamp(14px,3.5vh,26px); display: inline-flex; align-items: center; gap: 0.55em;
+      align-self: flex-end; font-family: var(--font-display); font-size: clamp(15px,2.5vw,17px);
+      font-weight: 300; color: #d7b584; text-decoration: none; padding-bottom: 4px;
+      border-bottom: 1px solid rgba(215,181,132,.3);
+      opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease) .46s, transform .8s var(--ocm-ease) .46s, color .25s;
+    }
+    .menu-archive svg { width: 0.85em; height: 0.85em; stroke: currentColor; fill: none; stroke-width: 1.6; }
+    .menu-archive:hover { color: #ecc998; }
+    .menu-overlay.is-open .menu-archive { opacity: 1; transform: translateX(0); }
+    .menu-notes { margin-top: clamp(8px,1.6vh,12px); transition: opacity .8s var(--ocm-ease) .5s, transform .8s var(--ocm-ease) .5s, color .25s; }
+    .menu-documents { margin-top: clamp(8px,1.6vh,12px); transition: opacity .8s var(--ocm-ease) .54s, transform .8s var(--ocm-ease) .54s, color .25s; }
+    .menu-links-item { margin-top: clamp(8px,1.6vh,12px);
+      transition: opacity .8s var(--ocm-ease) .57s, transform .8s var(--ocm-ease) .57s, color .25s; }
+    .menu-help { margin-top: clamp(8px,1.6vh,12px); transition: opacity .8s var(--ocm-ease) .58s, transform .8s var(--ocm-ease) .58s, color .25s; }
+    .menu-foot {
+      margin-top: clamp(20px,5vh,38px); font-family: var(--font-mono);
+      letter-spacing: .22em; text-transform: uppercase; color: #6f6a62;
+      opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease) .62s, transform .8s var(--ocm-ease) .62s;
+    }
+    .menu-overlay.is-open .menu-foot { opacity: 1; transform: translateX(0); }
+    .menu-foot-name { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <button class="burger" id="mobileBurger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu">
+    <span></span><span></span><span></span>
+  </button>
+
+  <button class="theme-fab" id="topTheme" type="button" title="Change theme" aria-label="Change theme">
+    <span class="theme-icon" id="topThemeIcon">☾</span>
+  </button>
+
+  <div class="menu-overlay" id="mobileMenu" role="dialog" aria-modal="true" aria-label="Menu">
+    <button class="menu-close" id="closeMobile" type="button" aria-label="Close menu">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+
+    <a href="/" class="menu-link" style="margin-bottom: 1.5rem; color: #d7b584;">NOEMA</a>
+    <nav class="menu-nav">
+    </nav>
+
+    <a href="/arhiva" class="menu-archive">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4" stroke-linecap="round"/></svg>
+      Archive
+    </a>
+    <a href="/notes" class="menu-archive menu-notes">
+      <svg viewBox="0 0 24 24"><path d="M5 3h9l5 5v13a0 0 0 0 1 0 0H5a0 0 0 0 1 0 0V3z" stroke-linejoin="round"/><path d="M14 3v5h5M8 13h8M8 17h5" stroke-linecap="round"/></svg>
+      Notes
+    </a>
+    <a href="/documents" class="menu-archive menu-documents">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+      Documents
+    </a>
+
+    <a href="/links" class="menu-archive menu-links-item">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      Links
+    </a>
+
+    <a href="/ai-projects" class="menu-archive menu-notes">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+      AI Projects
+    </a>
+
+    <a href="/inspiration" class="menu-archive menu-documents">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-5 3 3 2-2 6 5"/></svg>
+      Inspiration
+    </a>
+
+    <a href="/backup" class="menu-foot" style="text-decoration: none; cursor: pointer;">
+      <div class="menu-foot-name">BACKUP</div>
+    </a>
+  </div>
+
+  <div class="wrap">
+    <div class="top">
+      <a class="back" href="/">
+        <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Noema
+      </a>
+      <div class="top-title">Help</div>
+    </div>
+
+    <div class="layout">
+      <nav class="toc" aria-label="On this page">
+        <div class="toc-label">On this page</div>
+        <a href="#what">1 · What Noema is</a>
+        <a href="#board">2 · The three-day board</a>
+        <a href="#rollover">3 · Roll-over & archive</a>
+        <a href="#tasks">4 · Tasks: priority, time, repeat</a>
+        <a href="#notes-docs">5 · Notes & Documents</a>
+        <a href="#ai-projects">6 · AI Projects & Ctrl+V Paste</a>
+        <a href="#buildingsite">7 · Building Site & Maps</a>
+        <a href="#stats">8 · Stats & SEO Analytics</a>
+        <a href="#archive">9 · Archive</a>
+        <a href="#links">10 · Links & Reader Mode</a>
+        <a href="#pwa">11 · PWA & Offline Mode</a>
+        <a href="#backup">12 · Backup & snapshots</a>
+        <a href="#mcp">13 · MCP & OpenAPI</a>
+        <a href="#siri">14 · Siri & OpenAI</a>
+        <a href="#auth">15 · Auth & security</a>
+      </nav>
+
+      <!-- Article -->
+      <article class="doc">
+        <p class="lede">Noema is a calm, three-day to-do list — <em>yesterday · today · tomorrow</em> — that doubles as a self-hosted gateway exposing your tasks to AI assistants over MCP and OpenAPI.</p>
+
+        <section id="what">
+          <h2><span class="num">01</span> What Noema is</h2>
+          <p>Noema (Greek <em>νοήματος</em> — “what is held in mind”) keeps you focused on a short horizon: what was left from yesterday, what matters today, what is coming tomorrow. There is nothing to install — it is plain Node.js with zero dependencies.</p>
+          <p>Behind the simple board there is a gateway: every task operation is also available to large language models (Claude, ChatGPT) and to Siri, so you can ask <em>“what's left for me today?”</em> in natural language and get a real answer from your own data.</p>
+        </section>
+
+        <section id="board">
+          <h2><span class="num">02</span> The three-day board</h2>
+          <p>The home screen has three columns. <strong>Today</strong> is the beacon in the middle; <strong>yesterday</strong> sits to the left as “what remains”, and <strong>tomorrow</strong> to the right as “what's next”.</p>
+          <div class="flow">
+            <div class="flow-col y"><div class="fc-day">Yesterday</div><p>What you didn't finish. A gentle reminder, not a graveyard.</p></div>
+            <div class="flow-col t"><div class="fc-day">Today</div><p>Your focus. New tasks land here by default.</p></div>
+            <div class="flow-col m"><div class="fc-day">Tomorrow</div><p>Planned ahead so today stays clear.</p></div>
+          </div>
+          <p>Add a task by typing in a column. Double-click (or double-tap on mobile) a title to edit it, tap the circle to complete it, tap the priority chip to cycle it, and the clock to set a time.</p>
+        </section>
+
+        <section id="rollover">
+          <h2><span class="num">03</span> How tasks roll over &amp; disappear</h2>
+          <p>This is the most important idea in Noema, and the most common question. A task does <strong>not</strong> store the word “today”. It stores an <strong>absolute date</strong> (<code>scheduledFor</code>, e.g. <code>2026-06-29</code>). The column it appears in is <em>computed live</em> against the real current date:</p>
+          <ul>
+            <li><code>scheduledFor &lt; today</code> → shown under <strong>Yesterday</strong></li>
+            <li><code>scheduledFor === today</code> → shown under <strong>Today</strong></li>
+            <li><code>scheduledFor &gt; today</code> → shown under <strong>Tomorrow</strong></li>
+          </ul>
+          <p>Because of this, the board “moves” on its own as midnight passes — you don't press anything:</p>
+          <ul>
+            <li>A task you put in <strong>Tomorrow</strong> automatically becomes <strong>Today</strong> when the new day begins.</li>
+            <li>An unfinished <strong>Today</strong> task automatically slips into <strong>Yesterday</strong> as “remaining”.</li>
+          </ul>
+          <div class="callout warn">
+            <span class="callout-label">Why a task vanishes from the board</span>
+            The board only shows the window <em>yesterday → today → tomorrow</em>. The moment a task's date becomes <strong>older than yesterday</strong> (two or more days in the past), it is hidden from the main screen so it can't pile up forever. It is <strong>not deleted</strong> — it lives on in the <a class="inline" href="/arhiva">Archive</a>, searchable by exact date. So “it disappeared” means “it rolled past yesterday”, never “it was lost”.
+          </div>
+          <div class="callout note">
+            <span class="callout-label">Note</span>
+            Completed tasks behave the same way — they stay visible while still in the yesterday/today/tomorrow window, then settle into the Archive once their date moves on.
+          </div>
+        </section>
+
+        <section id="tasks">
+          <h2><span class="num">04</span> Tasks: priority, time &amp; repeat</h2>
+          <h3>Priority</h3>
+          <p>Each task carries a priority — <code>high</code>, <code>normal</code>, or <code>low</code> (<code>medium</code> is accepted as a legacy alias for normal). High-priority, unfinished tasks sort to the top of a column.</p>
+          <h3>Time</h3>
+          <p>A task can have an optional time in 24-hour <code>HH:MM</code> form (e.g. <code>09:30</code>). Loose input like <code>9:5</code> is normalized to <code>09:05</code>. A task without a time is an “all-day” item; timed tasks sort before untimed ones.</p>
+          <h3>Time Blocking</h3>
+          <p>By assigning a time to a task in the <strong>Today</strong> column, you automatically activate a <strong>visual timeline</strong>. Timed tasks shift to the right, receive a bronze timeline marker (vertical line and a dot), and sort chronologically. This turns your "Today" column into a visual agenda.</p>
+          <h3>Subtasks</h3>
+          <p>Click the <strong>+ Subtask</strong> button at the bottom of any task to break it down. Subtasks act as a lightweight checklist inside the main task, and can be checked off individually.</p>
+          <h3>Repeat</h3>
+          <p>A task can recur: <code>daily</code>, <code>weekdays</code> (Mon–Fri), <code>weekends</code> (Sat/Sun), or a specific weekday (<code>mon</code> … <code>sun</code>). Each day the server creates that day's instance once — if a matching task already exists for the day, it is not duplicated.</p>
+        </section>
+
+        <section id="notes-docs">
+          <h2><span class="num">05</span> Notes &amp; Documents</h2>
+          <h3>Notes</h3>
+          <p><a class="inline" href="/notes">Notes</a> are lightweight checklists: a title plus a list of items you can tick off. Good for shopping lists, packing, quick sub-tasks.</p>
+          <div class="callout note">
+            <span class="callout-label">Network of Thought (Backlinks)</span>
+            You can link notes together by typing <code>[[Note Title]]</code> in a checklist item. When viewing a note in <em>Preview</em> mode (the eye icon), it automatically scans all other notes and lists <strong>backlinks</strong> (notes that link to the current one) at the bottom. This allows you to build a connected web of thoughts.
+          </div>
+          <h3>Documents</h3>
+          <p><a class="inline" href="/documents">Documents</a> are richer, free-form rich-text notes with a label. You can also <strong>upload a file</strong> — text files become editable document bodies, and other files (PDF, Word…) are stored and linked. Uploaded files are served back from <code>/uploads/&lt;name&gt;</code>.</p>
+        </section>
+
+        <section id="ai-projects">
+          <h2><span class="num">06</span> AI Projects &amp; Ctrl+V Screenshot Pasting</h2>
+          <p>The <a class="inline" href="/ai-projects">AI Projects</a> catalog displays your AI models, workspaces, tools, and servers in a clean 3-column visual card grid.</p>
+          <ul>
+            <li><strong>Direct Link Cards</strong> — Each card's top header banner and preview frame act as a direct link to open the target project URL in a new tab.</li>
+            <li><strong>Instant Ctrl+V Screenshot Pasting</strong> — Take a screenshot of any website (<code>Cmd+Shift+4</code> on Mac or Snipping Tool on Windows), open the edit dialog (<code>✎</code>), and press <code>Ctrl+V</code> / <code>Cmd+V</code> anywhere inside the form. The image is instantly captured, optimized, and saved to the card!</li>
+            <li><strong>Pinning &amp; Filtering</strong> — Pin high-priority projects with the <code>◆</code> icon to keep them at the top, and filter by custom labels (e.g. <code>models</code>, <code>cloud</code>, <code>workspace</code>).</li>
+          </ul>
+        </section>
+
+        <section id="buildingsite">
+          <h2><span class="num">07</span> Building Site (Gradilišta) &amp; Maps</h2>
+          <p>The <a class="inline" href="/buildingsite">Building Site</a> module organizes architectural construction projects, photo albums, and site updates.</p>
+          <ul>
+            <li><strong>Photo Timeline &amp; Year Slider</strong> — Browse site photos chronologically with a vertical scroll-synced year slider (2025, 2024, 2023...). Clicking any year scrolls directly to that section.</li>
+            <li><strong>Leaflet Map Geocoding</strong> — View construction locations on an interactive map with GPS markers, address geocoding, and custom hotspot annotations on site photos.</li>
+          </ul>
+        </section>
+
+        <section id="stats">
+          <h2><span class="num">08</span> Stats &amp; SEO Analytics</h2>
+          <p>The <a class="inline" href="/stats">Stats</a> page shows verified website telemetry without generated or silent fallback values.</p>
+          <ul>
+            <li><strong>Google Analytics 4</strong> — Direct service-account visitor trend; the chart and seven-day table are generated from the exact same daily series.</li>
+            <li><strong>Google Search Console Analytics</strong> — Direct daily clicks, impressions, CTR, and average position with all-project and per-site charts. GSC delay is shown explicitly and data older than three days is marked stale.</li>
+            <li><strong>Freshness &amp; Error Status</strong> — Every response shows the latest available Search Console date and is explicitly marked LIVE, PARTIAL, STALE, or UNAVAILABLE.</li>
+            <li><strong>PageSpeed Insights</strong> — Direct desktop/mobile Lighthouse performance and lab LCP tests, cached for six hours to protect Google API quota.</li>
+            <li><strong>Server Telemetry</strong> — Real-time CPU, RAM, and Disk utilization monitor.</li>
+          </ul>
+        </section>
+
+        <section id="archive">
+          <h2><span class="num">09</span> Archive</h2>
+          <p>The <a class="inline" href="/arhiva">Archive</a> is the long-term memory the board deliberately hides. It shows every task by its absolute date, plus notes, documents and snapshot dates, on a calendar.</p>
+          <ul>
+            <li><strong>Calendar</strong> — dots mark days that have tasks (amber), documents (green), saved links (blue) or backups (red). Click a day to see it.</li>
+            <li><strong>Day / All</strong> — view a single day, or everything at once.</li>
+            <li><strong>Search</strong> — filter the open day, or search your <em>entire</em> history (press <code>/</code> to jump to search). Clicking a result jumps to that day.</li>
+          </ul>
+        </section>
+
+        <section id="links">
+          <h2><span class="num">10</span> Links &amp; Reader Mode</h2>
+          <p>The <a class="inline" href="/links">Links</a> page is a personal “linkdump”: a place to throw in anything interesting you stumble upon — an Instagram post, an article, a product page — and sort through it later. Every saved link becomes a <strong>preview card</strong> with the page's image (Open Graph <code>og:image</code>), title, domain and description, so you remember at a glance why you saved it.</p>
+
+          <h3>Saving, labels &amp; search</h3>
+          <ul>
+            <li><strong>Paste a URL</strong> into the field at the top — the server fetches the page's title, description and image automatically.</li>
+            <li><strong>Labels</strong> — every link can carry one free-form label (e.g. <code>instagram</code>, <code>recipes</code>, <code>work</code>). The label pills above the grid act as filters; click a card's label pill to change it. Labels get a stable colour derived from their name.</li>
+            <li><strong>Search</strong> — press <code>/</code> or click the search field; it matches titles, descriptions, URLs and labels.</li>
+            <li><strong>No duplicates</strong> — saving the same URL twice updates the existing card instead of creating a copy.</li>
+            <li><strong>Archive</strong> — each saved link also appears in the <a class="inline" href="/arhiva">Archive</a> calendar on the day you saved it, marked with a <strong>blue dot</strong>, and is included in the global archive search.</li>
+          </ul>
+
+          <h3>Reader Mode</h3>
+          <p>Every link card features a 📖 (Read) icon. Clicking it activates <strong>Reader Mode</strong>: Noema fetches the live web page, strips out all ads, menus, and boilerplate HTML, and presents you with a clean, distraction-free reading experience covering the full screen. This runs entirely locally via our zero-dependency parser.</p>
+
+          <h3>The bookmarklet — save from any browser, any computer</h3>
+          <p>A <strong>bookmarklet</strong> is an ordinary browser bookmark whose “address” is a tiny piece of JavaScript instead of a URL. Clicking it runs that code on the page you are viewing. No extension, no installation, works in <strong>Safari, Firefox, Chrome and Edge, on macOS and Windows alike</strong> — including a locked-down work computer, since it is just a bookmark.</p>
+          <p>Noema's bookmarklet reads the page's title, description and <code>og:image</code> <em>from the live page you are looking at</em>. That is why it works even for Instagram and Facebook: you are logged in, so the data is there in the page — while a server fetching the same URL anonymously would usually hit a login wall.</p>
+          <ol>
+            <li>Open the <a class="inline" href="/links">Links</a> page and find the dashed <strong>“+ Noema”</strong> button at the bottom.</li>
+            <li><strong>Drag</strong> it (don't click) into your browser's bookmarks bar:
+              <ul>
+                <li><strong>Safari (Mac)</strong> — show the Favourites bar with <code>⌘⇧B</code> (View → Show Favourites Bar), then drag the button onto it.</li>
+                <li><strong>Firefox (Windows/Mac)</strong> — show the Bookmarks toolbar with <code>Ctrl⇧B</code> / <code>⌘⇧B</code>, then drag the button onto it.</li>
+                <li><strong>Chrome / Edge</strong> — <code>Ctrl⇧B</code> (<code>⌘⇧B</code> on Mac) shows the bookmarks bar; drag the button onto it.</li>
+              </ul>
+            </li>
+            <li>Browse anywhere. When a page is worth keeping, click the bookmarklet — a small window opens, the link is saved with its preview, and you can close the window or assign a label right there.</li>
+          </ol>
+          <div class="callout note">
+            <span class="callout-label">Keyboard shortcut</span>
+            In <strong>Safari</strong>, the first nine items of the Favourites bar get automatic shortcuts <code>⌘1</code>–<code>⌘9</code> — put the bookmarklet first and saving a page becomes a single keystroke. In <strong>Firefox</strong>, you can assign a keyword to the bookmarklet (right-click it → Edit bookmark → Keyword, e.g. <code>nl</code>), then type <code>nl</code> in the address bar and press Enter.
+          </div>
+          <div class="callout note">
+            <span class="callout-label">One thing to know</span>
+            The bookmarklet opens a window on your Noema address, so your Noema server must be reachable from that computer (e.g. your public <code>PUBLIC_BASE_URL</code>, or the LAN address at home). If the UI password is enabled, the browser will ask for it once and remember it.
+          </div>
+
+          <h3>iPhone &amp; iPad — share sheet via the Shortcuts app</h3>
+          <p>On iOS the natural flow is the <strong>share sheet</strong>: you see a post in the Instagram or Facebook app, tap <em>Share → Send to Noema</em>, done. This uses Apple's built-in <strong>Shortcuts</strong> app and Noema's machine API (<code>/api/tools/link_add</code>), which stays reachable even when the UI password is on — it is protected by your <code>NOEMA_API_TOKEN</code> instead.</p>
+          <ol>
+            <li>Open the <strong>Shortcuts</strong> app → <code>+</code> to create a new shortcut.</li>
+            <li>Tap the info (ⓘ) bar → enable <strong>“Show in Share Sheet”</strong>. Under “Receive”, limit input types to <strong>URLs</strong> (and Safari web pages).</li>
+            <li>Add the action <strong>“Get URLs from Input”</strong>.</li>
+            <li>Add the action <strong>“Get Contents of URL”</strong> and configure it:
+              <ul>
+                <li><strong>URL</strong>: <code>https://&lt;your-noema&gt;/api/tools/link_add</code></li>
+                <li><strong>Method</strong>: <code>POST</code></li>
+                <li><strong>Headers</strong>: <code>Authorization</code> = <code>Bearer &lt;your NOEMA_API_TOKEN&gt;</code></li>
+                <li><strong>Request Body</strong>: JSON with one field — key <code>url</code>, value = the <em>URLs</em> variable from the previous step. Optionally add a fixed <code>label</code> field (e.g. <code>phone</code>).</li>
+              </ul>
+            </li>
+            <li>Name it <strong>“Send to Noema”</strong>. It now appears in the share sheet of every app — Instagram, Facebook, Safari, YouTube…</li>
+          </ol>
+          <p>The server fetches the page's Open Graph metadata itself in this flow. The same shortcut works on macOS too (Shortcuts is on the Mac since Monterey), and you can ask <strong>Siri</strong> to run it by name.</p>
+          <div class="callout warn">
+            <span class="callout-label">Instagram / Facebook previews</span>
+            Meta aggressively walls off anonymous scraping, so links saved <em>via the share sheet</em> (server-side fetch) sometimes come through without an image or with a generic title. Links saved with the <em>bookmarklet</em> on desktop don't have this problem, because the metadata is read from your logged-in page. You can always fix a title or label later on the Links page.
+          </div>
+
+          <h3>For LLMs too</h3>
+          <p>The linkdump is part of the gateway like everything else: <code>link_add</code> and <code>link_list</code> are exposed over MCP and OpenAPI, so you can tell Claude <em>“save this link under ‘reading'”</em> or ask <em>“what did I save last week about kitchens?”</em>.</p>
+        </section>
+
+        <section id="calendar">
+          <h2><span class="num">08</span> Google Calendar (optional)</h2>
+          <p>Noema can show your Google Calendar events for a given day inside the “today” column, read-only. The connect flow is built in — no OAuth Playground needed:</p>
+          <ol>
+            <li>In Google Cloud, enable the <strong>Google Calendar API</strong> and create an <strong>OAuth client (Web)</strong>.</li>
+            <li>Set the redirect URI to <code>&lt;PUBLIC_BASE_URL&gt;/auth/google/callback</code>.</li>
+            <li>Put <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> in <code>.env</code> and start the server.</li>
+            <li>Open <code>/auth/google</code>, click <strong>Allow</strong> — the refresh token is saved into <code>data/</code> (never committed to git).</li>
+          </ol>
+          <p>The scope is read-only (<code>calendar.readonly</code>); recurring events are expanded into concrete instances.</p>
+        </section>
+
+        <section id="backup">
+          <h2><span class="num">09</span> Backup &amp; snapshots</h2>
+          <p>On the <a class="inline" href="/backup">Backup</a> page you can:</p>
+          <ul>
+            <li><strong>Download</strong> a full backup of tasks, notes, documents and links as a single JSON file.</li>
+            <li><strong>Restore</strong> from such a file (this replaces current data).</li>
+            <li>Take a <strong>snapshot</strong> kept on the server, and restore any previous snapshot later.</li>
+          </ul>
+          <div class="callout note">
+            <span class="callout-label">On disk</span>
+            Data files in <code>data/</code> are stored AES-256-GCM encrypted at rest. A downloaded backup, however, is plain JSON — keep it somewhere safe.
+          </div>
+        </section>
+
+        <section id="mcp">
+          <h2><span class="num">10</span> MCP &amp; OpenAPI gateway</h2>
+          <p>Every Noema capability is defined once in a tool registry and exposed three ways at the same time, so they can never drift apart:</p>
+          <ul>
+            <li><strong>MCP</strong> — <code>POST /mcp</code> (Model Context Protocol, Streamable HTTP, stateless) for Claude / ChatGPT.</li>
+            <li><strong>OpenAPI 3.1</strong> — <code>GET /openapi.json</code>, auto-generated, for agents and Siri Shortcuts.</li>
+            <li><strong>REST</strong> — <code>POST /api/tools/&lt;name&gt;</code> to call any tool directly.</li>
+          </ul>
+          <h3>Connect from Claude / ChatGPT</h3>
+          <p>Add Noema as an MCP server in your client's config:</p>
+<pre><code>{
+  "mcpServers": {
+    "noema": {
+      "url": "http://localhost:3000/mcp"
+    }
+  }
+}</code></pre>
+          <p>Then ask, in plain language: <em>“What's left for me today?”</em> — the client calls <code>todo_summary</code> / <code>todo_list</code> behind the scenes.</p>
+          <h3>Available tools</h3>
+          <table>
+            <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+            <tbody>
+              <tr><td><code>todo_list</code></td><td>Tasks grouped by day (yesterday/today/tomorrow).</td></tr>
+              <tr><td><code>todo_add</code></td><td>Add a task (<code>title</code>, <code>day</code>, <code>priority</code>, <code>time</code>, <code>repeat</code>).</td></tr>
+              <tr><td><code>todo_complete</code></td><td>Mark a task done / reopen it (<code>id</code>).</td></tr>
+              <tr><td><code>todo_delete</code></td><td>Delete a task (<code>id</code>).</td></tr>
+              <tr><td><code>todo_summary</code></td><td>Short summary: counts per day + titles of open tasks.</td></tr>
+              <tr><td><code>calendar_events</code></td><td>Google Calendar events for a day (needs a connected calendar).</td></tr>
+              <tr><td><code>link_add</code></td><td>Save a link to the linkdump (<code>url</code>, optional <code>title</code>, <code>description</code>, <code>image</code>, <code>label</code>). Missing metadata is fetched from the page.</td></tr>
+              <tr><td><code>link_list</code></td><td>List saved links, newest first (<code>q</code> search, <code>label</code> filter, <code>limit</code>).</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="siri">
+          <h2><span class="num">11</span> Siri &amp; OpenAI — via Keryx</h2>
+          <p>For <strong>Siri</strong> and <strong>OpenAI</strong> integration Noema relies on <a class="inline" href="https://github.com/vladimirperovic/keryx" target="_blank" rel="noopener">Keryx</a>, a separate companion project that acts as the bridge (Siri Shortcuts / OpenAI). Noema shares the same gateway pattern as Keryx — the OpenAPI schema Noema generates is exactly what Siri Shortcuts and OpenAI tool-use expect — but Noema runs in a light theme around the three-day board instead of Siri shortcuts.</p>
+        </section>
+
+        <section id="auth">
+          <h2><span class="num">12</span> Auth &amp; security</h2>
+          <ul>
+            <li><strong>UI password</strong> (<code>UI_PASSWORD</code>) — optional HTTP Basic password protecting the whole web UI and its REST routes. The machine endpoints (<code>/mcp</code>, <code>/openapi.json</code>, <code>/api/tools/*</code>, OAuth, <code>/healthz</code>) stay public. Empty = UI is public.</li>
+            <li><strong>Gateway token</strong> (<code>NOEMA_API_TOKEN</code>) — optional bearer token machine clients must send (<code>Authorization: Bearer &lt;token&gt;</code>). Empty = auth disabled (local dev only).</li>
+            <li><strong>Encryption</strong> (<code>ENCRYPTION_KEY</code>) — if set, the data key is derived from it (scrypt) and only the salt is stored on disk; if empty, a random local key is generated.</li>
+            <li><strong>Rate limiting</strong> — repeated bad logins are throttled per IP, and all <code>/api/*</code> traffic is capped per minute.</li>
+          </ul>
+          <div class="callout warn">
+            <span class="callout-label">Before exposing publicly</span>
+            If you put Noema on the open internet, set <code>UI_PASSWORD</code> (and ideally <code>NOEMA_API_TOKEN</code>), restrict <code>NOEMA_CORS_ORIGIN</code>, and serve it over HTTPS.
+          </div>
+        </section>
+
+        <section id="tips">
+          <h2><span class="num">13</span> Interface tips</h2>
+          <ul>
+            <li><strong>Quick Capture (CMD+K)</strong> — press <code>Cmd + K</code> (or <code>Ctrl + K</code>) from anywhere to open the global Inbox modal. Type a URL to save a Link, start with <code>/n</code> to create a Note, or just type text to add a Task for Today.</li>
+            <li><strong>Theme</strong> — toggle light / dark with the ☾ / ☀ button in the footer. Your choice is remembered.</li>
+            <li><strong>Text size</strong> — the footer A− / 100% / A+ buttons scale the whole interface.</li>
+            <li><strong>System stats</strong> — the footer shows live CPU / RAM / Disk of the server Noema runs on.</li>
+            <li><strong>Menu</strong> — the button top-right opens the side menu with links to Archive, Notes, Documents, Links, Help and Backup.</li>
+            <li><strong>Search</strong> — on the Archive page, press <code>/</code> to jump straight to search.</li>
+          </ul>
+        </section>
+      </article>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <span class="footer-left">
+      Noema · <em>a thought within reach</em>
+      <span class="sys-sep">|</span>
+      <span class="sys-stats" id="sysStats" title="Server resources">CPU: <b>—</b> · RAM: <b>—</b> · Disk: <b>—</b></span>
+      <span class="sys-sep">|</span>
+      <a href="/logout" class="sys-stats" style="text-decoration: none; cursor: pointer;">logout</a>
+    </span>
+    <div style="display:inline-flex; gap:0.5rem; align-items:center;">
+      <button class="footer-theme" id="pageWidth" type="button" title="Change page width (90% or normal)" aria-label="Page width" style="width:auto; padding: 0 8px; font-weight:600; font-size:0.75rem;">WIDTH</button>
+      <button class="footer-theme" id="fontDec" type="button" title="Smaller text" aria-label="Smaller text">
+        <span style="font-size: 0.85em; font-family: var(--font-sans); font-weight:600;">A</span>
+      </button>
+      <button class="footer-theme" id="fontReset" type="button" title="Reset text size" aria-label="Reset text size" style="width:auto; padding: 0 8px;">
+        <span style="font-size: 0.85em; font-family: var(--font-sans); font-weight:600;">100%</span>
+      </button>
+      <button class="footer-theme" id="fontInc" type="button" title="Larger text" aria-label="Larger text">
+        <span style="font-size: 1.25em; font-family: var(--font-sans); font-weight:600;">A</span>
+      </button>
+      <span class="sys-sep" style="margin: 0 20px;">|</span>
+      <button class="footer-theme" id="footerTheme" type="button" title="Toggle theme" aria-label="Toggle theme">
+        <span id="ftIcon">☾</span>
+      </button>
+    </div>
+  </footer>
+
+  <script>
+    "use strict";
+
+    // ── Theme ──
+    function getStoredTheme() { try { return localStorage.getItem("noema-theme"); } catch (e) { return null; } }
+    function storeTheme(t) { try { localStorage.setItem("noema-theme", t); } catch (e) {} }
+    function applyTheme(t) {
+      document.documentElement.setAttribute("data-theme", t);
+      const icon = document.getElementById("ftIcon");
+      if (icon) icon.textContent = t === "dark" ? "☀" : "☾";
+    }
+    applyTheme(getStoredTheme() || "dark");
+    const themeBtn = document.getElementById("footerTheme");
+    if (themeBtn) {
+      themeBtn.addEventListener("click", () => {
+        const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        applyTheme(next); storeTheme(next);
+      });
+    }
+
+    // ── Font scale ──
+    let fontScale = Number(localStorage.getItem("noema-font-scale")) || 1;
+    function applyFontScale(scale) {
+      document.documentElement.style.fontSize = (16 * scale) + "px";
+      document.body.style.fontSize = (16 * scale) + "px";
+    }
+    applyFontScale(fontScale);
+    const decBtn = document.getElementById("fontDec");
+    const incBtn = document.getElementById("fontInc");
+    const resBtn = document.getElementById("fontReset");
+    if (decBtn) decBtn.addEventListener("click", () => { fontScale = Math.max(0.4, fontScale - 0.3); localStorage.setItem("noema-font-scale", fontScale); applyFontScale(fontScale); });
+    if (incBtn) incBtn.addEventListener("click", () => { fontScale = Math.min(2.5, fontScale + 0.3); localStorage.setItem("noema-font-scale", fontScale); applyFontScale(fontScale); });
+    if (resBtn) resBtn.addEventListener("click", () => { fontScale = 1; localStorage.setItem("noema-font-scale", fontScale); applyFontScale(fontScale); });
+
+    // ── Server resources (CPU/RAM/Disk) ──
+    function fmtGB(bytes) { return (bytes / 1073741824).toFixed(1); }
+    async function loadSystem() {
+      const el = document.getElementById("sysStats");
+      if (!el) return;
+      try {
+        const res = await fetch("/api/system");
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const cpu = data.cpu ? `${data.cpu.percent}%` : "—";
+        const ram = data.mem ? `${data.mem.percent}%` : "—";
+        const disk = data.disk ? `${data.disk.percent}%` : "—";
+        el.innerHTML = `CPU: <b>${cpu}</b> · RAM: <b>${ram}</b> · Disk: <b>${disk}</b>`;
+        const parts = [];
+        if (data.cpu) parts.push(`CPU ${data.cpu.cores} cores`);
+        if (data.mem) parts.push(`RAM ${fmtGB(data.mem.used)}/${fmtGB(data.mem.total)} GB`);
+        if (data.disk) parts.push(`Disk ${fmtGB(data.disk.used)}/${fmtGB(data.disk.total)} GB`);
+        el.title = parts.join(" · ") || "Server resources";
+      } catch (err) {
+        el.innerHTML = `<span style="font-style:italic">system unavailable</span>`;
+      }
+    }
+    loadSystem();
+    setInterval(loadSystem, 5000);
+
+    // ── Push menu (port "Salient reveal") ──
+    function initMenu() {
+      const burger = document.getElementById("mobileBurger");
+      const overlay = document.getElementById("mobileMenu");
+      const closeBtn = document.getElementById("closeMobile");
+      if (!burger || !overlay) return;
+
+      const shell = document.createElement("div");
+      shell.id = "shell";
+      const inner = document.createElement("div");
+      inner.id = "shell-inner";
+      while (document.body.firstChild) inner.appendChild(document.body.firstChild);
+      shell.appendChild(inner);
+      const scrim = document.createElement("div");
+      scrim.className = "shell-scrim";
+      scrim.setAttribute("aria-hidden", "true");
+      shell.appendChild(scrim);
+      document.body.appendChild(shell);
+      document.body.appendChild(overlay);
+
+      let sy = 0, unfixTimer = null;
+      const setExpanded = (o) => burger.setAttribute("aria-expanded", o ? "true" : "false");
+
+      function open() {
+        if (unfixTimer) { clearTimeout(unfixTimer); unfixTimer = null; }
+        if (!document.body.classList.contains("menu-fixed")) {
+          sy = window.scrollY || window.pageYOffset || 0;
+          inner.style.transform = "translateY(" + (-sy) + "px)";
+          document.body.classList.add("menu-fixed");
+          void shell.offsetWidth;
+        }
+        requestAnimationFrame(() => {
+          document.body.classList.add("menu-pushed");
+          overlay.classList.add("is-open");
+        });
+        setExpanded(true);
+      }
+      function close() {
+        overlay.classList.remove("is-open");
+        document.body.classList.remove("menu-pushed");
+        setExpanded(false);
+        if (unfixTimer) clearTimeout(unfixTimer);
+        unfixTimer = setTimeout(() => {
+          document.body.classList.remove("menu-fixed");
+          inner.style.transform = "";
+          window.scrollTo(0, sy);
+          unfixTimer = null;
+        }, 850);
+      }
+
+      burger.addEventListener("click", open);
+      closeBtn.addEventListener("click", close);
+      scrim.addEventListener("click", close);
+      overlay.querySelectorAll("a").forEach((l) => {
+        l.addEventListener("click", (e) => {
+          const href = l.getAttribute("href");
+          const target = l.getAttribute("target");
+          if (!href || href === "#" || target === "_blank") { close(); return; }
+          e.preventDefault();
+          close();
+          setTimeout(() => { window.location.href = href; }, 850);
+        });
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && document.body.classList.contains("menu-pushed")) close();
+      });
+    }
+    initMenu();
+  </script>
+<script src="/noema-header-footer.js"></script>
+<script src="/cmdk.js"></script></body>
+</html>

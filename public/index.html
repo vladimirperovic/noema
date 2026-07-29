@@ -1,0 +1,1993 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Noema — juče · danas · sjutra</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="Noema — minimalna todo lista sa pogledom na juče, danas i sjutra. MCP/OpenAPI gateway u pozadini.">
+
+  <!-- Postavi temu prije paint-a da ne bljesne svijetla (FOUC zaštita). -->
+  <script>
+    (function () {
+      try {
+        var manual = localStorage.getItem("noema-theme-manual");
+        var hour = new Date().getHours();
+        var autoTheme = (hour >= 19 || hour < 7) ? "dark" : "light";
+        var t = (manual === "dark" || manual === "light") ? manual : autoTheme;
+        document.documentElement.setAttribute("data-theme", t);
+        var w = localStorage.getItem("noema-page-width");
+        if (w === "wide") document.documentElement.setAttribute("data-width", "wide");
+      } catch (e) {}
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker.register("/sw.js").then(function (reg) {
+            reg.update();
+          }).catch(function () {});
+        });
+      }
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,300&family=JetBrains+Mono:wght@400;500;600&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* NOEMA — light "herald" tema: topli papir, amber beacon, editorial serif. */
+    :root {
+      --paper:      #f7f3ec;
+      --paper-2:    #fbf8f2;
+      --paper-3:    #ffffff;
+      --ink-line:   rgba(26, 26, 31, 0.10);
+      --ink-line-2: rgba(26, 26, 31, 0.18);
+      --ink:        #1a1a1f;
+      --ink-2:      #3d3d44;
+      --ink-3:      #6b6b73;
+      --ink-4:      #9b958a;
+      --beacon:     #b87333;
+      --beacon-2:   #9c6029;
+      --beacon-glow:rgba(184, 115, 51, 0.16);
+      --beacon-soft:rgba(184, 115, 51, 0.08);
+      --signal:     #4a7a5e;
+      --ember:      #c0563b;
+      --azure:      #3a6ea5;
+      --azure-soft: rgba(58, 110, 165, 0.05);
+      --font-display: 'Fraunces', Georgia, serif;
+      --font-sans:    'Geist', -apple-system, system-ui, sans-serif;
+      --font-mono:    'JetBrains Mono', 'IBM Plex Mono', monospace;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      --ocm-ease: cubic-bezier(.15, .2, .1, 1);
+      --maxw: 1400px;
+      --gut: clamp(1.25rem, 4vw, 2.5rem);
+      --yesterday: #8a7a6b;
+      --today: var(--beacon);
+      --tomorrow: #5a7a8a;
+      
+      /* Drum Time Picker - Light Theme variables */
+      --tp-bg: #ffffff;
+      --tp-border: var(--ink-line-2);
+      --tp-text-dim: rgba(26, 26, 31, 0.28);
+      --tp-text-near1: rgba(26, 26, 31, 0.50);
+      --tp-text-near2: rgba(26, 26, 31, 0.70);
+      --tp-text-sel: var(--ink);
+      --tp-highlight-bg: rgba(26, 26, 31, 0.06);
+      --tp-btn-bg: rgba(26, 26, 31, 0.04);
+      --tp-btn-border: var(--ink-line);
+      --tp-btn-text: var(--ink-2);
+    }
+
+    /* DARK — keryx "obsidian" tema (isti font/brand, tamne površine). */
+    html[data-theme="dark"] {
+      --paper:      #0a0a0c;
+      --paper-2:    #0f0f12;
+      --paper-3:    #16161b;
+      --ink-line:   rgba(244, 239, 230, 0.08);
+      --ink-line-2: rgba(244, 239, 230, 0.14);
+      --ink:        #f4efe6;
+      --ink-2:      #d8d2c4;
+      --ink-3:      #9b958a;
+      --ink-4:      #5c574f;
+      --beacon:     #e8b07d;
+      --beacon-2:   #d4a574;
+      --beacon-glow:rgba(232, 176, 125, 0.22);
+      --beacon-soft:rgba(232, 176, 125, 0.10);
+      --signal:     #8ab4a1;
+      --ember:      #d97757;
+      --azure:      #7fa7d9;
+      --azure-soft: rgba(127, 167, 217, 0.08);
+      --yesterday:  #b0a392;
+      --tomorrow:   var(--azure);
+      
+      /* Drum Time Picker - Dark Theme variables */
+      --tp-bg: #1e1e22;
+      --tp-border: rgba(255, 255, 255, 0.08);
+      --tp-text-dim: rgba(255, 255, 255, 0.22);
+      --tp-text-near1: rgba(255, 255, 255, 0.40);
+      --tp-text-near2: rgba(255, 255, 255, 0.55);
+      --tp-text-sel: rgba(255, 255, 255, 0.92);
+      --tp-highlight-bg: rgba(255, 255, 255, 0.08);
+      --tp-btn-bg: rgba(255, 255, 255, 0.05);
+      --tp-btn-border: rgba(255, 255, 255, 0.1);
+      --tp-btn-text: rgba(255, 255, 255, 0.6);
+    }
+    :root { color-scheme: light; }
+    html[data-theme="dark"] { color-scheme: dark; } /* nativni time picker u tamnoj temi */
+    html { background: var(--paper); }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    body {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--ink-2);
+      background: var(--paper);
+      min-height: 100vh;
+      transition: background 0.3s var(--ease), color 0.3s var(--ease);
+      opacity: 0;
+      animation: pageFadeIn 0.6s var(--ocm-ease) forwards;
+    }
+    @keyframes pageFadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    ::selection { background: var(--beacon); color: var(--paper); }
+
+    /* HAMBURGER — plutajući taster gore desno (otvara push-meni). */
+    .burger {
+      position: fixed; top: 1rem; right: 1rem; z-index: 1001;
+      display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 6px;
+      width: 46px; height: 46px; padding: 11px 9px;
+      background: var(--paper-3); border: 1px solid var(--ink-line-2); border-radius: 12px;
+      cursor: pointer; box-shadow: 0 4px 18px -8px rgba(0,0,0,0.30);
+      transition: border-color 0.2s var(--ease), background 0.3s var(--ease);
+    }
+    .burger:hover { border-color: var(--beacon); }
+    .burger span { display: block; width: 24px; height: 2px; background: var(--ink); border-radius: 2px; transition: all 0.3s var(--ocm-ease); }
+    .burger span:last-child { width: 16px; }
+
+    /* Theme FAB — isti izgled kao burger (samostalan, ne dijeli .burger span pravila), ispod njega. */
+    .theme-fab {
+      position: fixed; top: calc(1rem + 46px + 10px); right: 1rem; z-index: 1001;
+      display: flex; align-items: center; justify-content: center;
+      width: 46px; height: 46px; padding: 0;
+      background: var(--paper-3); border: 1px solid var(--ink-line-2); border-radius: 12px;
+      cursor: pointer; box-shadow: 0 4px 18px -8px rgba(0,0,0,0.30);
+      font-family: var(--font-mono); font-size: 1.15rem; line-height: 1; color: var(--ink-4);
+      transition: border-color 0.2s var(--ease), background 0.3s var(--ease), color 0.2s var(--ease);
+    }
+    .theme-fab:hover { border-color: var(--beacon); color: var(--beacon); }
+
+    /* PUSH MENU — page card se gurne lijevo + 3D rotira, otkriva tamni meni
+       (port iz the original portfolio "Salient reveal"). */
+    #shell {
+      position: relative; z-index: 2; min-height: 100vh; background: var(--paper);
+      transform-origin: center center;
+      transition: transform .8s var(--ocm-ease), border-radius .8s var(--ocm-ease), box-shadow .8s var(--ocm-ease);
+    }
+    body.menu-fixed { overflow: hidden; }
+    body.menu-fixed #shell {
+      position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100dvh;
+      overflow: hidden; border-radius: 18px;
+    }
+    body.menu-pushed #shell {
+      transform: perspective(1400px) translateX(-50vw) rotateY(11deg) scale(.84);
+      box-shadow: 0 0 90px rgba(0,0,0,.55), 0 30px 60px rgba(0,0,0,.4);
+      will-change: transform;
+    }
+    .shell-scrim {
+      position: absolute; inset: 0; background: rgba(14,14,16,.30);
+      opacity: 0; visibility: hidden;
+      transition: opacity .8s var(--ocm-ease), visibility .8s var(--ocm-ease);
+      z-index: 50000; cursor: pointer;
+    }
+    body.menu-pushed .shell-scrim { opacity: 1; visibility: visible; }
+
+    .menu-overlay {
+      box-sizing: border-box; position: fixed; inset: 0; z-index: 1;
+      background: #0e0e10; color: #f5f1ea;
+      display: flex; flex-direction: column; justify-content: center; align-items: flex-end;
+      text-align: right; padding: clamp(70px,11vh,110px) clamp(24px,7vw,48px);
+    }
+    .menu-close {
+      position: absolute; top: 30px; right: 26px; background: none; border: none;
+      color: #f5f1ea; cursor: pointer; padding: 10px; opacity: 0;
+      transform: translateX(20px) rotate(-90deg);
+      transition: opacity .8s var(--ocm-ease) .15s, transform .8s var(--ocm-ease) .15s;
+    }
+    .menu-overlay.is-open .menu-close { opacity: .6; transform: translateX(0) rotate(0); }
+    .menu-close:hover { opacity: 1 !important; transform: rotate(90deg); }
+    .menu-close svg { width: 28px; height: 28px; stroke-width: 1.5; }
+
+    .menu-eyebrow {
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: .38em; text-transform: uppercase;
+      color: #d7b584; margin-bottom: clamp(16px,3.5vh,26px);
+      opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease), transform .8s var(--ocm-ease);
+    }
+    .menu-overlay.is-open .menu-eyebrow { opacity: 1; transform: translateX(0); }
+
+    .menu-nav { display: flex; flex-direction: column; align-items: flex-end; gap: clamp(3px,1.1vh,10px); }
+    .menu-link {
+      font-family: var(--font-display); font-size: clamp(16px,3vw,20px); font-weight: 300; line-height: 1.1;
+      color: #f5f1ea; text-decoration: none; opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease), transform .8s var(--ocm-ease), color .25s;
+    }
+    .menu-link .ml-tag { color: #6f6a62; font-family: var(--font-mono); font-size: 0.55em; letter-spacing: 0.1em; text-transform: uppercase; margin-left: 0.5em; }
+    .menu-link:hover { color: #d7b584; }
+    .menu-overlay.is-open .menu-link { opacity: 1; transform: translateX(0); }
+    .menu-link:nth-child(1){transition-delay:.10s}
+    .menu-link:nth-child(2){transition-delay:.14s}
+    .menu-link:nth-child(3){transition-delay:.18s}
+    .menu-link:nth-child(4){transition-delay:.22s}
+    .menu-link:nth-child(5){transition-delay:.26s}
+    .menu-link:nth-child(6){transition-delay:.30s}
+    .menu-link:nth-child(7){transition-delay:.34s}
+    .menu-link:nth-child(8){transition-delay:.38s}
+    .menu-link:nth-child(9){transition-delay:.42s}
+    .menu-link:nth-child(10){transition-delay:.46s}
+    .menu-archive {
+      margin-top: clamp(14px,3.5vh,26px); display: inline-flex; align-items: center; gap: 0.55em;
+      align-self: flex-end; font-family: var(--font-display); font-size: clamp(15px,2.5vw,17px);
+      font-weight: 300; color: #d7b584; text-decoration: none; padding-bottom: 4px;
+      border-bottom: 1px solid rgba(215,181,132,.3);
+      opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease) .46s, transform .8s var(--ocm-ease) .46s, color .25s;
+    }
+    .menu-archive svg { width: 0.85em; height: 0.85em; stroke: currentColor; fill: none; stroke-width: 1.6; }
+    .menu-archive:hover { color: #ecc998; }
+    .menu-overlay.is-open .menu-archive { opacity: 1; transform: translateX(0); }
+    .menu-notes { margin-top: clamp(8px,1.6vh,12px);
+      transition: opacity .8s var(--ocm-ease) .5s, transform .8s var(--ocm-ease) .5s, color .25s; }
+    .menu-documents { margin-top: clamp(8px,1.6vh,12px);
+      transition: opacity .8s var(--ocm-ease) .54s, transform .8s var(--ocm-ease) .54s, color .25s; }
+    .menu-links-item { margin-top: clamp(8px,1.6vh,12px);
+      transition: opacity .8s var(--ocm-ease) .55s, transform .8s var(--ocm-ease) .55s, color .25s; }
+    .menu-foot {
+      margin-top: clamp(20px,5vh,38px); font-family: var(--font-mono);
+      letter-spacing: .22em; text-transform: uppercase; color: #6f6a62;
+      opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease) .58s, transform .8s var(--ocm-ease) .58s;
+    }
+    .menu-overlay.is-open .menu-foot { opacity: 1; transform: translateX(0); }
+    .menu-foot-name { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+    .menu-foot-tagline { font-size: 9px; opacity: .7; }
+
+    /* Footer theme switch — samo ikona (diskretno, rijetko se koristi). */
+    .footer-theme {
+      background: none; border: 1px solid var(--ink-line); cursor: pointer; color: var(--ink-4);
+      font-family: var(--font-mono); font-size: 1rem; line-height: 1;
+      display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 8px;
+      transition: color 0.2s var(--ease), border-color 0.2s var(--ease), background 0.2s var(--ease);
+    }
+    .footer-theme:hover { color: var(--beacon); border-color: var(--beacon); background: var(--beacon-soft); }
+
+    /* BOARD */
+    .board { padding: clamp(1.75rem, 4vw, 2.75rem) var(--gut) clamp(3rem, 6vw, 5rem); }
+    .board-inner {
+      max-width: var(--maxw); margin: 0 auto;
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem;
+    }
+    @media (max-width: 980px) { .board-inner { grid-template-columns: 1fr; } }
+
+    .column {
+      display: flex; flex-direction: column;
+      background: var(--paper-2); border: 1px solid var(--ink-line);
+      border-radius: 18px; overflow: hidden; min-width: 0;
+    }
+    .column.is-today { border-color: var(--ink-line-2); box-shadow: 0 8px 32px -16px var(--beacon-glow); }
+    .column.is-today::before {
+      content: ''; display: block; height: 3px;
+      background: linear-gradient(90deg, var(--beacon-2), var(--beacon), var(--beacon-2));
+    }
+    .column-head { padding: 1.2rem 1.5rem 0.85rem; border-bottom: 1px solid var(--ink-line); }
+    .day-title {
+      font-family: var(--font-display); font-weight: 500; font-size: 1.5rem;
+      color: var(--ink); letter-spacing: -0.01em; line-height: 1;
+    }
+    .column.is-yesterday .day-title { color: var(--yesterday); }
+    .column.is-today .day-title { color: var(--today); }
+    .column.is-tomorrow .day-title { color: var(--tomorrow); }
+    .day-date { font-family: var(--font-mono); font-size: 0.76rem; color: var(--ink-3); margin-top: 0.35rem; }
+    .column.is-today .day-date { font-size: 1.14rem; color: var(--beacon-2); letter-spacing: -0.01em; }
+    .day-count {
+      margin-top: 0.6rem; display: inline-flex; align-items: center; gap: 0.4rem;
+      font-family: var(--font-mono); font-size: 0.7rem; color: var(--ink-3);
+      background: rgba(26,26,31,0.04); padding: 0.25rem 0.6rem; border-radius: 100px;
+    }
+    .day-count .num { color: var(--ink); font-weight: 600; }
+    /* "Otvori/Sakrij" dugme za Juče — skriveno na desktopu, vidljivo na mobilnom. */
+    .day-toggle {
+      display: none; margin-top: 0.85rem; width: 100%;
+      align-items: center; justify-content: center; gap: 0.45rem;
+      padding: 0.6rem 0.8rem; cursor: pointer;
+      font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase;
+      color: var(--ink-3); background: var(--paper-3);
+      border: 1px solid var(--ink-line-2); border-radius: 9px;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .day-toggle:hover { color: var(--beacon-2); border-color: var(--beacon); background: var(--beacon-soft); }
+    .day-toggle .chev { font-size: 1rem; line-height: 1; transition: transform 0.25s var(--ease); }
+    .column:not(.collapsed) .day-toggle .chev { transform: rotate(90deg); } /* otvoreno → strelica nadole */
+    @media (max-width: 980px) {
+      .board { padding: 0.6rem 0.85rem 3.5rem; }
+      .board-inner { grid-template-columns: 1fr; gap: 0.75rem; }
+      .column { border-radius: 14px; }
+      .column-head { padding: 0.55rem 0.65rem 0.35rem; }
+      .day-title { font-size: 1.3rem; }
+      .day-date { margin-top: 0.1rem; font-size: 0.76rem; }
+      .column.is-today .day-date { font-size: 0.9rem; }
+      .day-count { margin-top: 0.2rem; padding: 0.12rem 0.45rem; font-size: 0.65rem; }
+      .column.is-yesterday .day-toggle { display: inline-flex; margin-top: 0.35rem; padding: 0.35rem 0.55rem; }
+      /* Glatko otvaranje/skupljanje: visina se animira preko JS-izmjerene max-height. */
+      .column.is-yesterday .col-body {
+        overflow: hidden; min-height: 0;
+        transition: max-height 0.4s var(--ease), opacity 0.32s var(--ease);
+      }
+      .column.is-yesterday.collapsed .col-body { max-height: 0; opacity: 0; }
+
+      .cal-section { padding: 0.25rem 0.65rem; }
+      .cal-head { margin-bottom: 0.1rem; }
+      .cal-event { padding: 0.1rem 0; font-size: 0.8rem; }
+      .cal-empty { padding: 0; font-size: 0.72rem; opacity: 0.7; }
+      .cal-section:has(.cal-empty) { padding: 0.15rem 0.65rem; }
+      .cal-section:has(.cal-empty) .cal-empty { font-size: 0.7rem; }
+
+      .task-list { padding: 0.3rem 0.3rem 0.45rem; gap: 0.25rem; }
+      .task { padding: 0.35rem 0.5rem !important; gap: 0.15rem; border-radius: 8px; margin-left: 0 !important; border-left: 1px solid var(--ink-line) !important; }
+      .task-timeline-marker, .task-timeline-label { display: none !important; }
+      .task-top { gap: 0.4rem; align-items: flex-start; }
+      .task-check { width: 17px !important; height: 17px !important; border-radius: 4px !important; margin-top: 2px !important; flex-shrink: 0 !important; }
+      .task-check svg { width: 9px !important; height: 9px !important; }
+      .task-title { font-size: 0.96rem !important; line-height: 1.25 !important; }
+      .task-delete { width: 20px !important; height: 20px !important; font-size: 0.85rem !important; border-radius: 4px !important; opacity: 0.7 !important; }
+      .task-bottom { padding-left: 0; margin-top: 0.15rem; gap: 0.2rem; }
+      .task-chips { gap: 0.2rem; flex-wrap: wrap; align-items: center; }
+      .prio { height: 21px !important; padding: 0 0.35rem !important; font-size: 0.62rem !important; border-radius: 4px !important; }
+      .prio.move-tomorrow { padding: 0 0.7rem !important; min-width: 30px !important; }
+      .task-time { height: 21px !important; font-size: 0.68rem !important; border-radius: 4px !important; }
+      .task-time:not(.set) { width: 21px !important; }
+      .repeat-select { height: 21px !important; padding: 0 0.25rem !important; font-size: 0.6rem !important; border-radius: 4px !important; }
+      .repeat-add { width: 21px !important; height: 21px !important; }
+      .repeat-add svg { width: 12px !important; height: 12px !important; }
+      .subtask-list { margin-top: 0.15rem !important; margin-bottom: 0.15rem !important; gap: 0.15rem !important; }
+      .subtask { padding: 2px 5px !important; font-size: 0.78rem !important; gap: 0.3rem !important; border-radius: 4px !important; }
+      .subtask .task-check { width: 13px !important; height: 13px !important; margin-top: 0 !important; border-radius: 3px !important; }
+      .subtask .task-check svg { width: 7px !important; height: 7px !important; }
+      .subtask .task-delete { width: 16px !important; height: 16px !important; font-size: 0.75rem !important; }
+      .add-row { padding: 0.4rem 0.55rem; gap: 0.3rem; }
+      .add-input { padding: 0.4rem 0.55rem; font-size: 0.88rem; border-radius: 7px; }
+      .add-btn { padding: 0 0.65rem; font-size: 0.82rem; border-radius: 7px; }
+      .burger { top: 0.75rem; right: 0.75rem; width: 42px; height: 42px; padding: 9px 8px; }
+      .theme-fab { top: calc(0.75rem + 42px + 8px); right: 0.75rem; width: 42px; height: 42px; }
+    }
+
+
+    .add-row {
+      display: flex; gap: 0.5rem; padding: 0.85rem 1.5rem;
+      border-top: 1px solid var(--ink-line); background: var(--paper-3); margin-top: auto;
+    }
+    .add-input {
+      flex: 1; min-width: 0; border: 1px solid var(--ink-line-2); border-radius: 9px;
+      padding: 0.6rem 0.8rem; font-family: var(--font-sans); font-size: 0.9rem;
+      color: var(--ink); background: var(--paper); outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .add-input::placeholder { color: var(--ink-4); }
+    .add-input:focus { border-color: var(--beacon); box-shadow: 0 0 0 3px var(--beacon-soft); }
+    .add-btn {
+      border: 1px solid var(--beacon); background: var(--beacon-soft); color: var(--beacon-2);
+      border-radius: 9px; padding: 0 0.95rem; font-family: var(--font-sans); font-weight: 600;
+      font-size: 0.85rem; cursor: pointer; white-space: nowrap;
+      transition: background 0.2s var(--ease), color 0.2s var(--ease), transform 0.1s;
+    }
+    .add-btn:hover { background: var(--beacon); color: var(--paper); }
+    .add-btn:active { transform: scale(0.96); }
+
+    .task-list {
+      list-style: none; padding: 0.6rem 0.75rem 1rem;
+      display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; flex: 1; min-height: 100px;
+    }
+    .task {
+      display: flex; flex-direction: column; gap: 0.5rem; padding: 0.6rem 0.8rem;
+      background: var(--paper-3); border: 1px solid var(--ink-line); border-radius: 11px;
+      transition: border-color 0.2s var(--ease), opacity 0.3s var(--ease), transform 0.2s var(--ease);
+      animation: taskIn 0.3s var(--ease);
+      touch-action: pan-y; cursor: grab; min-width: 0;
+    }
+    .task-top {
+      display: flex; align-items: flex-start; gap: 0.7rem; width: 100%;
+    }
+    @keyframes taskIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    .task:hover { border-color: var(--ink-line-2); }
+    .task.done { opacity: 0.55; }
+    .task.done .task-title { color: var(--ink-3); }
+    .task.removing { opacity: 0; transform: translateX(20px); }
+
+    /* DRAG & DROP (pointer-based, radi i na dodir) */
+    .task.task-dragging { opacity: 0.32; }
+    .task-ghost {
+      position: fixed; z-index: 9000; margin: 0; list-style: none; pointer-events: none;
+      background: var(--paper-3); border: 1px solid var(--beacon); border-radius: 11px;
+      box-shadow: 0 18px 42px -12px rgba(0,0,0,0.55); transform: scale(1.03);
+    }
+    .column.drop-target { border-color: var(--beacon); box-shadow: 0 0 0 2px var(--beacon-glow), 0 8px 32px -16px var(--beacon-glow); }
+    body.dragging-active { -webkit-user-select: none; user-select: none; }
+    body.dragging-active .task { cursor: grabbing; }
+    .task-check {
+      flex-shrink: 0; width: 20px; height: 20px; border: 1.5px solid var(--ink-line-2);
+      border-radius: 6px; cursor: pointer; display: grid; place-items: center;
+      background: var(--paper); margin-top: 1px;
+      transition: background 0.25s var(--ease), border-color 0.25s var(--ease);
+    }
+    .task-check:hover { border-color: var(--beacon); }
+    .task.done .task-check { background: var(--signal); border-color: var(--signal); }
+    .task-check svg {
+      width: 12px; height: 12px; stroke: var(--paper); stroke-width: 3; fill: none;
+      stroke-linecap: round; stroke-linejoin: round;
+      stroke-dasharray: 16; stroke-dashoffset: 16;
+      transition: stroke-dashoffset 0.32s var(--ease) 0.05s;
+    }
+    .task.done .task-check svg { stroke-dashoffset: 0; }
+    @keyframes checkPop { 0% { transform: scale(1); } 42% { transform: scale(1.22); } 100% { transform: scale(1); } }
+    .task-check.pop { animation: checkPop 0.34s var(--ease); }
+    .task-body { flex: 1; min-width: 0; }
+    .task-title {
+      /* Font kao "Kalendar" (mono — uža slova); boja/veličina ostaju kao prije. */
+      font-family: var(--font-mono);
+      font-size: 1.15rem; color: var(--ink); line-height: 1.4; word-break: break-word;
+      display: inline; transition: color 0.35s var(--ease), background-size 0.4s var(--ease);
+      background-image: linear-gradient(transparent calc(50% - 0.75px), currentColor 0, currentColor calc(50% + 0.75px), transparent 0);
+      background-size: 0% 100%; background-repeat: no-repeat; background-position: left center;
+    }
+    .task.done .task-title { background-size: 100% 100%; opacity: 0.6; }
+    .task-bottom {
+      display: flex; align-items: center; justify-content: space-between; gap: 0.4rem;
+      margin-top: 0.4rem; padding-left: 0; flex-wrap: nowrap; min-width: 0;
+    }
+    .task-chips {
+      display: flex; align-items: center; gap: 0.35rem; flex-wrap: nowrap;
+      flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none;
+    }
+    .task-chips::-webkit-scrollbar { display: none; }
+    .repeat-select {
+      height: 26px; font-family: var(--font-mono); font-size: 0.65rem; font-weight: 600; letter-spacing: 0.04em;
+      text-transform: uppercase; padding: 0 0.4rem; border-radius: 6px; border: 1px solid var(--ink-line);
+      color: var(--ink-4); background: transparent; cursor: pointer; outline: none;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .repeat-select:hover { border-color: var(--ink-line-2); color: var(--ink-3); background: var(--paper-3); }
+    .repeat-select.has-repeat { color: var(--beacon-2); border-color: rgba(184,115,51,0.25); background: var(--beacon-soft); }
+    .repeat-select.has-repeat:hover { border-color: var(--beacon); }
+    .repeat-add {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 20px; height: 20px; padding: 0; border: none; background: none;
+      cursor: pointer; color: var(--ink-4); opacity: 0.3; transition: opacity 0.2s;
+    }
+    .repeat-add svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+    li:hover .repeat-add { opacity: 0.8; }
+    .repeat-add:hover { opacity: 1 !important; color: var(--beacon-2); }
+    /* Dvoklik na naslov → inline edit (contenteditable). */
+    .task-title[contenteditable="true"] {
+      outline: none; cursor: text;
+      border-radius: 6px; padding: 0 0.2rem; margin: 0 -0.2rem;
+      box-shadow: 0 0 0 2px var(--beacon-soft); border-bottom: 2px solid var(--beacon);
+      transition: none; /* nema animacije strike kroz dok se uređuje */
+    }
+    .task-title[contenteditable="true"]::after { display: none; }
+    .edit-icon {
+      font-size: 0.75rem; color: var(--ink-4); opacity: 0.35; margin-left: 0.35rem; cursor: pointer;
+      display: inline-block; transition: opacity 0.2s, color 0.2s;
+    }
+    .task:hover .edit-icon { opacity: 0.8; }
+    .edit-icon:hover { opacity: 1; color: var(--beacon-2); }
+    .task-meta { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; }
+    .prio {
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 28px;
+      font-family: var(--font-mono); font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; padding: 0 0.5rem; border-radius: 6px; border: 1px solid;
+    }
+    .prio.high { color: var(--ember); background: rgba(192,86,59,0.06); border-color: rgba(192,86,59,0.25); }
+    /* "normal" = podrazumevani srednji prioritet (plavkast). "medium" je legacy alias istog izgleda. */
+    .prio.normal, .prio.medium { color: var(--azure); background: var(--azure-soft); border-color: rgba(58,110,165,0.30); }
+    .prio.low { color: var(--ink-4); background: rgba(26,26,31,0.04); border-color: var(--ink-line); }
+    .prio.move-tomorrow { color: var(--beacon-2); background: var(--beacon-soft); border-color: rgba(184,115,51,0.28); cursor: pointer; transition: background 0.2s, color 0.2s, transform 0.1s; padding: 0 1rem; min-width: 44px; }
+    .prio.move-tomorrow:hover { background: var(--beacon); color: var(--paper); }
+    .prio.move-tomorrow:active { transform: scale(0.9); }
+    
+    .prio.subtask-add { 
+      cursor: pointer; 
+      color: rgba(138, 43, 226, 0.85); 
+      background: rgba(138, 43, 226, 0.04); 
+      border-color: rgba(138, 43, 226, 0.25);
+      transition: background 0.2s, transform 0.1s;
+    }
+    .prio.subtask-add:hover { background: rgba(138, 43, 226, 0.12); }
+    .prio.subtask-add:active { transform: scale(0.95); }
+    /* Sat / vrijeme taska. */
+    .task-time {
+      position: relative; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
+      height: 28px; padding: 0 0.5rem; border-radius: 6px; cursor: pointer;
+      border: 1px solid var(--ink-line); color: var(--ink-3);
+      font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.01em;
+      transition: color 0.2s, background 0.2s, border-color 0.2s, opacity 0.2s;
+    }
+    .task-time svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+    .task-time .tt-text:empty { display: none; }
+    /* Prazan sat je uvijek vidljiv — na dodir nema :hover stanja. */
+    .task-time:not(.set) { opacity: 0.6; width: 28px; padding: 0; }
+    .task:hover .task-time:not(.set) { opacity: 0.85; }
+    .task-time:not(.set):hover { opacity: 1; color: var(--beacon-2); border-color: var(--ink-line-2); }
+    /* Kad je vrijeme postavljeno: sakrij sat, prikaži vrijeme. */
+    .task-time.set {
+      opacity: 1; color: var(--beacon-2); background: var(--beacon-soft);
+      border-color: rgba(184,115,51,0.28);
+      width: auto; padding: 0 0.55rem;
+    }
+    .task-time.set svg { display: none; }
+    .task-time.set .tt-text { font-size: 0.8rem; font-weight: 600; line-height: 1; }
+    .task-time.set:hover { border-color: var(--beacon); }
+    
+    /* ═══════════ DRUM TIME PICKER ═══════════ */
+    .tp-backdrop {
+      position: fixed; inset: 0; background: rgba(6,6,8,0.65);
+      z-index: 10000; opacity: 0; visibility: hidden;
+      transition: opacity 0.25s; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    }
+    .tp-backdrop.open { opacity: 1; visibility: visible; }
+    .tp-modal {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -42%);
+      background: var(--tp-bg); border: 1px solid var(--tp-border); border-radius: 18px;
+      padding: 1.4rem 1.2rem 1.2rem; z-index: 10001;
+      opacity: 0; visibility: hidden;
+      transition: opacity 0.3s, transform 0.3s cubic-bezier(0.175,0.885,0.32,1.275);
+      box-shadow: 0 24px 48px -12px rgba(0,0,0,0.5); width: 280px;
+    }
+    .tp-modal.open { opacity: 1; visibility: visible; transform: translate(-50%, -50%); }
+
+    /* Header */
+    .tp-header {
+      font-family: var(--font-display); font-size: 1rem; color: var(--tp-text-near2);
+      text-align: center; margin-bottom: 1rem; letter-spacing: 0.03em;
+    }
+
+    /* Drum body */
+    .tp-drums { display: flex; justify-content: center; align-items: center; gap: 0; position: relative; margin-bottom: 1.4rem; }
+    .tp-separator {
+      font-family: var(--font-mono); font-size: 2rem; font-weight: 700;
+      color: var(--tp-text-sel); user-select: none; padding: 0 0.15rem; line-height: 1;
+    }
+
+    /* Single drum column */
+    .tp-drum {
+      display: flex; flex-direction: column; align-items: center; width: 100px; position: relative;
+    }
+    .tp-arrow {
+      background: none; border: none; cursor: pointer; padding: 6px 14px;
+      color: var(--tp-text-near1); font-size: 1.1rem; line-height: 1;
+      transition: color 0.15s; user-select: none; z-index: 2;
+    }
+    .tp-arrow:hover { color: var(--tp-text-sel); }
+    .tp-arrow:active { color: var(--beacon); }
+
+    /* Scroll window */
+    .tp-scroll-wrap {
+      position: relative; height: 210px; overflow: hidden; width: 100%;
+      touch-action: none; overscroll-behavior: contain;
+    }
+    /* Highlight band behind selected row */
+    .tp-highlight {
+      position: absolute; top: 50%; left: -8px; right: -8px; height: 42px;
+      transform: translateY(-50%); border-radius: 10px;
+      background: var(--tp-highlight-bg); pointer-events: none; z-index: 0;
+    }
+    /* Fade masks top & bottom */
+    .tp-scroll-wrap::before, .tp-scroll-wrap::after {
+      content: ''; position: absolute; left: 0; right: 0; height: 72px; z-index: 1; pointer-events: none;
+    }
+    .tp-scroll-wrap::before { top: 0; background: linear-gradient(to bottom, var(--tp-bg) 10%, transparent); }
+    .tp-scroll-wrap::after  { bottom: 0; background: linear-gradient(to top, var(--tp-bg) 10%, transparent); }
+
+    .tp-scroll {
+      position: absolute; left: 0; right: 0;
+      display: flex; flex-direction: column; align-items: center;
+      transition: transform 0.25s cubic-bezier(0.22,0.68,0,1);
+    }
+    .tp-cell {
+      height: 42px; display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono); font-size: 1.55rem; font-weight: 600;
+      color: var(--tp-text-dim); transition: color 0.2s, font-size 0.2s;
+      user-select: none; cursor: pointer; width: 100%;
+    }
+    .tp-cell.near1 { color: var(--tp-text-near1); font-size: 1.35rem; }
+    .tp-cell.near2 { color: var(--tp-text-near2); font-size: 1.45rem; }
+    .tp-cell.sel   { color: var(--tp-text-sel); font-size: 1.7rem; }
+
+    /* Editable input overlaid on selected cell */
+    .tp-edit {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 56px; height: 38px; z-index: 3;
+      font-family: var(--font-mono); font-size: 1.7rem; font-weight: 600;
+      color: var(--tp-text-sel); background: var(--tp-highlight-bg); border: 1px solid var(--beacon);
+      border-radius: 8px; text-align: center; outline: none;
+      display: none; /* shown on click */
+    }
+
+    /* Footer */
+    .tp-footer { display: flex; justify-content: space-between; gap: 0.8rem; }
+    .tp-btn {
+      flex: 1; padding: 0.65rem; border-radius: 10px; border: 1px solid var(--tp-btn-border);
+      background: var(--tp-btn-bg); color: var(--tp-btn-text);
+      font-weight: 500; cursor: pointer; transition: 0.15s; font-size: 0.85rem;
+    }
+    .tp-btn.primary { background: var(--beacon); color: #fff; border-color: var(--beacon); }
+    .tp-btn:hover { filter: brightness(1.15); }
+    .tp-btn:active { transform: scale(0.97); }
+
+    /* × dugme u gornjem desnom uglu taska. */
+    .task-delete {
+      flex-shrink: 0; cursor: pointer;
+      display: inline-grid; place-items: center;
+      width: 28px; height: 28px; padding: 0;
+      font-family: var(--font-mono); font-size: 1.1rem; font-weight: 600; line-height: 1;
+      color: var(--ember); background: rgba(192,86,59,0.06); border: 1px solid rgba(192,86,59,0.25); border-radius: 6px;
+      opacity: 0.6; transition: opacity 0.2s, color 0.2s, background 0.2s, border-color 0.2s, transform 0.1s;
+    }
+    .task:hover .task-delete { opacity: 1; }
+    .task-delete:hover { background: rgba(192,86,59,0.16); border-color: rgba(192,86,59,0.45); }
+    .task-delete:active { transform: scale(0.9); }
+    .empty-state { text-align: center; padding: 2rem 1rem; color: var(--ink-4); font-style: italic; font-size: 0.88rem; }
+
+    /* CALENDAR (u "Danas" koloni) — azure akcenat #3a6ea5 */
+    .cal-section {
+      border-bottom: 1px solid var(--ink-line); padding: 0.85rem 1.5rem;
+      background: linear-gradient(180deg, var(--azure-soft), transparent);
+    }
+    .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; }
+    .cal-label {
+      font-family: var(--font-mono); font-size: 0.86rem; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--azure); display: inline-flex; align-items: center; gap: 0.4rem;
+    }
+    .cal-refresh {
+      background: none; border: none; color: var(--ink-4); cursor: pointer; font-size: 0.85rem;
+      padding: 2px; transition: color 0.2s, transform 0.4s var(--ease);
+    }
+    .cal-refresh:hover { color: var(--azure); }
+    .cal-refresh.spinning { transform: rotate(360deg); }
+    .col-body { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
+    .cal-list { display: flex; flex-direction: column; gap: 0.4rem; }
+    .cal-event { display: flex; gap: 0.65rem; align-items: flex-start; font-size: 0.86rem; color: var(--ink-2); padding: 0.3rem 0; }
+    .cal-event .cal-time { font-family: var(--font-mono); font-size: 0.72rem; color: var(--azure); min-width: 3.2rem; padding-top: 1px; }
+    .cal-event .cal-title { flex: 1; line-height: 1.4; }
+    .cal-event .cal-loc { font-size: 0.72rem; color: var(--ink-4); margin-top: 1px; }
+    .cal-empty, .cal-stub { font-size: 0.82rem; color: var(--ink-4); font-style: italic; }
+    .cal-connect {
+      display: inline-flex; align-items: center; gap: 0.45rem; margin-top: 0.2rem;
+      border: 1px solid var(--ink-line-2); background: var(--paper-3); color: var(--ink);
+      font-family: var(--font-sans); font-size: 0.82rem; font-weight: 500;
+      padding: 0.5rem 0.8rem; border-radius: 9px; text-decoration: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .cal-connect:hover { border-color: var(--azure); background: var(--azure-soft); }
+
+    /* FOOTER (slim) */
+    .footer {
+      max-width: var(--maxw); margin: 0 auto; padding: 1.75rem var(--gut) 3rem;
+      border-top: 1px solid var(--ink-line);
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 1rem;
+      font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-4);
+    }
+    .footer code {
+      color: var(--beacon-2); background: var(--beacon-soft);
+      padding: 0.08rem 0.35rem; border-radius: 4px;
+    }
+    .footer em { font-family: var(--font-display); font-style: italic; color: var(--beacon); }
+    .footer-left { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .footer .sys-sep { color: var(--ink-line-2); }
+    .footer .sys-stats { color: var(--ink-4); letter-spacing: 0.01em; }
+    .footer .sys-stats b { color: var(--beacon-2); font-weight: 600; }
+    .footer .gw-status { display: inline-flex; align-items: center; gap: 0.4rem; }
+    .footer .pip { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .footer .on { color: var(--signal); }
+    .footer .off { color: var(--ink-4); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+
+
+
+</head>
+<body>
+
+  <button class="burger" id="mobileBurger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu">
+    <span></span><span></span><span></span>
+  </button>
+
+  <button class="theme-fab" id="topTheme" type="button" title="Change theme" aria-label="Change theme">
+    <span class="theme-icon" id="topThemeIcon">☾</span>
+  </button>
+
+  <div class="menu-overlay" id="mobileMenu" role="dialog" aria-modal="true" aria-label="Menu">
+    <button class="menu-close" id="closeMobile" type="button" aria-label="Close menu">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+
+    <a href="/" class="menu-link" style="margin-bottom: 1.5rem; color: #d7b584;">NOEMA</a>
+
+    <nav class="menu-nav">
+      <a href="/ai-projects" class="menu-link">AI Projects<span class="ml-tag">Workspace</span></a>
+      <a href="/buildingsite" class="menu-link">Building<span class="ml-tag">sites</span></a>
+      <a href="/stats" class="menu-link">Stats<span class="ml-tag">Analytics</span></a>
+    </nav>
+
+    <a href="/arhiva" class="menu-archive">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4" stroke-linecap="round"/></svg>
+      Arhiva
+    </a>
+
+    <a href="/notes" class="menu-archive menu-notes">
+      <svg viewBox="0 0 24 24"><path d="M5 3h9l5 5v13a0 0 0 0 1 0 0H5a0 0 0 0 1 0 0V3z" stroke-linejoin="round"/><path d="M14 3v5h5M8 13h8M8 17h5" stroke-linecap="round"/></svg>
+      Notes
+    </a>
+
+    <a href="/documents" class="menu-archive menu-documents">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+      Documents
+    </a>
+
+    <a href="/links" class="menu-archive menu-links-item">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      Links
+    </a>
+
+    <a href="/inspiration" class="menu-archive menu-documents">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-5 3 3 2-2 6 5"/></svg>
+      Inspiration
+    </a>
+
+    <a href="/backup" class="menu-foot" style="text-decoration: none; cursor: pointer;">
+      <div class="menu-foot-name">BACKUP</div>
+    </a>
+  </div>
+
+
+
+  <!-- DRUM TIME PICKER -->
+  <div class="tp-backdrop" id="tpBackdrop"></div>
+  <div class="tp-modal" id="tpModal" role="dialog" aria-modal="true" aria-label="Select time">
+    <div class="tp-header">Set time</div>
+    <div class="tp-drums">
+      <!-- Hours drum -->
+      <div class="tp-drum" id="tpDrumH">
+        <button class="tp-arrow tp-up" data-drum="h" aria-label="Hour +1">&#9650;</button>
+        <div class="tp-scroll-wrap">
+          <div class="tp-highlight"></div>
+          <div class="tp-scroll" id="tpScrollH"></div>
+          <input class="tp-edit" id="tpEditH" type="text" inputmode="numeric" maxlength="2" aria-label="Enter hour">
+        </div>
+        <button class="tp-arrow tp-down" data-drum="h" aria-label="Hour -1">&#9660;</button>
+      </div>
+      <span class="tp-separator">:</span>
+      <!-- Minutes drum -->
+      <div class="tp-drum" id="tpDrumM">
+        <button class="tp-arrow tp-up" data-drum="m" aria-label="Minute +1">&#9650;</button>
+        <div class="tp-scroll-wrap">
+          <div class="tp-highlight"></div>
+          <div class="tp-scroll" id="tpScrollM"></div>
+          <input class="tp-edit" id="tpEditM" type="text" inputmode="numeric" maxlength="2" aria-label="Enter minute">
+        </div>
+        <button class="tp-arrow tp-down" data-drum="m" aria-label="Minute -1">&#9660;</button>
+      </div>
+    </div>
+    <div class="tp-footer">
+      <button class="tp-btn" id="tpClear">Clear</button>
+      <button class="tp-btn primary" id="tpSave">Save</button>
+    </div>
+  </div>
+
+  <main class="board">
+    <div class="board-inner" id="boardInner"><!-- kolone iz JS-a --></div>
+  </main>
+
+  <footer class="footer">
+    <span class="footer-left">
+      Noema · <em>misao na dohvat ruke</em>
+      <span class="sys-sep">|</span>
+      <span class="sys-stats" id="sysStats" title="Resursi servera">CPU: <b>—</b> · RAM: <b>—</b> · Disk: <b>—</b></span>
+      <span class="sys-sep">|</span>
+      <a href="/help" class="sys-stats" style="text-decoration: none; cursor: pointer;">help</a>
+      <span class="sys-sep">|</span>
+      <a href="/logout" class="sys-stats" style="text-decoration: none; cursor: pointer;">logout</a>
+    </span>
+    <div style="display:inline-flex; gap:0.5rem; align-items:center;">
+      <button class="footer-theme" id="pageWidth" type="button" title="Promijeni širinu stranice (90% ili normalno)" aria-label="Širina stranice" style="width:auto; padding: 0 8px; font-weight:600; font-size:0.75rem;">WIDTH</button>
+      <button class="footer-theme" id="fontDec" type="button" title="Smanji tekst" aria-label="Smanji tekst">
+        <span style="font-size: 0.85em; font-family: var(--font-sans); font-weight:600;">A</span>
+      </button>
+      <button class="footer-theme" id="fontReset" type="button" title="Vrati na original" aria-label="Vrati na original" style="width:auto; padding: 0 8px;">
+        <span style="font-size: 0.85em; font-family: var(--font-sans); font-weight:600;">100%</span>
+      </button>
+      <button class="footer-theme" id="fontInc" type="button" title="Povećaj tekst" aria-label="Povećaj tekst">
+        <span style="font-size: 1.25em; font-family: var(--font-sans); font-weight:600;">A</span>
+      </button>
+      <span class="sys-sep" style="margin: 0 20px;">|</span>
+      <button class="footer-theme" id="footerTheme" type="button" title="Change theme" aria-label="Change theme">
+        <span class="theme-icon" id="ftIcon">☾</span>
+      </button>
+    </div>
+  </footer>
+
+  <script>
+    "use strict";
+
+    const DAYS = [
+      { key: "yesterday", label: "Juče", cls: "is-yesterday", sub: "prošli dan", offset: -1 },
+      { key: "today", label: "Danas", cls: "is-today", sub: "danas", offset: 0 },
+      { key: "tomorrow", label: "Sjutra", cls: "is-tomorrow", sub: "naredni dan", offset: 1 },
+    ];
+
+    let state = { yesterday: [], today: [], tomorrow: [] };
+    let calendarState = {
+      configured: false,
+      connected: false,
+      yesterday: { events: [], loading: false },
+      today: { events: [], loading: false },
+      tomorrow: { events: [], loading: false }
+    };
+    // Na mobilnom je "Juče" skupljeno (samo header + dugme) da ne zakloni "Danas".
+    // Na desktopu je ovo bez efekta (vidi CSS). Pamti se kroz re-render-e.
+    let yesterdayOpen = false;
+
+    function dateFor(offset) {
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      return d;
+    }
+    function fmtDate(d) {
+      const days = ["nedelja", "ponedeljak", "utorak", "sreda", "četvrtak", "petak", "subota"];
+      const months = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "avg", "sep", "okt", "nov", "dec"];
+      return `${days[d.getDay()]} · ${d.getDate()}. ${months[d.getMonth()]}`;
+    }
+
+    async function api(path, opts = {}) {
+      const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+      const text = await res.text();
+      let json = null;
+      try { json = text ? JSON.parse(text) : null; } catch { /* not json */ }
+      if (!res.ok) throw new Error((json && json.error) || `HTTP ${res.status}`);
+      return json;
+    }
+
+    function render() {
+      const board = document.getElementById("boardInner");
+      board.innerHTML = "";
+      for (const day of DAYS) board.appendChild(renderColumn(day));
+    }
+
+    function renderColumn(day) {
+      const tasks = state[day.key] || [];
+      const open = tasks.filter((t) => !t.done).length;
+      const col = document.createElement("section");
+      col.className = `column ${day.cls}`;
+      col.dataset.day = day.key; // za drag & drop drop-zone detekciju
+
+      // "Juče" se na mobilnom može skupiti — skriva listu, ostaje header + dugme.
+      const collapsible = day.key === "yesterday" && tasks.length > 0;
+      if (collapsible && !yesterdayOpen) col.classList.add("collapsed");
+
+      const head = document.createElement("div");
+      head.className = "column-head";
+      head.innerHTML = `
+        <div class="day-title">${day.label}</div>
+        <div class="day-date">${fmtDate(dateFor(day.offset))}</div>
+        <div class="day-count"><span class="num">${open}</span> otvorenih · ${tasks.length} total</div>
+      `;
+      if (collapsible) {
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "day-toggle";
+        toggle.setAttribute("aria-expanded", String(yesterdayOpen));
+        toggle.innerHTML = `<span class="dt-label">${yesterdayOpen ? "Sakrij" : "Otvori"}</span><span class="chev">›</span>`;
+        toggle.addEventListener("click", () => {
+          const opening = !yesterdayOpen;
+          yesterdayOpen = opening;
+          toggle.setAttribute("aria-expanded", String(opening));
+          toggle.querySelector(".dt-label").textContent = opening ? "Sakrij" : "Otvori";
+
+          const list = col.querySelector(".col-body");
+          // Animiraj samo na mobilnom (gdje je dugme vidljivo i transition definisan).
+          const animate = list && getComputedStyle(toggle).display !== "none";
+          if (!animate) { col.classList.toggle("collapsed", !opening); return; }
+
+          const onMaxHeightEnd = (cb) => {
+            const te = (e) => {
+              if (e.propertyName !== "max-height") return;
+              list.removeEventListener("transitionend", te);
+              cb();
+            };
+            list.addEventListener("transitionend", te);
+          };
+          if (opening) {
+            col.classList.remove("collapsed");         // padding/opacity → puni (animira)
+            const h = list.scrollHeight;               // puna visina sadržaja
+            list.style.maxHeight = "0px";
+            void list.offsetHeight;                    // commit početnog stanja (inače skok)
+            list.style.maxHeight = h + "px";
+            onMaxHeightEnd(() => { list.style.maxHeight = "none"; }); // pusti da raste dinamički
+          } else {
+            list.style.maxHeight = list.scrollHeight + "px";
+            void list.offsetHeight;                    // commit pune visine prije skupljanja
+            col.classList.add("collapsed");            // padding/opacity → 0 (animira uz visinu)
+            list.style.maxHeight = "0px";
+            onMaxHeightEnd(() => { list.style.maxHeight = ""; }); // CSS (collapsed) preuzme = 0
+          }
+        });
+        head.appendChild(toggle);
+      }
+      col.appendChild(head);
+
+      const colBody = document.createElement("div");
+      colBody.className = "col-body";
+
+      // Calendar sekcija
+      colBody.appendChild(renderCalendar(day.key));
+
+      // "Juče" je read-only za dodavanje — nema add-row (ne mogu se praviti
+      // obaveze u prošlosti; tamo stižu samo preostali/zakasneli taskovi).
+      let addRow = null;
+      if (day.key !== "yesterday") {
+        addRow = document.createElement("div");
+        addRow.className = "add-row";
+        addRow.innerHTML = `
+          <input class="add-input" type="text" placeholder="Dodaj u ${day.label.toLowerCase()}…" maxlength="280" />
+          <button class="add-btn" title="Dodaj (Enter)">+ Dodaj</button>
+        `;
+        const input = addRow.querySelector(".add-input");
+        const btn = addRow.querySelector(".add-btn");
+        const submit = async () => {
+          const title = input.value.trim();
+          if (!title) return;
+          btn.disabled = true;
+          try {
+            const res = await api("/api/todos", {
+              method: "POST",
+              body: JSON.stringify({ title, day: day.key, priority: "normal" }),
+            });
+            state[day.key].unshift(res.todo);
+            input.value = "";
+            render();
+          } catch (err) {
+            alert("Greška: " + err.message);
+          } finally {
+            btn.disabled = false;
+          }
+        };
+        btn.addEventListener("click", submit);
+        input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+      }
+
+      const list = document.createElement("ul");
+      list.className = "task-list";
+      if (tasks.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty-state";
+        empty.textContent = day.key === "yesterday"
+          ? "Ništa nije preostalo."
+          : day.key === "today" ? "Čisto. Dodaj prvi task iznad." : "Još prazno za sjutra.";
+        list.appendChild(empty);
+      } else {
+        for (const t of tasks) list.appendChild(renderTask(t, day.key));
+      }
+      colBody.appendChild(list);
+      if (addRow) colBody.appendChild(addRow); // input + dugme na dnu kolone (osim "Juče")
+      col.appendChild(colBody);
+      return col;
+    }
+
+    function renderTask(task, dayKey) {
+      const li = document.createElement("li");
+      li.className = "task" + (task.done ? " done" : "");
+      li.dataset.id = task.id;
+      
+
+
+      const check = document.createElement("div");
+      check.className = "task-check";
+      check.setAttribute("role", "checkbox");
+      check.setAttribute("aria-checked", String(task.done));
+      check.innerHTML = `<svg viewBox="0 0 14 14"><polyline points="2,7 6,11 12,3"/></svg>`;
+      check.addEventListener("click", () => toggleDone(task, dayKey, li, check));
+
+      const body = document.createElement("div");
+      body.className = "task-body";
+      body.innerHTML = `
+        <div class="task-title" title="Klikni ili dvoklikni za izmjenu">${escapeHtml(task.title)} <span class="edit-icon" title="Izmijeni naslov">✎</span></div>
+      `;
+      const titleEl = body.querySelector(".task-title");
+      titleEl.addEventListener("click", (e) => {
+        e.stopPropagation();
+        editTaskTitle(task, titleEl);
+      });
+      titleEl.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        editTaskTitle(task, titleEl);
+      });
+
+      const topRow = document.createElement("div");
+      topRow.className = "task-top";
+      topRow.appendChild(check);
+      topRow.appendChild(body);
+      // del se dodaje na kraj topRow-a (gornji desni ugao) — vidi ispod.
+
+      const prio = document.createElement("span");
+      prio.className = `prio ${task.priority}`;
+      prio.setAttribute("role", "button");
+      prio.setAttribute("tabindex", "0");
+      prio.setAttribute("title", "Promijeni prioritet");
+      prio.textContent = task.priority;
+
+      // Tap-to-cycle prioritet: normal → high → low → normal.
+      const cyclePrio = () => cyclePriority(task, prio);
+      prio.addEventListener("click", cyclePrio);
+      prio.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); cyclePrio(); }
+      });
+
+      const time = document.createElement("div");
+      time.className = "task-time" + (task.time ? " set" : "");
+      time.setAttribute("title", "Set time");
+      time.innerHTML = `
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="tt-text">${task.time || ""}</span>
+      `;
+      time.addEventListener("pointerdown", (e) => { e.stopPropagation(); });
+      time.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openCustomTimePicker(task, time);
+      });
+
+      const del = document.createElement("button");
+      del.className = "task-delete";
+      del.setAttribute("title", "Obriši");
+      del.setAttribute("aria-label", "Obriši task");
+      del.innerHTML = "×";
+      del.addEventListener("click", () => removeTask(task, dayKey, li));
+      topRow.appendChild(del); // gornji desni ugao
+
+      const bottomChips = document.createElement("div");
+      bottomChips.className = "task-chips";
+      bottomChips.appendChild(prio); // prioritet lijevo
+
+      // Subtasks prikaz
+      if (task.subtasks && task.subtasks.length > 0) {
+        const subList = document.createElement("div");
+        subList.className = "subtask-list";
+        subList.style.marginTop = "0.5rem";
+        subList.style.marginBottom = "0.5rem";
+        subList.style.display = "flex";
+        subList.style.flexDirection = "column";
+        subList.style.gap = "0.3rem";
+        
+        task.subtasks.forEach((st, idx) => {
+          const sub = document.createElement("div");
+          sub.className = "subtask" + (st.done ? " done" : "");
+          sub.style.display = "flex";
+          sub.style.alignItems = "center";
+          sub.style.gap = "0.5rem";
+          sub.style.fontSize = "0.85rem";
+          sub.style.opacity = st.done ? "0.5" : "1";
+          
+          // Border like label but different color (using a subtle purple/indigo theme)
+          sub.style.border = "1px solid rgba(138, 43, 226, 0.25)";
+          sub.style.backgroundColor = "rgba(138, 43, 226, 0.04)";
+          sub.style.borderRadius = "6px";
+          sub.style.padding = "4px 8px";
+          
+          const sCheck = document.createElement("div");
+          sCheck.className = "task-check";
+          sCheck.style.width = "18px";
+          sCheck.style.height = "18px";
+          sCheck.style.flexShrink = "0";
+          sCheck.setAttribute("role", "checkbox");
+          sCheck.setAttribute("aria-checked", String(st.done));
+          sCheck.innerHTML = `<svg viewBox="0 0 14 14" style="width:10px;height:10px;"><polyline points="2,7 6,11 12,3"/></svg>`;
+          sCheck.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            st.done = !st.done;
+            try {
+              await api(`/api/todos/${task.id}`, { method: "PATCH", body: JSON.stringify({ subtasks: task.subtasks }) });
+              render();
+            } catch (err) {
+              st.done = !st.done;
+              alert("Greška: " + err.message);
+            }
+          });
+          
+          const sTitle = document.createElement("div");
+          sTitle.textContent = st.title;
+          sTitle.style.flex = "1";
+          sTitle.style.textDecoration = st.done ? "line-through" : "none";
+          
+          const sDel = document.createElement("button");
+          sDel.className = "task-delete";
+          sDel.style.width = "20px";
+          sDel.style.height = "20px";
+          sDel.style.fontSize = "0.9rem";
+          sDel.innerHTML = "×";
+          sDel.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const prev = [...task.subtasks];
+            task.subtasks.splice(idx, 1);
+            sub.remove();
+            try {
+              await api(`/api/todos/${task.id}`, { method: "PATCH", body: JSON.stringify({ subtasks: task.subtasks }) });
+              render();
+            } catch (err) {
+              task.subtasks = prev;
+              alert("Greška: " + err.message);
+            }
+          });
+          
+          sub.appendChild(sCheck);
+          sub.appendChild(sTitle);
+          sub.appendChild(sDel);
+          subList.appendChild(sub);
+        });
+        body.appendChild(subList);
+      }
+
+      const addSubBtn = document.createElement("button");
+      addSubBtn.className = "prio subtask-add";
+      addSubBtn.title = "Dodaj subtask";
+      addSubBtn.innerHTML = "+ Subtask";
+      addSubBtn.style.marginRight = "auto";
+      addSubBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const title = prompt("Unesi subtask:");
+        if (!title) return;
+        task.subtasks = task.subtasks || [];
+        task.subtasks.push({ id: Math.random().toString(36).substr(2, 9), title, done: false });
+        try {
+          await api(`/api/todos/${task.id}`, { method: "PATCH", body: JSON.stringify({ subtasks: task.subtasks }) });
+          render();
+        } catch (err) {
+          task.subtasks.pop();
+          alert("Greška: " + err.message);
+        }
+      });
+      bottomChips.appendChild(addSubBtn);
+
+      // Repeat
+      const REPEAT_OPTIONS = [
+        { value: "daily", label: "Daily" },
+        { value: "weekdays", label: "Weekdays" },
+        { value: "weekends", label: "Weekends" },
+        { value: "mon", label: "Mon" },
+        { value: "tue", label: "Tue" },
+        { value: "wed", label: "Wed" },
+        { value: "thu", label: "Thu" },
+        { value: "fri", label: "Fri" },
+        { value: "sat", label: "Sat" },
+        { value: "sun", label: "Sun" },
+      ];
+      function addRepeatButton() {
+        const btn = document.createElement("button");
+        btn.className = "repeat-add";
+        btn.setAttribute("title", "Ponavljaj");
+        btn.innerHTML = `<svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`;
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          task.repeat = "daily";
+          btn.replaceWith(buildRepeatSelect("daily"));
+          fetch(`/api/todos/${task.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ repeat: "daily" })
+          }).catch(() => {});
+        });
+        btn.addEventListener("pointerdown", (e) => e.stopPropagation());
+        return btn;
+      }
+      function buildRepeatSelect(val) {
+        const rs = document.createElement("select");
+        rs.className = "repeat-select has-repeat";
+        rs.innerHTML = `<option value="">✕</option>` +
+          REPEAT_OPTIONS.map(o => `<option value="${o.value}"${o.value === val ? ' selected' : ''}>${o.label}</option>`).join("");
+        rs.addEventListener("change", (e) => {
+          e.stopPropagation();
+          const v = rs.value;
+          task.repeat = v;
+          if (!v) {
+            rs.replaceWith(addRepeatButton());
+          }
+          fetch(`/api/todos/${task.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ repeat: v })
+          }).catch(() => {});
+        });
+        rs.addEventListener("pointerdown", (e) => e.stopPropagation());
+        return rs;
+      }
+      const repeatEl = task.repeat ? buildRepeatSelect(task.repeat) : addRepeatButton();
+      bottomChips.appendChild(repeatEl);
+      // Move-to-next-day dugme
+      if (dayKey !== "tomorrow") {
+        const nextDay = dayKey === "yesterday" ? "today" : "tomorrow";
+        const btnTitle = dayKey === "yesterday" ? "Prebaci za danas" : "Prebaci za sjutra";
+        const moveBtn = document.createElement("button");
+        moveBtn.className = "prio move-tomorrow";
+        moveBtn.setAttribute("title", btnTitle);
+        moveBtn.innerHTML = "&raquo;";
+        moveBtn.addEventListener("click", () => moveTaskToDay(task, dayKey, nextDay));
+        bottomChips.appendChild(moveBtn);
+      }
+
+      const bottomRow = document.createElement("div");
+      bottomRow.className = "task-bottom";
+      bottomRow.appendChild(bottomChips);
+      bottomRow.appendChild(time); // sat skroz desno (space-between)
+
+      li.appendChild(topRow);
+      li.appendChild(bottomRow);
+      attachDrag(li, task, dayKey);
+      return li;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      })[c]);
+    }
+
+    function renderCalendar(dayKey) {
+      const calDay = calendarState[dayKey];
+      const sec = document.createElement("div");
+      sec.className = "cal-section";
+      sec.innerHTML = `
+        <div class="cal-head">
+          <span class="cal-label">Kalendar</span>
+          <button class="cal-refresh ${calDay.loading ? "spinning" : ""}" title="Osveži">↻</button>
+        </div>
+        <div class="cal-list"></div>
+      `;
+      const list = sec.querySelector(".cal-list");
+      const refreshBtn = sec.querySelector(".cal-refresh");
+
+      if (!calendarState.configured) {
+        list.innerHTML = `<div class="cal-stub">Nije podešeno. Dodaj <code>GOOGLE_CLIENT_ID</code> i <code>GOOGLE_CLIENT_SECRET</code> u <code>.env</code>.</div>`;
+        refreshBtn.style.display = "none";
+        return sec;
+      }
+      if (!calendarState.connected) {
+        refreshBtn.style.display = "none";
+        list.innerHTML = `<div class="cal-stub">Kalendar nije povezan.</div>`;
+        if (dayKey === "today") {
+          const btn = document.createElement("a");
+          btn.className = "cal-connect";
+          btn.href = "/auth/google";
+          btn.innerHTML = "🔗 Poveži Google kalendar";
+          list.appendChild(btn);
+        }
+        return sec;
+      }
+      if (calDay.loading) {
+        list.innerHTML = `<div class="cal-empty">Učitavanje…</div>`;
+      } else if (calDay.events.length === 0) {
+        const text = dayKey === "yesterday" ? "Nema događaja." : (dayKey === "today" ? "Nema događaja danas." : "Nema događaja sjutra.");
+        list.innerHTML = `<div class="cal-empty">${text}</div>`;
+      } else {
+        for (const e of calDay.events) {
+          const el = document.createElement("div");
+          el.className = "cal-event";
+          const titleStyle = dayKey === "today" ? ' style="color: var(--ember);"' : '';
+          el.innerHTML = `
+            <span class="cal-time">${fmtTime(e.start)}</span>
+            <div class="cal-title"${titleStyle}>${escapeHtml(e.title)}${e.location ? `<div class="cal-loc">${escapeHtml(e.location)}</div>` : ""}</div>
+          `;
+          list.appendChild(el);
+        }
+      }
+      refreshBtn.addEventListener("click", () => loadCalendar(dayKey));
+      return sec;
+    }
+
+    function fmtTime(iso) {
+      if (!iso) return "celi dan";
+      if (iso.length === 10) return "celi dan"; // YYYY-MM-DD = all-day
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return "—";
+      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    }
+
+    async function loadCalendar(dayKey) {
+      if (!calendarState.connected) { render(); return; }
+      const keys = dayKey ? [dayKey] : ["yesterday", "today", "tomorrow"];
+      keys.forEach(k => { calendarState[k].loading = true; });
+      render();
+      await Promise.all(keys.map(async (k) => {
+        try {
+          const res = await api(`/api/calendar?day=${k}`);
+          calendarState.configured = res.configured !== false;
+          calendarState.connected = res.connected !== false && !res.notConnected;
+          calendarState[k].events = res.events || [];
+        } catch (err) {
+          calendarState[k].events = [];
+        } finally {
+          calendarState[k].loading = false;
+        }
+      }));
+      render();
+    }
+
+    async function toggleDone(task, dayKey, li, check) {
+      const next = !task.done;
+      task.done = next; // optimistic
+      // In-place promjena klase (bez full re-render) da CSS animacije odsviraju.
+      if (li) li.classList.toggle("done", next);
+      if (check) {
+        check.setAttribute("aria-checked", String(next));
+        if (next) {
+          check.classList.remove("pop");
+          void check.offsetWidth; // restart animacije
+          check.classList.add("pop");
+          check.addEventListener("animationend", () => check.classList.remove("pop"), { once: true });
+        }
+      }
+      try {
+        const res = await api(`/api/todos/${task.id}`, { method: "PATCH", body: JSON.stringify({ done: next }) });
+        Object.assign(task, res.todo);
+      } catch (err) {
+        task.done = !next; // rollback
+        if (li) li.classList.toggle("done", !next);
+        if (check) check.setAttribute("aria-checked", String(!next));
+        alert("Greška: " + err.message);
+      }
+    }
+
+
+
+    // Sačuvaj/obriši vrijeme taska (HH:MM ili "" za brisanje). In-place update chipa.
+    async function setTaskTime(task, value, chip) {
+      const next = value || null;
+      const prev = task.time || null;
+      if (next === prev) return;
+      task.time = next; // optimistic
+      const txt = chip.querySelector(".tt-text");
+      if (txt) txt.textContent = next || "";
+      chip.classList.toggle("set", !!next);
+      try {
+        const res = await api(`/api/todos/${task.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ time: next }),
+        });
+        Object.assign(task, res.todo);
+        // Server može normalizovati (npr. odbiti nevalidno) → sinhronizuj prikaz.
+        if (txt) txt.textContent = task.time || "";
+        chip.classList.toggle("set", !!task.time);
+        const inp = chip.querySelector("input");
+        if (inp) inp.value = task.time || "";
+      } catch (err) {
+        task.time = prev; // rollback
+        if (txt) txt.textContent = prev || "";
+        chip.classList.toggle("set", !!prev);
+        alert("Greška: " + err.message);
+      }
+    }
+
+    // Tap-to-cycle prioritet: normal → high → low → normal. In-place update bedža.
+    // (legacy "medium" se prvim tapom uklopi u krug → high.)
+    async function cyclePriority(task, badge) {
+      const order = { normal: "high", high: "low", low: "normal", medium: "high" };
+      const next = order[task.priority] || "high";
+      const prev = task.priority;
+      task.priority = next; // optimistic
+      badge.className = `prio ${next}`;
+      badge.textContent = next;
+      try {
+        const res = await api(`/api/todos/${task.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ priority: next }),
+        });
+        Object.assign(task, res.todo);
+        badge.className = `prio ${task.priority}`;
+        badge.textContent = task.priority;
+      } catch (err) {
+        task.priority = prev; // rollback
+        badge.className = `prio ${prev}`;
+        badge.textContent = prev;
+        alert("Greška: " + err.message);
+      }
+    }
+
+    async function removeTask(task, dayKey, el) {
+      el.classList.add("removing");
+      try {
+        await api(`/api/todos/${task.id}`, { method: "DELETE" });
+        state[dayKey] = state[dayKey].filter((t) => t.id !== task.id);
+        setTimeout(render, 180);
+      } catch (err) {
+        el.classList.remove("removing");
+        alert("Greška: " + err.message);
+      }
+    }
+
+    function editTaskTitle(task, titleEl) {
+      if (titleEl.isContentEditable) return;
+
+      const editIcon = titleEl.querySelector(".edit-icon");
+      if (editIcon) editIcon.style.display = "none";
+
+      titleEl.contentEditable = "true";
+      titleEl.focus();
+      
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(titleEl);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      
+      const prevTitle = task.title;
+
+      const finishEdit = async () => {
+        titleEl.contentEditable = "false";
+        titleEl.removeEventListener("blur", finishEdit);
+        titleEl.removeEventListener("keydown", onKeyDown);
+        
+        const newTitle = titleEl.textContent.replace("✎", "").trim() || prevTitle;
+        titleEl.innerHTML = `${escapeHtml(newTitle)} <span class="edit-icon" title="Izmijeni naslov">✎</span>`;
+        
+        if (newTitle === prevTitle) return;
+        
+        task.title = newTitle;
+        try {
+          const res = await api(`/api/todos/${task.id}`, { method: "PATCH", body: JSON.stringify({ title: newTitle }) });
+          Object.assign(task, res.todo);
+          titleEl.innerHTML = `${escapeHtml(task.title)} <span class="edit-icon" title="Izmijeni naslov">✎</span>`;
+        } catch (err) {
+          task.title = prevTitle;
+          titleEl.innerHTML = `${escapeHtml(prevTitle)} <span class="edit-icon" title="Izmijeni naslov">✎</span>`;
+          alert("Greška: " + err.message);
+        }
+      };
+
+      const onKeyDown = (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          titleEl.blur();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          titleEl.innerHTML = `${escapeHtml(prevTitle)} <span class="edit-icon" title="Izmijeni naslov">✎</span>`;
+          titleEl.blur();
+        }
+      };
+      
+      titleEl.addEventListener("blur", finishEdit);
+      titleEl.addEventListener("keydown", onKeyDown);
+    }
+
+    async function loadAll() {
+      const [todosRes, statusRes] = await Promise.all([
+        api("/api/todos"),
+        api("/api/status").catch(() => null),
+      ]);
+      state = todosRes.todos;
+      if (statusRes) {
+        calendarState.configured = !!statusRes.calendarConfigured;
+        calendarState.connected = !!statusRes.calendarConnected;
+        renderAuthStatus(statusRes);
+      }
+      render();
+      if (calendarState.connected) loadCalendar();
+    }
+
+    function renderAuthStatus(status) {
+      // Footer više ne prikazuje auth status — ostavljeno bez-op (API i dalje radi).
+      void status;
+    }
+
+    // ── Sistemski resursi servera (CPU/RAM/Disk) u futeru ──
+    function fmtGB(bytes) { return (bytes / 1073741824).toFixed(1); }
+    async function loadSystem() {
+      const el = document.getElementById("sysStats");
+      if (!el) return;
+      try {
+        const res = await api("/api/system");
+        const cpu = res.cpu ? `${res.cpu.percent}%` : "—";
+        const ram = res.mem ? `${res.mem.percent}%` : "—";
+        const disk = res.disk ? `${res.disk.percent}%` : "—";
+        el.innerHTML = `CPU: <b>${cpu}</b> · RAM: <b>${ram}</b> · Disk: <b>${disk}</b>`;
+        // Detalji (GB) u tooltip-u.
+        const parts = [];
+        if (res.cpu) parts.push(`CPU ${res.cpu.cores} jezgara`);
+        if (res.mem) parts.push(`RAM ${fmtGB(res.mem.used)}/${fmtGB(res.mem.total)} GB`);
+        if (res.disk) parts.push(`Disk ${fmtGB(res.disk.used)}/${fmtGB(res.disk.total)} GB`);
+        el.title = parts.join(" · ") || "Resursi servera";
+      } catch (err) {
+        el.innerHTML = `<span style="font-style:italic">sistem nedostupan</span>`;
+      }
+    }
+
+    // ── Theme switcher (keryx tamna ↔ svijetla) u footeru, pamti se u localStorage ──
+    function applyTheme(theme) {
+      if (window.applyNoemaTheme) return window.applyNoemaTheme(theme);
+      const dark = theme === "dark";
+      document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+      document.querySelectorAll(".theme-icon, #ftIcon, #topThemeIcon").forEach(el => { el.textContent = dark ? "☀" : "☾"; });
+    }
+    function initTheme() {
+      const saved = localStorage.getItem("noema-theme") || "dark";
+      applyTheme(saved);
+      const toggle = (e) => {
+        if (window.toggleNoemaTheme) return window.toggleNoemaTheme(e);
+        if (e && e.preventDefault) { e.preventDefault(); e.stopPropagation(); }
+        const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        localStorage.setItem("noema-theme", next);
+        applyTheme(next);
+      };
+      const btn = document.getElementById("footerTheme");
+      if (btn && !btn._themeBound) { btn.addEventListener("click", toggle); btn._themeBound = true; }
+      const fab = document.getElementById("topTheme");
+      if (fab && !fab._themeBound) { fab.addEventListener("click", toggle); fab._themeBound = true; }
+    }
+
+    // ── Font Scale ──
+    let fontScale = Number(localStorage.getItem("noema-font-scale")) || 1;
+    function applyFontScale(scale) {
+      document.documentElement.style.fontSize = (16 * scale) + "px";
+      document.body.style.fontSize = (16 * scale) + "px";
+    }
+    function initFontScale() {
+      applyFontScale(fontScale);
+      const decBtn = document.getElementById("fontDec");
+      const incBtn = document.getElementById("fontInc");
+      const resBtn = document.getElementById("fontReset");
+      if (decBtn) decBtn.addEventListener("click", () => {
+        fontScale = Math.max(0.4, fontScale - 0.3);
+        localStorage.setItem("noema-font-scale", fontScale);
+        applyFontScale(fontScale);
+      });
+      if (incBtn) incBtn.addEventListener("click", () => {
+        fontScale = Math.min(2.5, fontScale + 0.3);
+        localStorage.setItem("noema-font-scale", fontScale);
+        applyFontScale(fontScale);
+      });
+      if (resBtn) resBtn.addEventListener("click", () => {
+        fontScale = 1;
+        localStorage.setItem("noema-font-scale", fontScale);
+        applyFontScale(fontScale);
+      });
+    }
+
+    // ── Drag & drop: premjesti task između kolona (pointer events → radi i na dodir) ──
+    let dragHL = null; // trenutno istaknuta drop-kolona
+    function columnUnder(x, y) {
+      const el = document.elementFromPoint(x, y);
+      return el ? el.closest(".column") : null;
+    }
+    function highlightColumn(col) {
+      const next = col && col.dataset.day ? col : null;
+      if (dragHL === next) return;
+      if (dragHL) dragHL.classList.remove("drop-target");
+      dragHL = next;
+      if (dragHL) dragHL.classList.add("drop-target");
+    }
+    function attachDrag(li, task, fromDay) {
+      li.addEventListener("pointerdown", (e) => {
+        if (e.button != null && e.button > 0) return; // samo primarno dugme
+        if (e.target.closest(".task-check") || e.target.closest(".task-delete") || e.target.closest(".task-time") || e.target.closest(".prio") || e.target.closest(".repeat-select") || e.target.closest(".repeat-add") || e.target.isContentEditable) return;
+        const touch = e.pointerType === "touch";
+        const sx = e.clientX, sy = e.clientY;
+        let started = false, ghost = null, ox = 0, oy = 0, lpTimer = null;
+        let lastX = sx, lastY = sy, scrollRAF = null;
+
+        const begin = () => {
+          started = true;
+          const r = li.getBoundingClientRect();
+          ox = sx - r.left; oy = sy - r.top;
+          ghost = li.cloneNode(true);
+          ghost.classList.add("task-ghost");
+          ghost.style.width = r.width + "px";
+          ghost.style.left = r.left + "px";
+          ghost.style.top = r.top + "px";
+          document.body.appendChild(ghost);
+          li.classList.add("task-dragging");
+          document.body.classList.add("dragging-active");
+          document.documentElement.style.touchAction = "none";
+          scrollRAF = requestAnimationFrame(edgeScroll);
+        };
+        // Auto-scroll kad je prst blizu vrha/dna — da dohvatiš kolonu van ekrana.
+        const edgeScroll = () => {
+          const margin = 90, max = 16, vh = window.innerHeight;
+          let dy = 0;
+          if (lastY < margin) dy = -max * (1 - lastY / margin);
+          else if (lastY > vh - margin) dy = max * (1 - (vh - lastY) / margin);
+          if (dy) {
+            window.scrollBy(0, dy);
+            highlightColumn(columnUnder(lastX, lastY)); // kolona se mijenja dok skrolujemo
+          }
+          scrollRAF = requestAnimationFrame(edgeScroll);
+        };
+        const onMove = (ev) => {
+          const dist = Math.hypot(ev.clientX - sx, ev.clientY - sy);
+          if (!started) {
+            if (touch) { if (dist > 12) cleanup(); return; } // pokret prije long-press = skrol
+            if (dist > 6) begin(); else return;
+          }
+          ev.preventDefault();
+          lastX = ev.clientX; lastY = ev.clientY;
+          ghost.style.left = (lastX - ox) + "px";
+          ghost.style.top = (lastY - oy) + "px";
+          highlightColumn(columnUnder(lastX, lastY));
+        };
+        const onUp = () => {
+          if (started) {
+            ghost.style.display = "none"; // Sakrij duha da elementFromPoint ispod njega prođe
+            const elUnder = document.elementFromPoint(lastX, lastY);
+            ghost.style.display = "";
+            const col = elUnder ? elUnder.closest(".column") : columnUnder(lastX, lastY);
+            const toDay = col && col.dataset.day;
+            const targetEl = elUnder ? elUnder.closest(".task:not(.task-dragging)") : null;
+            const targetId = targetEl ? targetEl.dataset.id : null;
+            
+            if (toDay && (toDay !== fromDay || targetId)) {
+              moveTaskToDay(task, fromDay, toDay, targetId);
+            }
+          }
+          cleanup();
+        };
+        const cleanup = () => {
+          if (lpTimer) clearTimeout(lpTimer);
+          if (scrollRAF) cancelAnimationFrame(scrollRAF);
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("pointerup", onUp);
+          window.removeEventListener("pointercancel", onUp);
+          if (ghost) ghost.remove();
+          li.classList.remove("task-dragging");
+          document.body.classList.remove("dragging-active");
+          document.documentElement.style.touchAction = "";
+          highlightColumn(null);
+        };
+
+        if (touch) lpTimer = setTimeout(begin, 200); // dugi pritisak pokreće drag
+        window.addEventListener("pointermove", onMove, { passive: false });
+        window.addEventListener("pointerup", onUp);
+        window.addEventListener("pointercancel", onUp);
+      });
+    }
+    async function moveTaskToDay(task, fromDay, toDay, targetId) {
+      const prevOrder = task.order || task.createdAt;
+      const prevDay = fromDay;
+
+      let targetTask = null;
+      let targetPrevOrder = null;
+
+      if (targetId) {
+        targetTask = state[toDay]?.find(t => t.id === targetId);
+        if (targetTask) {
+          targetPrevOrder = targetTask.order || targetTask.createdAt;
+          // Swap orders
+          task.order = targetPrevOrder;
+          targetTask.order = prevOrder;
+        }
+      } else if (fromDay !== toDay) {
+        // Ako se samo premješta u drugu kolonu na vrh
+        task.order = Date.now();
+      }
+
+      // Optimistično: prebaci u state pa potvrdi na serveru.
+      state[fromDay] = (state[fromDay] || []).filter((t) => t.id !== task.id);
+      task.day = toDay;
+      (state[toDay] = state[toDay] || []).unshift(task);
+      render();
+      
+      try {
+        const promises = [
+          api(`/api/todos/${task.id}`, { method: "PATCH", body: JSON.stringify({ day: toDay, order: task.order }) })
+        ];
+        if (targetTask) {
+          promises.push(api(`/api/todos/${targetTask.id}`, { method: "PATCH", body: JSON.stringify({ order: targetTask.order }) }));
+        }
+        await Promise.all(promises);
+      } catch (err) {
+        state[toDay] = state[toDay].filter((t) => t.id !== task.id); // rollback
+        task.day = prevDay;
+        task.order = prevOrder;
+        if (targetTask) targetTask.order = targetPrevOrder;
+        (state[fromDay] = state[fromDay] || []).unshift(task);
+        render();
+        alert("Greška: " + err.message);
+      }
+    }
+
+    // ── Push-meni (port "Salient reveal" iz the original portfolio) ──
+    function initMenu() {
+      const burger = document.getElementById("mobileBurger");
+      const overlay = document.getElementById("mobileMenu");
+      const closeBtn = document.getElementById("closeMobile");
+      if (!burger || !overlay) return;
+
+      // Umotaj cijelu stranicu u #shell (karticu); meni izvuci IZA kartice.
+      const shell = document.createElement("div");
+      shell.id = "shell";
+      const inner = document.createElement("div");
+      inner.id = "shell-inner";
+      while (document.body.firstChild) inner.appendChild(document.body.firstChild);
+      shell.appendChild(inner);
+      const scrim = document.createElement("div");
+      scrim.className = "shell-scrim";
+      scrim.setAttribute("aria-hidden", "true");
+      shell.appendChild(scrim);
+      document.body.appendChild(shell);
+      document.body.appendChild(overlay); // meni iza kartice (niži z-index)
+      document.body.appendChild(document.getElementById("tpBackdrop"));
+      document.body.appendChild(document.getElementById("tpModal"));
+
+      let sy = 0, unfixTimer = null;
+      const setExpanded = (o) => burger.setAttribute("aria-expanded", o ? "true" : "false");
+
+      function open() {
+        if (unfixTimer) { clearTimeout(unfixTimer); unfixTimer = null; }
+        if (!document.body.classList.contains("menu-fixed")) {
+          sy = window.scrollY || window.pageYOffset || 0;
+          inner.style.transform = "translateY(" + (-sy) + "px)";
+          document.body.classList.add("menu-fixed");
+          void shell.offsetWidth; // reflow da se .8s transform animira iz mira
+        }
+        requestAnimationFrame(() => {
+          document.body.classList.add("menu-pushed");
+          overlay.classList.add("is-open");
+        });
+        setExpanded(true);
+      }
+      function close() {
+        overlay.classList.remove("is-open");
+        document.body.classList.remove("menu-pushed");
+        setExpanded(false);
+        if (unfixTimer) clearTimeout(unfixTimer);
+        unfixTimer = setTimeout(() => {
+          document.body.classList.remove("menu-fixed");
+          inner.style.transform = "";
+          window.scrollTo(0, sy);
+          unfixTimer = null;
+        }, 850);
+      }
+
+      burger.addEventListener("click", open);
+      closeBtn.addEventListener("click", close);
+      scrim.addEventListener("click", close);
+      overlay.querySelectorAll("a").forEach((l) => {
+        l.addEventListener("click", (e) => {
+          const href = l.getAttribute("href");
+          const target = l.getAttribute("target");
+          if (!href || href === "#" || target === "_blank") {
+            close();
+            return;
+          }
+          e.preventDefault();
+          close();
+          setTimeout(() => {
+            window.location.href = href;
+          }, 850);
+        });
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && document.body.classList.contains("menu-pushed")) close();
+      });
+    }
+
+    function handleCalendarRedirect() {
+      const params = new URLSearchParams(location.search);
+      const cal = params.get("calendar");
+      if (!cal) return;
+      const msg = {
+        connected: "✓ Google kalendar je povezan.",
+        error: "Povezivanje kalendara nije uspelo. Pokušaj ponovo.",
+        denied: "Pristup kalendaru je odbijen.",
+      }[cal];
+      if (msg) setTimeout(() => alert(msg), 100);
+      // Očisti query param iz URL-a.
+      history.replaceState(null, "", location.pathname);
+    }
+
+    /* ═══════════ DRUM TIME PICKER LOGIC ═══════════ */
+    let activeTaskForTime = null;
+    let activeTimeDiv = null;
+    const tpBackdrop = document.getElementById("tpBackdrop");
+    const tpModal = document.getElementById("tpModal");
+    const CELL_H = 42; // px – must match CSS .tp-cell height
+    const VISIBLE_CELLS = 5; // cells visible in scroll window (210 / 42)
+    const CENTER_IDX = Math.floor(VISIBLE_CELLS / 2); // index 2 = middle
+
+    // Build a drum: creates cells 0..max, stores state on the wrapper
+    function buildDrum(scrollEl, max) {
+      scrollEl.innerHTML = '';
+      for (let i = 0; i <= max; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'tp-cell';
+        cell.dataset.value = i;
+        cell.textContent = String(i).padStart(2, '0');
+        scrollEl.appendChild(cell);
+      }
+      scrollEl._max = max;
+      scrollEl._value = 0;
+    }
+
+    function setDrumValue(scrollEl, val, animate) {
+      const max = scrollEl._max;
+      val = ((val % (max + 1)) + (max + 1)) % (max + 1); // wrap
+      scrollEl._value = val;
+      const offset = -(val * CELL_H) + (CENTER_IDX * CELL_H);
+      scrollEl.style.transition = animate ? 'transform 0.25s cubic-bezier(0.22,0.68,0,1)' : 'none';
+      scrollEl.style.transform = `translateY(${offset}px)`;
+      // Update cell classes for styling
+      const cells = scrollEl.children;
+      for (let i = 0; i < cells.length; i++) {
+        const dist = Math.abs(i - val);
+        cells[i].classList.remove('sel', 'near1', 'near2');
+        if (dist === 0) cells[i].classList.add('sel');
+        else if (dist === 1) cells[i].classList.add('near2');
+        else if (dist === 2) cells[i].classList.add('near1');
+      }
+    }
+
+    const scrollH = document.getElementById('tpScrollH');
+    const scrollM = document.getElementById('tpScrollM');
+    const editH = document.getElementById('tpEditH');
+    const editM = document.getElementById('tpEditM');
+    buildDrum(scrollH, 23);
+    buildDrum(scrollM, 59);
+
+    // Arrow buttons
+    document.querySelectorAll('.tp-arrow').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const isHour = btn.dataset.drum === 'h';
+        const scr = isHour ? scrollH : scrollM;
+        const dir = btn.classList.contains('tp-up') ? -1 : 1;
+        setDrumValue(scr, scr._value + dir, true);
+      });
+    });
+
+    // Click on a cell to jump to it
+    [scrollH, scrollM].forEach(scr => {
+      scr.addEventListener('click', (e) => {
+        const cell = e.target.closest('.tp-cell');
+        if (!cell) return;
+        const v = parseInt(cell.dataset.value);
+        if (cell.classList.contains('sel')) {
+          // Click on selected = open edit input
+          const ed = scr === scrollH ? editH : editM;
+          ed.value = String(v).padStart(2, '0');
+          ed.style.display = 'block';
+          ed.focus();
+          ed.select();
+        } else {
+          setDrumValue(scr, v, true);
+        }
+      });
+    });
+
+    // Touch/scroll drag on drums
+    [scrollH, scrollM].forEach(scr => {
+      const wrap = scr.parentElement;
+      let startY = 0, startVal = 0, dragging = false;
+      wrap.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.tp-edit') || e.target.closest('.tp-arrow')) return;
+        e.preventDefault();
+        dragging = true; startY = e.clientY; startVal = scr._value;
+        if (wrap.setPointerCapture) wrap.setPointerCapture(e.pointerId);
+      });
+      wrap.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        e.preventDefault();
+        const dy = startY - e.clientY;
+        const steps = Math.round(dy / (CELL_H * 0.6));
+        if (steps !== 0) {
+          setDrumValue(scr, startVal + steps, false);
+        }
+      });
+      wrap.addEventListener('pointerup', (e) => {
+        dragging = false;
+        if (wrap.hasPointerCapture && wrap.hasPointerCapture(e.pointerId)) {
+          wrap.releasePointerCapture(e.pointerId);
+        }
+      });
+      wrap.addEventListener('pointercancel', () => { dragging = false; });
+      // Mouse wheel
+      wrap.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const dir = e.deltaY > 0 ? 1 : -1;
+        setDrumValue(scr, scr._value + dir, true);
+      }, { passive: false });
+    });
+
+    // Edit input commit
+    function commitEdit(ed, scr) {
+      const v = parseInt(ed.value) || 0;
+      const clamped = Math.max(0, Math.min(scr._max, v));
+      setDrumValue(scr, clamped, true);
+      ed.style.display = 'none';
+    }
+    [editH, editM].forEach((ed, i) => {
+      const scr = i === 0 ? scrollH : scrollM;
+      ed.addEventListener('blur', () => commitEdit(ed, scr));
+      ed.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commitEdit(ed, scr); }
+        if (e.key === 'Escape') { ed.style.display = 'none'; }
+      });
+    });
+
+    function openCustomTimePicker(task, timeDiv) {
+      activeTaskForTime = task;
+      activeTimeDiv = timeDiv;
+      let h, m;
+      if (task.time) {
+        [h, m] = task.time.split(':').map(Number);
+      } else {
+        const now = new Date();
+        h = now.getHours();
+        m = now.getMinutes();
+      }
+      setDrumValue(scrollH, h, false);
+      setDrumValue(scrollM, m, false);
+      editH.style.display = 'none';
+      editM.style.display = 'none';
+      tpBackdrop.classList.add('open');
+      tpModal.classList.add('open');
+    }
+
+    function closeCustomTimePicker() {
+      tpBackdrop.classList.remove('open');
+      tpModal.classList.remove('open');
+      activeTaskForTime = null;
+      activeTimeDiv = null;
+    }
+
+    tpBackdrop.addEventListener('click', closeCustomTimePicker);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && tpModal.classList.contains('open')) {
+        closeCustomTimePicker();
+      }
+    });
+    document.getElementById('tpClear').addEventListener('click', () => {
+      if (activeTaskForTime) setTaskTime(activeTaskForTime, '', activeTimeDiv);
+      closeCustomTimePicker();
+    });
+    document.getElementById('tpSave').addEventListener('click', () => {
+      if (activeTaskForTime) {
+        const hh = String(scrollH._value).padStart(2, '0');
+        const mm = String(scrollM._value).padStart(2, '0');
+        setTaskTime(activeTaskForTime, `${hh}:${mm}`, activeTimeDiv);
+      }
+      closeCustomTimePicker();
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+      initTheme();
+      initFontScale();
+      initMenu();
+      handleCalendarRedirect();
+      loadAll().catch((err) => {
+        console.error(err);
+        alert("Ne mogu da učitam taskove: " + err.message);
+      });
+      loadSystem();
+      setInterval(loadSystem, 5000); // osvježi resurse svakih 5s
+    });
+  </script>
+
+<script src="/noema-header-footer.js"></script>
+<script src="/cmdk.js"></script></body>
+</html>

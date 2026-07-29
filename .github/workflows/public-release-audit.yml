@@ -1,0 +1,103 @@
+name: Public release audit
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noema-public-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check for forbidden private deployment details
+        shell: bash
+        run: |
+          set -euo pipefail
+          patterns='vladimirperovic[.]com|renovationsteps[.]com|aastudiobelgrade[.]rs|arch-duo[.]com|noema[.]renovationsteps[.]com|estanar[.]rs|[5]05083247|[5]33649384|[5]33642241|[5]33658820|VP[/]AA|AA[ ]Studio|ARCH[-]DUO|R[-]Steps|Socia[D]|Školic[a]'
+          if git grep -nEi "$patterns" -- . ':(exclude).github/workflows/public-release-audit.yml'; then
+            echo "Forbidden private deployment details remain in tracked files."
+            exit 1
+          fi
+
+      - name: Check private-network addresses
+        shell: bash
+        run: |
+          set -euo pipefail
+          patterns='(^|[^0-9])(10[.]([0-9]{1,3}[.]){2}[0-9]{1,3}|192[.]168[.]([0-9]{1,3}[.])?[0-9]{1,3}|172[.](1[6-9]|2[0-9]|3[01])[.]([0-9]{1,3}[.])?[0-9]{1,3})([^0-9]|$)'
+          if git grep -nEi "$patterns" -- . ':(exclude).github/workflows/public-release-audit.yml'; then
+            echo "Private-network addresses remain in tracked files."
+            exit 1
+          fi
+
+      - name: Check common secret formats
+        shell: bash
+        run: |
+          set -euo pipefail
+          patterns='BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|AIza[0-9A-Za-z_-]{30,}|gh[pousr]_[0-9A-Za-z]{30,}|xox[baprs]-[0-9A-Za-z-]{20,}'
+          if git grep -nE "$patterns" -- . ':(exclude).github/workflows/public-release-audit.yml'; then
+            echo "A value resembling a secret was found."
+            exit 1
+          fi
+
+      - name: Verify private runtime and seed files are not tracked
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad="$(git ls-files '.env' '.env.*' 'data/**' '*.pem' '*.key' 'src/store/seed*.json' 'src/store/seed_files/**' | grep -v '^\.env\.example$' || true)"
+          if [ -n "$bad" ]; then
+            echo "Private, runtime, seed, or seed-media files are tracked:"
+            echo "$bad"
+            exit 1
+          fi
+
+          unexpected_media="$(git ls-files | grep -Ei '[.](jpe?g|png|webp|gif|pdf|zip|mp4|mov|heic)$' | grep -v '^docs/screenshots/' || true)"
+          if [ -n "$unexpected_media" ]; then
+            echo "Unexpected tracked media exists outside docs/screenshots/:"
+            echo "$unexpected_media"
+            exit 1
+          fi
+
+      - name: Run project checks
+        run: npm run check
+
+      - name: Record tracked-file inventory
+        shell: bash
+        run: |
+          mkdir -p public-release-audit
+          git ls-files | sort > public-release-audit/tracked-files.txt
+          git grep -nE 'process\.env|PUBLIC_BASE_URL|GOOGLE_|GA4_|NOEMA_' -- src .env.example > public-release-audit/configuration-references.txt || true
+          git ls-files -z | while IFS= read -r -d '' file; do
+            size="$(stat -c '%s' "$file")"
+            if [ "$size" -ge 1048576 ]; then
+              printf '%12s  %s\n' "$size" "$file"
+            fi
+          done | sort -nr > public-release-audit/large-files.txt
+          git ls-files | grep -Ei '[.](jpe?g|png|webp|gif|pdf|zip|mp4|mov|heic)$' > public-release-audit/media-files.txt || true
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: noema-public-release-audit
+          path: public-release-audit/
+          retention-days: 14

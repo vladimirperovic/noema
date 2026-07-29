@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a reproducible problem in an unmodified or clearly described fork
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include passwords, tokens, private domains, addresses, production data, or undisclosed vulnerabilities. Use the security process in SECURITY.md for sensitive reports.
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      placeholder: v0.1.0 or commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: Node 22, Ubuntu 24.04, Docker, reverse proxy
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem and its impact.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Start a clean checkout...
+        2. Open...
+        3. Submit...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs or screenshots
+      description: Remove all secrets and personal data before posting.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I reproduced this with the latest default branch or stated why I could not.
+          required: true
+        - label: I ran `npm run check`.
+          required: true
+        - label: I removed secrets and private data.
+          required: true
+        - label: This is not an undisclosed security vulnerability.
+          required: true

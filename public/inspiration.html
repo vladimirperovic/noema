@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Noema - Inspiration</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="description" content="Privatna biblioteka arhitektonskih referenci i inspirativnih slika.">
+  <script>
+    (function () {
+      try { document.documentElement.setAttribute("data-theme", localStorage.getItem("noema-theme") || "dark"); } catch (e) {}
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&family=JetBrains+Mono:wght@400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper:#f7f3ec; --surface:#fbf8f2; --card:#fff; --ink:#1a1a1f; --ink-2:#434147;
+      --muted:#706c66; --faint:#999289; --line:rgba(26,26,31,.12); --line-2:rgba(26,26,31,.2);
+      --accent:#9c6029; --accent-soft:rgba(184,115,51,.1); --danger:#a43f32;
+      --display:'Fraunces',Georgia,serif; --sans:'Geist',system-ui,sans-serif; --mono:'JetBrains Mono',monospace;
+      --ease:cubic-bezier(.16,1,.3,1); color-scheme:light;
+    }
+    html[data-theme="dark"] {
+      --paper:#0a0a0c; --surface:#101013; --card:#17171b; --ink:#f4efe6; --ink-2:#d8d2c4;
+      --muted:#aaa397; --faint:#706a62; --line:rgba(244,239,230,.09); --line-2:rgba(244,239,230,.17);
+      --accent:#e8b07d; --accent-soft:rgba(232,176,125,.11); --danger:#e07a66; color-scheme:dark;
+    }
+    * { box-sizing:border-box; }
+    html { min-height:100%; background:var(--paper); -webkit-font-smoothing:antialiased; }
+    body { margin:0; min-height:100dvh; background:var(--paper); color:var(--ink-2); font:16px/1.55 var(--sans); }
+    button,input { font:inherit; } button { cursor:pointer; } [hidden] { display:none !important; }
+    :focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+    .wrap { width:min(1180px,calc(100% - 3rem)); margin:0 auto; padding:2rem 0 5rem; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+    .back,.theme-button { min-height:36px; border:1px solid var(--line); border-radius:9px; color:var(--muted); background:var(--card); font:500 .72rem var(--mono); letter-spacing:.035em; }
+    .back { display:inline-flex; align-items:center; gap:.55rem; padding:.45rem .72rem; text-decoration:none; }
+    .back:hover,.theme-button:hover { color:var(--accent); border-color:var(--accent); }
+    .theme-button { width:38px; padding:0; font-size:1rem; }
+    .hero { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:2rem; padding:clamp(3.6rem,9vw,7rem) 0 3rem; }
+    .eyebrow { margin-bottom:.55rem; color:var(--accent); font:500 .67rem var(--mono); letter-spacing:.16em; text-transform:uppercase; }
+    h1 { margin:0; color:var(--ink); font:300 clamp(3.6rem,8vw,7rem)/.86 var(--display); letter-spacing:-.065em; }
+    .intro { max-width:34rem; margin:1rem 0 0; color:var(--muted); font-size:1rem; }
+    .add-button { display:inline-flex; align-items:center; justify-content:center; gap:.55rem; min-width:130px; padding:.75rem 1rem; border:1px solid var(--accent); border-radius:10px; color:var(--paper); background:var(--accent); font-weight:600; white-space:nowrap; transition:transform .18s var(--ease),opacity .18s; }
+    .add-button:hover { opacity:.88; transform:translateY(-2px); }.add-button:active { transform:scale(.98); }
+    html.public-gallery .topbar, html.public-gallery #openAdd, html.public-gallery .collection-actions button, html.public-gallery .album-feature { display:none !important; }
+    .summary { display:flex; gap:1.2rem; align-items:center; margin-bottom:1.1rem; color:var(--faint); font:.67rem var(--mono); }.summary b { color:var(--ink-2); font-weight:500; }
+    .library-tools { display:grid; gap:.7rem; margin-bottom:1.5rem; }.tool-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(10.5rem,14rem); align-items:stretch; gap:.75rem; }
+    .search-box { position:relative; }.search-box input { width:100%; min-height:46px; padding:.72rem 2.7rem .72rem .9rem; border:1px solid var(--line-2); border-radius:10px; outline:0; color:var(--ink); background:var(--card); }.search-box input::placeholder { color:var(--faint); }.search-box input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+    .search-clear { position:absolute; top:50%; right:.55rem; width:30px; height:30px; transform:translateY(-50%); border:0; border-radius:7px; color:var(--muted); background:transparent; }.search-clear:hover { color:var(--accent); background:var(--accent-soft); }
+    .layout-control { display:grid; align-content:center; gap:.45rem; padding:.45rem .7rem; border:1px solid var(--line-2); border-radius:10px; background:var(--card); }.layout-heading { display:flex; justify-content:space-between; gap:.5rem; color:var(--muted); font:500 .62rem var(--mono); letter-spacing:.04em; text-transform:uppercase; }.layout-heading b { color:var(--accent); font-weight:500; }.layout-control input { width:100%; margin:0; accent-color:var(--accent); }
+    .label-filters { display:flex; gap:.4rem; overflow-x:auto; padding:.05rem 0 .15rem; scrollbar-width:none; }.label-filters::-webkit-scrollbar { display:none; }
+    .filter-chip { flex:0 0 auto; min-height:29px; padding:.32rem .68rem; border:1px solid var(--line); border-radius:99px; color:var(--muted); background:transparent; font:500 .65rem var(--mono); }.filter-chip:hover,.filter-chip.active { color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
+    .gallery { --gallery-columns:2; display:grid; grid-template-columns:repeat(var(--gallery-columns),minmax(0,1fr)); gap:clamp(1.3rem,3vw,2.5rem); }
+    .collection { min-width:0; padding:clamp(1rem,2.2vw,1.5rem); border:1px solid var(--line); border-radius:16px; background:var(--surface); transition:border-color .25s; }
+    .collection:hover { border-color:var(--line-2); }
+    .photo-stack { position:relative; width:100%; aspect-ratio:4/3; border:0; background:transparent; padding:0; }
+    .photo { position:absolute; inset:5% 6%; overflow:hidden; border:1px solid rgba(255,255,255,.22); border-radius:12px; background:var(--card); box-shadow:0 14px 36px rgba(15,13,10,.2); transition:transform .52s var(--ease),opacity .3s; }
+    .photo img { width:100%; height:100%; display:block; object-fit:cover; }
+    .photo-left { z-index:1; transform:translate(-4.5%,3%) rotate(-4deg) scale(.94); }
+    .photo-right { z-index:2; transform:translate(4.5%,3%) rotate(4deg) scale(.94); }
+    .photo-front { z-index:3; transform:translateY(-1%); }
+    .collection:hover .photo-left { transform:translate(-11%,5%) rotate(-7deg) scale(.92); }
+    .collection:hover .photo-right { transform:translate(11%,5%) rotate(7deg) scale(.92); }
+    .collection:hover .photo-front { transform:translateY(-5%) scale(.97); }
+    .collection-info { display:grid; grid-template-columns:minmax(0,1fr); grid-template-areas:"title" "meta" "tags" "actions"; row-gap:.38rem; padding:.9rem .15rem .08rem; }
+    .collection-copy { display:contents; min-width:0; }.collection h2 { grid-area:title; min-width:0; margin:0; color:var(--ink); font:400 clamp(1.25rem,2.5vw,1.7rem)/1.12 var(--display); overflow:visible; text-overflow:clip; white-space:normal; text-wrap:pretty; overflow-wrap:break-word; word-break:normal; }.collection-title-link { color:inherit; text-decoration:none; text-decoration-thickness:1px; text-underline-offset:.2em; }.collection-title-link:hover { color:var(--accent); text-decoration:underline; }
+    .meta { display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; margin:0; color:var(--faint); font:.65rem var(--mono); }.collection-meta { grid-area:meta; min-width:0; }.collection-tags { grid-area:tags; min-width:0; margin-top:.05rem; }.collection-label,.collection-size { padding:.12rem .4rem; border:1px solid var(--line); border-radius:99px; color:var(--muted); }
+    .source { color:var(--muted); text-decoration:none; border-bottom:1px solid var(--line-2); }.source:hover { color:var(--accent); border-color:var(--accent); }
+    .collection-actions { grid-area:actions; display:flex; align-items:center; justify-content:flex-start; gap:.35rem; margin-top:.25rem; }.quiet-button { display:inline-flex; align-items:center; justify-content:center; min-height:30px; padding:.3rem .58rem; border:1px solid var(--line); border-radius:8px; color:var(--faint); background:var(--card); font-size:.68rem; text-decoration:none; }.quiet-button:hover { color:var(--accent); border-color:var(--accent); }.quiet-button.danger:hover { color:var(--danger); border-color:var(--danger); }
+    .gallery[data-columns="4"] { gap:1.15rem; }.gallery[data-columns="4"] .collection,.gallery[data-columns="5"] .collection { padding:.85rem; }.gallery[data-columns="4"] .collection-info,.gallery[data-columns="5"] .collection-info { grid-template-columns:minmax(0,1fr); grid-template-areas:"title" "meta" "tags" "actions"; row-gap:.35rem; padding-top:.72rem; }.gallery[data-columns="4"] .collection h2 { font-size:1.18rem; }.gallery[data-columns="5"] { gap:.85rem; }.gallery[data-columns="5"] .collection h2 { font-size:1.02rem; }.gallery[data-columns="4"] .meta { gap:.3rem; font-size:.59rem; }.gallery[data-columns="5"] .meta { gap:.25rem; font-size:.54rem; }.gallery[data-columns="4"] .collection-actions,.gallery[data-columns="5"] .collection-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.28rem; margin-top:.18rem; }.gallery[data-columns="4"] .quiet-button,.gallery[data-columns="5"] .quiet-button { min-width:0; min-height:32px; padding:.3rem .2rem; overflow:hidden; font-size:.57rem; text-overflow:ellipsis; white-space:nowrap; }
+    .album-view { padding-bottom:2rem; }
+    .album-back { display:inline-flex; align-items:center; min-height:40px; margin-bottom:1.35rem; padding:.5rem .75rem; border:1px solid var(--line); border-radius:9px; color:var(--muted); background:var(--card); font:500 .67rem var(--mono); text-decoration:none; transition:color .2s var(--ease),border-color .2s var(--ease),transform .2s var(--ease); }.album-back:hover { color:var(--accent); border-color:var(--accent); transform:translateX(-2px); }
+    .album-header { display:grid; grid-template-columns:minmax(0,1fr) minmax(12rem,15rem); align-items:end; gap:2rem; margin-bottom:1.5rem; padding-bottom:1.35rem; border-bottom:1px solid var(--line-2); }
+    .album-controls { display:grid; gap:.75rem; }
+    .album-share { display:flex; align-items:center; justify-content:center; min-height:42px; padding:.65rem .9rem; border:1px solid var(--accent); border-radius:10px; color:var(--accent); background:var(--card); font-size:.72rem; font-weight:700; letter-spacing:.025em; text-decoration:none; transition:border-color .18s ease,background .18s ease,color .18s ease; }.album-share:hover { color:var(--card); background:var(--accent); }
+    .album-eyebrow { margin:0 0 .45rem; color:var(--accent); font:500 .6rem var(--mono); letter-spacing:.14em; text-transform:uppercase; }
+    .album-title { margin:0; color:var(--ink); font:400 clamp(2.4rem,5vw,4.5rem)/.95 var(--display); letter-spacing:-.045em; text-wrap:balance; }
+    .album-meta { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; margin:.8rem 0 0; color:var(--faint); font:.65rem var(--mono); }
+    .album-layout-control { display:grid; align-content:center; gap:.55rem; padding:.75rem .85rem; border:1px solid var(--line-2); border-radius:10px; background:var(--card); }.album-layout-control input { width:100%; margin:0; accent-color:var(--accent); }
+    .album-grid { --album-columns:4; display:grid; grid-template-columns:repeat(var(--album-columns),minmax(0,1fr)); gap:clamp(.55rem,1.2vw,.9rem); }
+    .album-photo { position:relative; min-width:0; aspect-ratio:4/3; overflow:hidden; border:1px solid var(--line); border-radius:11px; background:var(--surface); box-shadow:0 18px 40px -36px rgba(26,26,31,.75); transition:border-color .25s var(--ease),transform .3s var(--ease),box-shadow .3s var(--ease); }.album-photo:hover { z-index:1; border-color:var(--accent); transform:translateY(-3px); box-shadow:0 22px 48px -32px rgba(156,96,41,.48); }
+    .album-photo-open { width:100%; height:100%; padding:0; border:0; background:transparent; }.album-photo img { width:100%; height:100%; display:block; object-fit:cover; transition:transform .55s var(--ease); }.album-photo:hover img { transform:scale(1.025); }.album-photo-open:active { transform:scale(.99); }
+    .album-photo-index { position:absolute; right:.45rem; bottom:.45rem; min-width:2rem; padding:.2rem .4rem; border:1px solid rgba(255,255,255,.18); border-radius:6px; color:#f5f1e9; background:rgba(10,10,12,.7); backdrop-filter:blur(8px); font:500 .58rem var(--mono); font-variant-numeric:tabular-nums; text-align:center; }
+    .album-feature { position:absolute; top:.45rem; right:.45rem; z-index:2; width:30px; height:30px; padding:0 0 .08em; border:1px solid rgba(255,255,255,.42); border-radius:50%; color:rgba(255,255,255,.88); background:rgba(12,12,15,.26); backdrop-filter:blur(8px); font-size:1.05rem; line-height:1; transition:transform .16s var(--ease),background .16s var(--ease),border-color .16s var(--ease),color .16s var(--ease); }.album-feature:hover { border-color:var(--accent); color:var(--accent); background:rgba(12,12,15,.72); }.album-feature:active { transform:scale(.94); }.album-feature.is-featured { border-color:var(--accent); color:var(--accent); background:rgba(12,12,15,.78); }
+    .album-grid[data-columns="5"] .album-photo-index,.album-grid[data-columns="6"] .album-photo-index { right:.35rem; bottom:.35rem; min-width:1.65rem; padding:.16rem .3rem; font-size:.5rem; }.album-grid[data-columns="5"] .album-feature,.album-grid[data-columns="6"] .album-feature { top:.35rem; right:.35rem; width:26px; height:26px; font-size:.92rem; }
+    .empty { grid-column:1/-1; min-height:330px; display:grid; place-items:center; padding:2rem; border:1px dashed var(--line-2); border-radius:16px; color:var(--muted); text-align:center; }.empty strong { display:block; margin-bottom:.45rem; color:var(--ink); font:400 1.55rem var(--display); }
+    .skeleton { min-height:360px; border:1px solid var(--line); border-radius:16px; background:linear-gradient(100deg,var(--surface) 30%,var(--card) 50%,var(--surface) 70%); background-size:220% 100%; animation:shimmer 1.5s infinite; }
+    @keyframes shimmer { to { background-position:-220% 0; } }
+    .overlay { position:fixed; inset:0; z-index:20; display:grid; place-items:center; padding:1rem; background:rgba(8,8,10,.72); backdrop-filter:blur(8px); }
+    .modal { width:min(600px,100%); max-height:calc(100dvh - 2rem); overflow:auto; border:1px solid var(--line-2); border-radius:16px; background:var(--card); box-shadow:0 28px 90px rgba(0,0,0,.35); }
+    .modal-head { display:flex; justify-content:space-between; align-items:start; gap:1rem; padding:1.25rem 1.35rem 1rem; border-bottom:1px solid var(--line); }.modal-head h2 { margin:0; color:var(--ink); font:400 1.6rem var(--display); }.modal-head p { margin:.25rem 0 0; color:var(--muted); font-size:.8rem; }.close-button { width:32px; height:32px; border:1px solid var(--line); border-radius:8px; color:var(--muted); background:transparent; font-size:1.15rem; }.close-button:hover { color:var(--accent); border-color:var(--accent); }
+    .form { padding:1.2rem 1.35rem 1.4rem; }.field { display:block; margin-bottom:.9rem; }.field-label { display:block; margin-bottom:.38rem; color:var(--muted); font:500 .64rem var(--mono); letter-spacing:.06em; text-transform:uppercase; }.field input { width:100%; min-height:42px; padding:.65rem .75rem; border:1px solid var(--line-2); border-radius:9px; outline:0; color:var(--ink); background:var(--paper); }.field input::placeholder { color:var(--faint); }.field input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+    .field-label-chips { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.45rem; }
+    .label-chip { padding:.22rem .55rem; border:1px solid var(--line-2); border-radius:99px; color:var(--muted); background:var(--surface); font:500 .65rem var(--mono); cursor:pointer; transition:color .2s, border-color .2s, background .2s; }
+    .label-chip:hover, .label-chip.active { color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
+    .dropzone { display:grid; place-items:center; min-height:145px; padding:1.25rem; border:1px dashed var(--line-2); border-radius:12px; color:var(--muted); background:var(--surface); text-align:center; transition:.2s; }.dropzone.dragging,.dropzone:hover { color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }.dropzone strong { display:block; color:var(--ink); font-weight:500; }.dropzone span { margin-top:.25rem; font-size:.76rem; }.dropzone input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+    .selected { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.55rem; margin-top:.7rem; }.selected-item { position:relative; aspect-ratio:1; overflow:hidden; border-radius:99px; background:var(--surface); }.selected-item img { width:100%; height:100%; object-fit:cover; }.remove-file { position:absolute; top:4px; right:4px; width:24px; height:24px; border:0; border-radius:7px; color:#f5f2eb; background:rgba(10,10,12,.72); }
+    .form-note { margin:.7rem 0 0; color:var(--faint); font-size:.73rem; }.form-error { min-height:1.2em; margin-top:.55rem; color:var(--danger); font-size:.78rem; }.form-actions { display:flex; justify-content:flex-end; gap:.55rem; margin-top:1rem; }.secondary-button { padding:.68rem .85rem; border:1px solid var(--line-2); border-radius:99px; color:var(--muted); background:transparent; }.secondary-button:hover { color:var(--ink); }.save-button { min-width:105px; padding:.68rem .95rem; border:1px solid var(--accent); border-radius:99px; color:var(--paper); background:var(--accent); font-weight:600; }.save-button:disabled { opacity:.55; cursor:wait; }
+    body.viewer-open .burger, body.viewer-open .theme-fab { display:none !important; }
+    .viewer { width:min(1100px,100%); max-height:calc(100dvh - 2rem); display:grid; grid-template-rows:auto minmax(0,1fr) auto; border:1px solid rgba(255,255,255,.15); border-radius:16px; overflow:hidden; background:#111114; }.viewer-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.8rem 1rem; color:#eee9e0; }.viewer-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }.viewer-actions { display:flex; align-items:center; gap:.45rem; flex:0 0 auto; }.viewer-fullscreen { width:32px; height:32px; border:1px solid rgba(255,255,255,.2); border-radius:8px; color:#eee9e0; background:transparent; font-size:1.15rem; line-height:1; }.viewer-fullscreen:hover { border-color:var(--accent); color:var(--accent); }.viewer-stage { position:relative; min-height:0; display:grid; place-items:center; padding:0 3.2rem; touch-action:pan-y; }.viewer-stage img { max-width:100%; max-height:calc(100dvh - 180px); object-fit:contain; user-select:none; -webkit-user-drag:none; }.nav-button { position:absolute; top:50%; transform:translateY(-50%); width:38px; height:38px; border:1px solid rgba(255,255,255,.25); border-radius:50%; color:#eee9e0; background:rgba(18,18,21,.82); font-size:1.2rem; display:grid; place-items:center; z-index:10; cursor:pointer; }.nav-button:hover { border-color:rgba(255,255,255,.6); background:rgba(18,18,21,.95); }.nav-prev { left:.5rem; }.nav-next { right:.5rem; }.thumb-rail { display:flex; justify-content:center; gap:.5rem; padding:.8rem; overflow-x:auto; }.rail-thumb { flex:0 0 58px; width:58px; height:44px; padding:0; overflow:hidden; border:1px solid transparent; border-radius:7px; background:transparent; opacity:.55; }.rail-thumb.active { border-color:var(--accent); opacity:1; }.rail-thumb img { width:100%; height:100%; object-fit:cover; }
+    .overlay.viewer-fullscreen, .overlay.viewer-fullscreen *, #viewerOverlay:fullscreen, #viewerOverlay:-webkit-full-screen { outline:none !important; outline-offset:0 !important; border-color:transparent !important; box-shadow:none !important; }
+    .overlay.viewer-fullscreen { position:fixed !important; inset:0 !important; width:100vw !important; height:100vh !important; height:100dvh !important; z-index:200000 !important; background:#08080a !important; padding:0 !important; margin:0 !important; backdrop-filter:none; }.overlay.viewer-fullscreen .viewer { width:100% !important; height:100dvh !important; max-height:none !important; grid-template-rows:1fr !important; border:0 !important; border-radius:0 !important; background:#08080a !important; }.overlay.viewer-fullscreen .viewer-head { position:absolute; inset:0 0 auto; z-index:4; padding:.9rem 1.1rem 2.4rem; background:linear-gradient(180deg,rgba(8,8,10,.76),transparent); pointer-events:none; }.overlay.viewer-fullscreen .viewer-head > * { pointer-events:auto; }.overlay.viewer-fullscreen .viewer-stage { height:100dvh; padding:0 3.2rem; }.overlay.viewer-fullscreen .viewer-stage img { max-width:100%; max-height:100dvh; }.overlay.viewer-fullscreen .thumb-rail { position:absolute; right:0; bottom:0; left:0; z-index:5; padding:2.2rem 1rem .9rem; background:linear-gradient(0deg,rgba(8,8,10,.9),transparent); transform:translateY(100%); opacity:0; pointer-events:none; transition:transform .24s var(--ease),opacity .2s; }.overlay.viewer-fullscreen .viewer.viewer-controls-visible .thumb-rail { transform:translateY(0); opacity:1; pointer-events:auto; }
+    #viewerOverlay:fullscreen::backdrop,#viewerOverlay:-webkit-full-screen::backdrop { background:#08080a; }
+    @media (max-width:760px) {
+      .wrap { width:min(100% - 1.4rem,1180px); padding-top:1rem; }.hero { display:block; padding:3.8rem 0 2rem; }.hero .add-button { width:100%; margin-top:1.5rem; }.tool-row { grid-template-columns:1fr; }.gallery { grid-template-columns:1fr; gap:1rem; }.collection { padding:.9rem; }.collection:hover .photo-left { transform:translate(-6%,4%) rotate(-5deg) scale(.93); }.collection:hover .photo-right { transform:translate(6%,4%) rotate(5deg) scale(.93); }.collection:hover .photo-front { transform:translateY(-2%); }.collection-info { align-items:start; }.collection-actions { flex-direction:column; }.album-header { grid-template-columns:1fr; gap:1.2rem; }.album-layout-control { display:none; }.album-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.selected { grid-template-columns:repeat(3,minmax(0,1fr)); }.viewer-stage { padding:0 2.5rem; }.viewer-stage img { max-height:calc(100dvh - 160px); }.nav-button { top:50%; transform:translateY(-50%); width:36px; height:36px; font-size:1.1rem; }.nav-prev { left:.3rem; }.nav-next { right:.3rem; }.overlay.viewer-fullscreen .viewer-stage { padding:0 2.5rem; }.overlay.viewer-fullscreen .viewer-stage img { max-height:100dvh; }.overlay.viewer-fullscreen .nav-button { top:50%; transform:translateY(-50%); }.overlay.viewer-fullscreen .thumb-rail { justify-content:flex-start; }.overlay.viewer-fullscreen .viewer.viewer-controls-visible .thumb-rail { padding-bottom:1rem; }
+    }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="topbar"><a class="back" href="/">← Noema</a></div>
+    <section class="hero">
+      <div><div class="eyebrow">Arhitektonske reference</div><h1>Inspiration</h1><p class="intro">Save projekte i slike koje želiš da imaš pri ruci tokom projektovanja.</p></div>
+      <button class="add-button" id="openAdd" type="button"><span aria-hidden="true">+</span> Dodaj</button>
+    </section>
+    <section id="libraryView">
+      <div class="summary"><span><b id="collectionCount">0</b> kolekcija</span><span><b id="imageCount">0</b> slika</span></div>
+      <div class="library-tools"><div class="tool-row"><div class="search-box"><input id="searchInput" type="search" placeholder="Pretraži naziv, ulicu, labelu ili link..." autocomplete="off" aria-label="Pretraži inspiracije"><button class="search-clear" id="searchClear" type="button" aria-label="Očisti pretragu" hidden>×</button></div><label class="layout-control"><span class="layout-heading"><span>Raspored</span><b id="gridValue">2 kol.</b></span><input id="gridRange" type="range" min="2" max="5" step="1" value="2" aria-label="Broj kolekcija u redu"></label></div><div class="label-filters" id="labelFilters" aria-label="Filtriraj po labeli"></div></div>
+      <section class="gallery" id="gallery" aria-live="polite"><div class="skeleton"></div><div class="skeleton"></div></section>
+    </section>
+    <section class="album-view" id="albumView" aria-labelledby="albumTitle" hidden>
+      <a class="album-back" id="albumBack" href="#">← Sve kolekcije</a>
+      <header class="album-header">
+        <div><p class="album-eyebrow">Inspiration album</p><h2 class="album-title" id="albumTitle"></h2><p class="album-meta" id="albumMeta"></p></div>
+        <div class="album-controls"><a class="album-share" id="albumShare" href="#" target="_blank" rel="noopener noreferrer">Podijeli na WhatsApp</a><label class="album-layout-control"><span class="layout-heading"><span>Images u redu</span><b id="albumGridValue">4 kol.</b></span><input id="albumGridRange" type="range" min="2" max="6" step="1" value="4" aria-label="Broj slika u redu"></label></div>
+      </header>
+      <div class="album-grid" id="albumGrid" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <div class="overlay" id="addOverlay" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="addTitle">
+      <div class="modal-head"><div><h2 id="addTitle">New Inspiration</h2><p>Jedna kolekcija može imati do 35 slika.</p></div><button class="close-button" data-close="addOverlay" type="button" aria-label="Close">×</button></div>
+      <form class="form" id="addForm">
+        <label class="field"><span class="field-label">Naziv</span><input id="titleInput" required maxlength="160" placeholder="Kuća na obali"></label>
+        <label class="field"><span class="field-label">Adresa / ulica (optional)</span><input id="addressInput" maxlength="240" placeholder="Požarevačka 32, Beograd"></label>
+        <label class="field"><span class="field-label">Izvorni link (optional)</span><input id="linkInput" type="url" placeholder="https://..."></label>
+        <label class="field"><span class="field-label">Label (optional)</span><input id="labelInput" list="labelOptions" maxlength="40" placeholder="fasada, enterijer, detalj..."><div class="field-label-chips" id="addLabelChips"></div></label>
+        <span class="field-label">Images</span>
+        <label class="dropzone" id="dropzone"><input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple><strong>Prevuci slike ovdje ili klikni za izbor</strong><span>JPG, PNG, WebP ili GIF. Do 35 slika, najviše 10 MB po slici i 60 MB ukupno.</span></label>
+        <div class="selected" id="selectedFiles"></div>
+        <p class="form-note" id="fileMeta">Nijedna slika nije izabrana.</p>
+        <div class="form-error" id="formError"></div>
+        <div class="form-actions"><button class="secondary-button" data-close="addOverlay" type="button">Otkaži</button><button class="save-button" id="saveButton" type="submit">Save</button></div>
+      </form>
+    </section>
+  </div>
+
+  <div class="overlay" id="editOverlay" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+      <div class="modal-head"><div><h2 id="editTitle">Izmijeni kolekciju</h2><p>Naziv i izvorni link mogu se naknadno promijeniti.</p></div><button class="close-button" data-close="editOverlay" type="button" aria-label="Close">×</button></div>
+      <form class="form" id="editForm"><label class="field"><span class="field-label">Naziv</span><input id="editTitleInput" required maxlength="160"></label><label class="field"><span class="field-label">Adresa / ulica (optional)</span><input id="editAddressInput" maxlength="240" placeholder="Požarevačka 32, Beograd"></label><label class="field"><span class="field-label">Izvorni link (optional)</span><input id="editLinkInput" type="url" placeholder="https://..."></label><label class="field"><span class="field-label">Label (optional)</span><input id="editLabelInput" list="labelOptions" maxlength="40"><div class="field-label-chips" id="editLabelChips"></div></label><div class="form-error" id="editError"></div><div class="form-actions"><button class="secondary-button" data-close="editOverlay" type="button">Otkaži</button><button class="save-button" type="submit">Save</button></div></form>
+    </section>
+  </div>
+
+  <div class="overlay" id="viewerOverlay" hidden>
+    <section class="viewer" role="dialog" aria-modal="true" aria-label="Pregled slika">
+      <div class="viewer-head"><div class="viewer-title" id="viewerTitle"></div><div class="viewer-actions"><button class="viewer-fullscreen" id="fullscreenButton" type="button" aria-label="View preko cijelog ekrana" aria-pressed="false">⛶</button><button class="close-button" data-close="viewerOverlay" type="button" aria-label="Close">×</button></div></div>
+      <div class="viewer-stage"><button class="nav-button nav-prev" id="prevImage" type="button" aria-label="Prethodna slika">←</button><img id="viewerImage" alt=""><button class="nav-button nav-next" id="nextImage" type="button" aria-label="Sljedeća slika">→</button></div>
+      <div class="thumb-rail" id="thumbRail"></div>
+    </section>
+  </div>
+  <datalist id="labelOptions"></datalist>
+
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const publicGalleryMode = new URLSearchParams(window.location.search).has('gallery');
+      document.documentElement.classList.toggle('public-gallery', publicGalleryMode);
+      const els = { gallery:$('gallery'), collectionCount:$('collectionCount'), imageCount:$('imageCount'), search:$('searchInput'), searchClear:$('searchClear'), gridRange:$('gridRange'), gridValue:$('gridValue'), labelFilters:$('labelFilters'), labelOptions:$('labelOptions'), collectionLabel:$('labelInput'), address:$('addressInput'), addOverlay:$('addOverlay'), editOverlay:$('editOverlay'), viewerOverlay:$('viewerOverlay'), viewer:document.querySelector('.viewer'), fullscreen:$('fullscreenButton'), addForm:$('addForm'), title:$('titleInput'), link:$('linkInput'), fileInput:$('fileInput'), dropzone:$('dropzone'), selected:$('selectedFiles'), fileMeta:$('fileMeta'), error:$('formError'), save:$('saveButton'), editForm:$('editForm'), editTitle:$('editTitleInput'), editAddress:$('editAddressInput'), editLink:$('editLinkInput'), editLabel:$('editLabelInput'), editError:$('editError'), viewerTitle:$('viewerTitle'), viewerImage:$('viewerImage'), thumbRail:$('thumbRail'), addLabelChips:$('addLabelChips'), editLabelChips:$('editLabelChips'), libraryView:$('libraryView'), albumView:$('albumView'), albumBack:$('albumBack'), albumTitle:$('albumTitle'), albumMeta:$('albumMeta'), albumShare:$('albumShare'), albumGrid:$('albumGrid'), albumGridRange:$('albumGridRange'), albumGridValue:$('albumGridValue') };
+      let collections = [], pendingFiles = [], previewUrls = [], editingId = null, viewerItem = null, viewerIndex = 0, activeLabel = '', galleryColumns = 2, albumColumns = 4, currentAlbumId = '', viewerPseudoFullscreen = false;
+      const allowedTypes = new Set(['image/jpeg','image/png','image/webp','image/gif']);
+      const escape = (value) => String(value || '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+      const imageLabel = (count) => count === 1 ? 'slika' : count >= 2 && count <= 4 ? 'slike' : 'slika';
+      const formatBytes = (bytes) => { const value = Number(bytes) || 0; if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(value >= 100 * 1024 * 1024 ? 0 : 1)} MB`; if (value >= 1024) return `${Math.round(value / 1024)} KB`; return `${value} B`; };
+      const albumUrl = (id) => { const url = new URL(`${window.location.pathname}${window.location.search}`,window.location.origin); url.hash = `album=${encodeURIComponent(id)}`; return url.href; };
+      const whatsappShareUrl = (item) => `https://wa.me/?text=${encodeURIComponent(`${item.title} — pogledaj Inspiration album: ${albumUrl(item.id)}`)}`;
+      const api = async (path, options = {}) => { const response = await fetch(path,{headers:{'Content-Type':'application/json'},...options}); const data = await response.json().catch(() => ({})); if (!response.ok || !data.ok) throw new Error(data.error || 'Zahtjev nije uspio.'); return data; };
+      function setGalleryColumns(value, persist = true) { galleryColumns = Math.min(5,Math.max(2,Number(value) || 2)); els.gallery.style.setProperty('--gallery-columns',galleryColumns); els.gallery.dataset.columns = galleryColumns; els.gridRange.value = galleryColumns; els.gridValue.textContent = `${galleryColumns} kol.`; els.gridRange.setAttribute('aria-valuetext',`${galleryColumns} kolekcije u redu`); if (persist) try { localStorage.setItem('noema-inspiration-columns',galleryColumns); } catch (e) {} }
+      function setAlbumColumns(value, persist = true) { albumColumns = Math.min(6,Math.max(2,Number(value) || 4)); els.albumGrid.style.setProperty('--album-columns',albumColumns); els.albumGrid.dataset.columns = albumColumns; els.albumGridRange.value = albumColumns; els.albumGridValue.textContent = `${albumColumns} kol.`; els.albumGridRange.setAttribute('aria-valuetext',`${albumColumns} slika u redu`); if (persist) try { localStorage.setItem('noema-inspiration-album-columns',albumColumns); } catch (e) {} }
+      try { galleryColumns = Number(localStorage.getItem('noema-inspiration-columns')) || 2; albumColumns = Number(localStorage.getItem('noema-inspiration-album-columns')) || 4; } catch (e) {}
+      setGalleryColumns(galleryColumns,false);
+      setAlbumColumns(albumColumns,false);
+
+      function updateFormLabelChips(container, inputEl) {
+        if (!container || !inputEl) return;
+        const labels = [...new Set(collections.map(item => item.label).filter(Boolean))].sort();
+        if (!labels.length) { container.innerHTML = ''; return; }
+        const current = (inputEl.value || '').trim();
+        container.innerHTML = labels.map(lb => `<button class="label-chip ${current === lb ? 'active' : ''}" type="button" data-fill="${escape(lb)}">${escape(lb)}</button>`).join('');
+      }
+      function bindFormLabelChips(container, inputEl) {
+        if (!container || !inputEl || container._bound) return;
+        container.addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-fill]');
+          if (!btn) return;
+          const val = btn.dataset.fill;
+          inputEl.value = inputEl.value.trim() === val ? '' : val;
+          updateFormLabelChips(container, inputEl);
+        });
+        inputEl.addEventListener('input', () => updateFormLabelChips(container, inputEl));
+        container._bound = true;
+      }
+
+      function render() {
+        els.collectionCount.textContent = collections.length;
+        els.imageCount.textContent = collections.reduce((sum,item) => sum + item.images.length,0);
+        const labels = [...new Set(collections.map(item => item.label).filter(Boolean))].sort();
+        if (activeLabel && !labels.includes(activeLabel)) activeLabel = '';
+        els.labelOptions.innerHTML = labels.map(label => `<option value="${escape(label)}"></option>`).join('');
+        els.labelFilters.innerHTML = [`<button class="filter-chip ${activeLabel ? '' : 'active'}" type="button" data-label="">Sve</button>`,...labels.map(label => `<button class="filter-chip ${activeLabel === label ? 'active' : ''}" type="button" data-label="${escape(label)}">${escape(label)}</button>`)].join('');
+        updateFormLabelChips(els.addLabelChips, els.collectionLabel);
+        updateFormLabelChips(els.editLabelChips, els.editLabel);
+        const query = els.search.value.trim().toLowerCase();
+        els.searchClear.hidden = !query;
+        const visible = collections.filter(item => (!activeLabel || item.label === activeLabel) && (!query || [item.title,item.label,item.address,item.sourceUrl].join(' ').toLowerCase().includes(query)));
+        if (!visible.length) { const filtered = query || activeLabel; els.gallery.innerHTML = `<div class="empty"><div><strong>${filtered ? 'No results.' : 'Još nema kolekcija.'}</strong>${filtered ? 'Promijeni pretragu ili izabranu labelu.' : 'Koristi dugme Dodaj da sačuvaš prve reference.'}</div></div>`; return; }
+        els.gallery.innerHTML = visible.map(item => {
+          const featured = item.images.find(image => image.id === item.featuredImageId); const images = (featured ? [featured,...item.images.filter(image => image.id !== featured.id)] : item.images).slice(0,3); const back = [];
+          if (images[1]) back.push(`<span class="photo photo-left"><img src="${escape(images[1].thumbnail)}" alt="" loading="lazy"></span>`);
+          if (images[2]) back.push(`<span class="photo photo-right"><img src="${escape(images[2].thumbnail)}" alt="" loading="lazy"></span>`);
+          back.push(`<span class="photo photo-front"><img src="${escape(images[0].thumbnail)}" alt="${escape(item.title)}" loading="lazy"></span>`);
+          const source = item.sourceUrl ? `<a class="source" href="${escape(item.sourceUrl)}" target="_blank" rel="noopener">izvor</a>` : '';
+          const address = item.address ? `<span class="source">${escape(item.address)}</span>` : '';
+          const labelHtml = item.label ? `<div class="meta collection-tags"><span class="collection-label">${escape(item.label)}</span></div>` : '';
+          const totalBytes = item.totalBytes ?? item.images.reduce((total,image) => total + (Number(image.size) || 0),0);
+          const size = `<span class="collection-size">${formatBytes(totalBytes)}</span>`;
+          return `<article class="collection"><button class="photo-stack" type="button" data-view="${escape(item.id)}" aria-label="Otvori ${escape(item.title)} u lightboxu">${back.join('')}</button><div class="collection-info"><div class="collection-copy"><h2><a class="collection-title-link" href="#album=${encodeURIComponent(item.id)}" data-album="${escape(item.id)}">${escape(item.title)}</a></h2><div class="meta collection-meta"><span>${item.images.length} ${imageLabel(item.images.length)}</span>${size}${address}${source}</div>${labelHtml}</div><div class="collection-actions"><a class="quiet-button" href="${escape(whatsappShareUrl(item))}" target="_blank" rel="noopener noreferrer" aria-label="Podijeli album ${escape(item.title)} na WhatsApp">Podijeli</a><button class="quiet-button" type="button" data-edit="${escape(item.id)}">Izmijeni</button><button class="quiet-button danger" type="button" data-delete="${escape(item.id)}">Delete</button></div></div></article>`;
+        }).join('');
+      }
+
+      function renderAlbum(item) {
+        const images = Array.isArray(item.images) ? item.images : [];
+        const totalBytes = item.totalBytes ?? images.reduce((total,image) => total + (Number(image.size) || 0),0);
+        const source = item.sourceUrl ? `<a class="source" href="${escape(item.sourceUrl)}" target="_blank" rel="noopener noreferrer">izvor</a>` : '';
+        els.albumTitle.textContent = item.title;
+        els.albumMeta.innerHTML = `<span>${images.length} ${imageLabel(images.length)}</span><span>${formatBytes(totalBytes)}</span>${item.label ? `<span class="collection-label">${escape(item.label)}</span>` : ''}${item.address ? `<span>${escape(item.address)}</span>` : ''}${source}`;
+        els.albumShare.href = whatsappShareUrl(item);
+        els.albumShare.setAttribute('aria-label',`Podijeli album ${item.title} na WhatsApp`);
+        els.albumGrid.innerHTML = images.length ? images.map((image,index) => { const featured = image.id === item.featuredImageId; return `<div class="album-photo"><button class="album-photo-open" type="button" data-album-image="${index}" aria-label="Otvori ${escape(item.title)}, slika ${index + 1}"><img src="${escape(image.thumbnail)}" alt="${escape(item.title)}, slika ${index + 1}" loading="lazy"><span class="album-photo-index">${String(index + 1).padStart(2,'0')}</span></button><button class="album-feature ${featured ? 'is-featured' : ''}" type="button" data-feature-image="${escape(image.id)}" aria-label="${featured ? 'Naslovna fotografija albuma' : 'Postavi kao naslovnu fotografiju'}" aria-pressed="${featured}">${featured ? '★' : '☆'}</button></div>`; }).join('') : '<div class="empty"><div><strong>Album nema fotografija.</strong></div></div>';
+      }
+      function openAlbum(item, updateHistory = true) {
+        if (!item) return;
+        currentAlbumId = item.id;
+        els.libraryView.hidden = true;
+        els.albumView.hidden = false;
+        renderAlbum(item);
+        document.title = `${item.title} — Noema Inspiration`;
+        if (updateHistory) { const hash = `#album=${encodeURIComponent(item.id)}`; if (window.location.hash !== hash) window.history.pushState({albumId:item.id},'',hash); }
+        window.scrollTo({top:0,behavior:'smooth'});
+      }
+      function closeAlbum(updateHistory = true) {
+        currentAlbumId = '';
+        els.albumView.hidden = true;
+        els.libraryView.hidden = false;
+        document.title = 'Noema - Inspiration';
+        if (updateHistory && window.location.hash) window.history.pushState({},'',`${window.location.pathname}${window.location.search}`);
+      }
+      function syncAlbumFromLocation() {
+        const match = window.location.hash.match(/^#album=(.+)$/);
+        if (!match) return closeAlbum(false);
+        let id = '';
+        try { id = decodeURIComponent(match[1]); } catch (e) { return closeAlbum(false); }
+        const item = collections.find(entry => entry.id === id);
+        if (item) openAlbum(item,false); else closeAlbum(false);
+      }
+      async function load() { try { collections = (await api('/api/inspirations')).inspirations || []; render(); syncAlbumFromLocation(); } catch (err) { els.gallery.innerHTML = `<div class="empty"><div><strong>Gallery nije učitana.</strong>${escape(err.message)}</div></div>`; } }
+      function viewerIsFullscreen() { return viewerPseudoFullscreen || document.fullscreenElement === els.viewerOverlay; }
+      function syncViewerFullscreen() { const active = viewerIsFullscreen(); els.viewerOverlay.classList.toggle('viewer-fullscreen',active); els.viewer.classList.remove('viewer-controls-visible'); els.fullscreen.textContent = active ? '⤢' : '⛶'; els.fullscreen.setAttribute('aria-label',active ? 'Izađi iz fullscreen prikaza' : 'View preko cijelog ekrana'); els.fullscreen.setAttribute('aria-pressed',String(active)); }
+      function hideViewerControls() { els.viewer.classList.remove('viewer-controls-visible'); }
+      function revealViewerControls() { if (!viewerIsFullscreen()) return; els.viewer.classList.add('viewer-controls-visible'); }
+      function leaveViewerFullscreen() { viewerPseudoFullscreen = false; hideViewerControls(); if (document.fullscreenElement === els.viewerOverlay) document.exitFullscreen().catch(() => {}); syncViewerFullscreen(); }
+      async function toggleViewerFullscreen() { if (viewerIsFullscreen()) return leaveViewerFullscreen(); if (els.viewerOverlay.requestFullscreen) { try { await els.viewerOverlay.requestFullscreen(); return; } catch (e) {} } viewerPseudoFullscreen = true; syncViewerFullscreen(); }
+      function openOverlay(element) { element.hidden = false; document.body.style.overflow = 'hidden'; if (element === els.viewerOverlay) document.body.classList.add('viewer-open'); }
+      function closeOverlay(element) { if (element === els.viewerOverlay) { leaveViewerFullscreen(); document.body.classList.remove('viewer-open'); } element.hidden = true; if ([els.addOverlay,els.editOverlay,els.viewerOverlay].every(item => item.hidden)) document.body.style.overflow = ''; }
+      function resetFiles() { previewUrls.forEach(URL.revokeObjectURL); previewUrls = []; pendingFiles = []; els.fileInput.value = ''; renderSelected(); }
+      function renderSelected() { previewUrls.forEach(URL.revokeObjectURL); previewUrls = pendingFiles.map(file => URL.createObjectURL(file)); els.selected.innerHTML = pendingFiles.map((file,index) => `<div class="selected-item"><img src="${previewUrls[index]}" alt=""><button class="remove-file" type="button" data-remove-file="${index}" aria-label="Ukloni sliku">×</button></div>`).join(''); els.fileMeta.textContent = pendingFiles.length ? `Izabrano: ${pendingFiles.length}.` : 'Nijedna slika nije izabrana.'; }
+      function addFiles(fileList) { els.error.textContent = ''; const candidates = [...fileList]; for (const file of candidates) { if (!allowedTypes.has(file.type)) { els.error.textContent = `${file.name}: format nije podržan.`; continue; } if (file.size > 10 * 1024 * 1024) { els.error.textContent = `${file.name}: slika je veća od 10 MB.`; continue; } if (pendingFiles.length >= 35) { els.error.textContent = 'Možeš dodati najviše 35 slika.'; break; } const totalSize = pendingFiles.reduce((sum,item) => sum + item.size,0) + file.size; if (totalSize > 60 * 1024 * 1024) { els.error.textContent = 'Ukupna veličina kolekcije može biti najviše 60 MB.'; break; } pendingFiles.push(file); } renderSelected(); }
+      const fileBase64 = (file) => new Promise((resolve,reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1]); reader.onerror = reject; reader.readAsDataURL(file); });
+      async function thumbnailBase64(file) { const bitmap = await createImageBitmap(file); const width = 640, height = 480; const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; const context = canvas.getContext('2d'); const scale = Math.max(width / bitmap.width,height / bitmap.height); const drawWidth = bitmap.width * scale, drawHeight = bitmap.height * scale; context.drawImage(bitmap,(width - drawWidth) / 2,(height - drawHeight) / 2,drawWidth,drawHeight); bitmap.close(); const blob = await new Promise(resolve => canvas.toBlob(resolve,'image/jpeg',.82)); if (!blob) throw new Error('Thumbnail nije napravljen.'); return fileBase64(blob); }
+
+      $('openAdd').addEventListener('click',() => { els.addForm.reset(); resetFiles(); els.error.textContent = ''; updateFormLabelChips(els.addLabelChips, els.collectionLabel); bindFormLabelChips(els.addLabelChips, els.collectionLabel); openOverlay(els.addOverlay); setTimeout(() => els.title.focus(),20); });
+      els.search.addEventListener('input',render);
+      els.searchClear.addEventListener('click',() => { els.search.value = ''; render(); els.search.focus(); });
+      els.gridRange.addEventListener('input',event => setGalleryColumns(event.target.value));
+      els.albumGridRange.addEventListener('input',event => setAlbumColumns(event.target.value));
+      els.albumBack.addEventListener('click',event => { event.preventDefault(); closeAlbum(); });
+      els.albumGrid.addEventListener('click',async event => { const item = collections.find(entry => entry.id === currentAlbumId); const feature = event.target.closest('[data-feature-image]'); if (feature) { if (!item || feature.dataset.featureImage === item.featuredImageId) return; feature.disabled = true; try { const result = await api(`/api/inspirations/${encodeURIComponent(item.id)}`,{method:'PATCH',body:JSON.stringify({featuredImageId:feature.dataset.featureImage})}); collections = collections.map(entry => entry.id === item.id ? result.inspiration : entry); render(); } catch (err) { alert(err.message); } finally { feature.disabled = false; } return; } const image = event.target.closest('[data-album-image]'); if (!image || !item) return; openViewer(item,Number(image.dataset.albumImage)); });
+      els.labelFilters.addEventListener('click',event => { const chip = event.target.closest('[data-label]'); if (!chip) return; activeLabel = chip.dataset.label; render(); });
+      document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click',() => closeOverlay($(button.dataset.close))));
+      [els.addOverlay,els.editOverlay,els.viewerOverlay].forEach(overlay => overlay.addEventListener('click',event => { if (event.target === overlay) closeOverlay(overlay); }));
+      els.fileInput.addEventListener('change',event => addFiles(event.target.files));
+      ['dragenter','dragover'].forEach(name => els.dropzone.addEventListener(name,event => { event.preventDefault(); els.dropzone.classList.add('dragging'); }));
+      ['dragleave','drop'].forEach(name => els.dropzone.addEventListener(name,event => { event.preventDefault(); els.dropzone.classList.remove('dragging'); }));
+      els.dropzone.addEventListener('drop',event => addFiles(event.dataTransfer.files));
+      els.selected.addEventListener('click',event => { const button = event.target.closest('[data-remove-file]'); if (!button) return; pendingFiles.splice(Number(button.dataset.removeFile),1); renderSelected(); });
+      els.addForm.addEventListener('submit',async event => { event.preventDefault(); if (!pendingFiles.length) { els.error.textContent = 'Dodaj najmanje jednu sliku.'; return; } els.save.disabled = true; els.save.textContent = 'Čuvam...'; els.error.textContent = ''; try { const images = []; for (let index = 0; index < pendingFiles.length; index++) { els.save.textContent = `Slika ${index + 1}/${pendingFiles.length}`; const file = pendingFiles[index]; images.push({name:file.name,type:file.type,data:await fileBase64(file),thumbnailData:await thumbnailBase64(file)}); } const result = await api('/api/inspirations',{method:'POST',body:JSON.stringify({title:els.title.value,address:els.address.value,sourceUrl:els.link.value,label:els.collectionLabel.value,images})}); collections.unshift(result.inspiration); closeOverlay(els.addOverlay); resetFiles(); render(); } catch (err) { els.error.textContent = err.message; } finally { els.save.disabled = false; els.save.textContent = 'Save'; } });
+
+      els.gallery.addEventListener('click',async event => { const album = event.target.closest('[data-album]'); if (album) { event.preventDefault(); const item = collections.find(entry => entry.id === album.dataset.album); if (item) openAlbum(item); return; } const view = event.target.closest('[data-view]'), edit = event.target.closest('[data-edit]'), remove = event.target.closest('[data-delete]'); const id = view?.dataset.view || edit?.dataset.edit || remove?.dataset.delete; if (!id) return; const item = collections.find(entry => entry.id === id); if (!item) return; if (view) return openViewer(item,Math.max(0,item.images.findIndex(image => image.id === item.featuredImageId))); if (edit) { editingId = id; els.editTitle.value = item.title; els.editAddress.value = item.address || ''; els.editLink.value = item.sourceUrl || ''; els.editLabel.value = item.label || ''; els.editError.textContent = ''; updateFormLabelChips(els.editLabelChips, els.editLabel); bindFormLabelChips(els.editLabelChips, els.editLabel); openOverlay(els.editOverlay); return; } if (remove && confirm(`Obrisati kolekciju „${item.title}“ i sve njene slike?`)) { try { await api(`/api/inspirations/${encodeURIComponent(id)}`,{method:'DELETE'}); collections = collections.filter(entry => entry.id !== id); render(); } catch (err) { alert(err.message); } } });
+      els.editForm.addEventListener('submit',async event => { event.preventDefault(); els.editError.textContent = ''; try { const result = await api(`/api/inspirations/${editingId}`,{method:'PATCH',body:JSON.stringify({title:els.editTitle.value,address:els.editAddress.value,sourceUrl:els.editLink.value,label:els.editLabel.value})}); collections = collections.map(item => item.id === editingId ? result.inspiration : item); closeOverlay(els.editOverlay); render(); } catch (err) { els.editError.textContent = err.message; } });
+
+      function openViewer(item,index) { viewerItem = item; viewerIndex = index; els.viewerTitle.textContent = item.title; updateViewer(); openOverlay(els.viewerOverlay); syncViewerFullscreen(); }
+      function updateViewer() { const images = viewerItem.images; const image = images[viewerIndex]; els.viewerImage.src = image.original; els.viewerImage.alt = `${viewerItem.title}, slika ${viewerIndex + 1}`; els.thumbRail.innerHTML = images.map((entry,index) => `<button class="rail-thumb ${index === viewerIndex ? 'active' : ''}" type="button" data-rail="${index}" aria-label="Slika ${index + 1}"><img src="${escape(entry.thumbnail)}" alt=""></button>`).join(''); $('prevImage').hidden = images.length < 2; $('nextImage').hidden = images.length < 2; }
+      $('prevImage').addEventListener('click',() => { viewerIndex = (viewerIndex - 1 + viewerItem.images.length) % viewerItem.images.length; updateViewer(); }); $('nextImage').addEventListener('click',() => { viewerIndex = (viewerIndex + 1) % viewerItem.images.length; updateViewer(); }); els.thumbRail.addEventListener('click',event => { const button = event.target.closest('[data-rail]'); if (!button) return; viewerIndex = Number(button.dataset.rail); updateViewer(); });
+      els.fullscreen.addEventListener('click',toggleViewerFullscreen);
+      els.viewerOverlay.addEventListener('pointermove',event => { const rect = els.viewerOverlay.getBoundingClientRect(); if (!viewerIsFullscreen()) return; if (event.clientY >= rect.bottom - Math.min(170,rect.height * .28)) revealViewerControls(); else hideViewerControls(); });
+      els.viewerOverlay.addEventListener('pointerdown',event => { const rect = els.viewerOverlay.getBoundingClientRect(); if (viewerIsFullscreen() && event.clientY >= rect.bottom - Math.min(170,rect.height * .28)) revealViewerControls(); });
+      
+      let touchSx = 0, touchSy = 0, touchSt = 0;
+      els.viewerOverlay.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        touchSx = e.touches[0].clientX; touchSy = e.touches[0].clientY; touchSt = Date.now();
+      }, { passive: true });
+      els.viewerOverlay.addEventListener('touchend', (e) => {
+        if (!touchSx || !e.changedTouches.length || !viewerItem?.images?.length || viewerItem.images.length < 2) return;
+        const dx = e.changedTouches[0].clientX - touchSx;
+        const dy = e.changedTouches[0].clientY - touchSy;
+        const dt = Date.now() - touchSt;
+        touchSx = 0; touchSy = 0;
+        if (Math.abs(dx) > 35 && Math.abs(dx) > Math.abs(dy) * 1.2 && dt < 500) {
+          if (dx < 0) $('nextImage').click();
+          else $('prevImage').click();
+        }
+      }, { passive: true });
+
+      document.addEventListener('fullscreenchange',syncViewerFullscreen);
+      window.addEventListener('popstate',syncAlbumFromLocation);
+      window.addEventListener('hashchange',syncAlbumFromLocation);
+      document.addEventListener('keydown',event => { if (event.key === 'Escape' && !els.viewerOverlay.hidden && viewerIsFullscreen()) { leaveViewerFullscreen(); return; } if (event.key === 'Escape') { [els.addOverlay,els.editOverlay,els.viewerOverlay].forEach(closeOverlay); } if (!els.viewerOverlay.hidden && event.key === 'ArrowLeft') $('prevImage').click(); if (!els.viewerOverlay.hidden && event.key === 'ArrowRight') $('nextImage').click(); });
+      load();
+    })();
+  </script>
+  <script src="/noema-header-footer.js"></script>
+</body>
+</html>

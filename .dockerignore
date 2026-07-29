@@ -1,0 +1,15 @@
+.git
+.github
+.claude
+data
+*.log
+logs
+dist
+.env
+.env.local
+*.key
+*.pem
+.DS_Store
+Thumbs.db
+README.md
+LICENSE

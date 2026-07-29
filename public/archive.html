@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Noema — Archive</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="description" content="Noema arhiva — sve obaveze po danima, završene i otvorene.">
+
+  <!-- Tema prije paint-a (ista logika kao na početnoj). -->
+  <script>
+    (function () {
+      try {
+        var manual = localStorage.getItem("noema-theme-manual");
+        var hour = new Date().getHours();
+        var autoTheme = (hour >= 19 || hour < 7) ? "dark" : "light";
+        var t = (manual === "dark" || manual === "light") ? manual : autoTheme;
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,300&family=JetBrains+Mono:wght@400;500;600&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --paper: #f7f3ec; --paper-2: #fbf8f2; --paper-3: #ffffff;
+      --ink-line: rgba(26,26,31,0.10); --ink-line-2: rgba(26,26,31,0.18);
+      --ink: #1a1a1f; --ink-2: #3d3d44; --ink-3: #6b6b73; --ink-4: #9b958a;
+      --beacon: #b87333; --beacon-2: #9c6029; --beacon-glow: rgba(184,115,51,0.16); --beacon-soft: rgba(184,115,51,0.08);
+      --signal: #4a7a5e; --ember: #c0563b; --azure: #3a6ea5;
+      --font-display: 'Fraunces', Georgia, serif;
+      --font-sans: 'Geist', -apple-system, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      --ocm-ease: cubic-bezier(.15, .2, .1, 1);
+      --maxw: 1100px;
+    }
+    html[data-theme="dark"] {
+      --paper: #0a0a0c; --paper-2: #0f0f12; --paper-3: #16161b;
+      --ink-line: rgba(244,239,230,0.08); --ink-line-2: rgba(244,239,230,0.14);
+      --ink: #f4efe6; --ink-2: #d8d2c4; --ink-3: #9b958a; --ink-4: #5c574f;
+      --beacon: #e8b07d; --beacon-2: #d4a574; --beacon-glow: rgba(232,176,125,0.22); --beacon-soft: rgba(232,176,125,0.10);
+      --signal: #8ab4a1; --ember: #d97757; --azure: #7fa7d9;
+    }
+    :root { color-scheme: light; }
+    html[data-theme="dark"] { color-scheme: dark; }
+    html { background: var(--paper); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--font-sans); font-size: 16px; line-height: 1.6;
+      color: var(--ink-2); background: var(--paper); min-height: 100vh;
+      transition: background 0.3s var(--ease), color 0.3s var(--ease);
+      opacity: 0;
+      animation: pageFadeIn 0.6s var(--ocm-ease) forwards;
+    }
+    @keyframes pageFadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    ::selection { background: var(--beacon); color: var(--paper); }
+
+    .wrap { max-width: var(--maxw); margin: 0 auto; padding: clamp(1.25rem,4vw,2.5rem); }
+
+    /* Top bar */
+    .top {
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      margin-bottom: clamp(1.4rem,4vw,2.2rem);
+    }
+    .back {
+      display: inline-flex; align-items: center; gap: 0.5em; text-decoration: none;
+      color: var(--ink-3); font-family: var(--font-mono); font-size: 0.78rem;
+      letter-spacing: 0.04em; padding: 0.4rem 0.7rem 0.4rem 0.5rem; border-radius: 8px;
+      border: 1px solid var(--ink-line); transition: color 0.2s, border-color 0.2s;
+    }
+    .back:hover { color: var(--beacon-2); border-color: var(--ink-line-2); }
+    .back svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+    .top-title { font-family: var(--font-display); font-weight: 300; font-size: clamp(1.4rem,4vw,2rem); color: var(--ink); }
+    /* burger-clearance: reserve room for the fixed burger so the title never sits under it. */
+    @media (max-width: 1160px) { .top { padding-right: 3.5rem; } }
+    .theme-toggle {
+      background: var(--paper-3); border: 1px solid var(--ink-line-2); color: var(--ink-3);
+      width: 40px; height: 40px; border-radius: 10px; cursor: pointer; font-size: 1.05rem;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .theme-toggle:hover { color: var(--beacon-2); border-color: var(--beacon); }
+
+    /* Layout: kalendar | tabela */
+    .grid { display: grid; grid-template-columns: minmax(260px, 320px) 1fr; gap: clamp(1rem,3vw,2rem); align-items: start; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+
+    /* Kalendar */
+    .cal {
+      background: var(--paper-3); border: 1px solid var(--ink-line); border-radius: 14px;
+      padding: 1.1rem 1.15rem 1.3rem;
+      min-width: 0; overflow: hidden; /* Safari: spriječi da se cal-grid prelije preko panela pri resize-u */
+    }
+    .cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.9rem; }
+    .cal-month { display: inline-flex; gap: 0.4rem; align-items: center; }
+    .cal-sel {
+      font-family: var(--font-display); font-weight: 400; font-size: 1.12rem; color: var(--ink);
+      background: var(--paper-3); border: 1px solid var(--ink-line); border-radius: 8px;
+      padding: 0.22rem 0.45rem; cursor: pointer; text-transform: capitalize;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .cal-sel:hover { border-color: var(--beacon); color: var(--beacon-2); }
+    .cal-sel:focus { outline: none; border-color: var(--beacon); }
+    .cal-arrow {
+      background: none; border: 1px solid var(--ink-line); color: var(--ink-3); cursor: pointer;
+      width: 32px; height: 32px; border-radius: 8px; font-size: 1rem; line-height: 1;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .cal-arrow:hover { color: var(--beacon-2); border-color: var(--beacon); background: var(--beacon-soft); }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; min-width: 0; }
+    .cal-dow {
+      text-align: center; font-family: var(--font-mono); font-size: 0.6rem; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-4); padding-bottom: 0.4rem;
+    }
+    .cal-day {
+      position: relative; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+      border: 1px solid transparent; border-radius: 8px; cursor: pointer; font-size: 0.82rem;
+      color: var(--ink-2); transition: background 0.15s, border-color 0.15s, color 0.15s;
+      min-width: 0; min-height: 0; /* Safari: aspect-ratio ćelija ne smije naduvati kolonu pri resize-u */
+    }
+    .cal-day.empty { cursor: default; background: transparent !important; border-color: transparent !important; pointer-events: none; }
+    .cal-day.other { color: var(--ink-4); opacity: 0.45; }
+    .cal-day:not(.empty):hover { background: var(--beacon-soft); }
+    .cal-day.today { border-color: var(--ink-line-2); font-weight: 600; color: var(--ink); }
+    .cal-day.selected { background: var(--beacon); color: var(--paper); border-color: var(--beacon); font-weight: 600; }
+    .cal-dots { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); display: flex; gap: 3px; }
+    .cal-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+    .cal-dot.tasks { background: var(--beacon-2); }
+    .cal-day.selected .cal-dot.tasks { background: var(--paper); }
+    .cal-dot.docs { background: var(--signal); }
+    .cal-day.selected .cal-dot.docs { background: var(--paper); }
+    .cal-dot.backup { background: var(--ember); }
+    .cal-day.selected .cal-dot.backup { background: var(--paper); }
+    .cal-dot.links { background: var(--azure); }
+    .cal-day.selected .cal-dot.links { background: var(--paper); }
+    .cal-foot {
+      margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--ink-line);
+      display: flex; gap: 1rem; font-family: var(--font-mono); font-size: 0.62rem;
+      letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-4);
+    }
+    .cal-foot .lg { display: inline-flex; align-items: center; gap: 0.4em; }
+    .cal-foot .lg i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+
+    /* Tabela */
+    .panel { min-width: 0; }
+    .panel-head {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+      margin-bottom: 0.9rem; flex-wrap: wrap;
+    }
+    .panel-date { font-family: var(--font-display); font-weight: 400; font-size: clamp(1.15rem,3.5vw,1.5rem); color: var(--ink); }
+    .panel-stats { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.04em; color: var(--ink-3); }
+    .panel-stats b { color: var(--signal); }
+    .panel-stats .open { color: var(--beacon-2); }
+
+    .seg { display: inline-flex; border: 1px solid var(--ink-line-2); border-radius: 9px; overflow: hidden; }
+    .seg button {
+      background: none; border: none; cursor: pointer; padding: 0.35rem 0.85rem;
+      font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.05em; text-transform: uppercase;
+      color: var(--ink-3); transition: background 0.2s, color 0.2s;
+    }
+    .seg button.active { background: var(--beacon); color: var(--paper); }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      text-align: left; font-family: var(--font-mono); font-size: 0.62rem; font-weight: 600;
+      letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-4);
+      padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--ink-line);
+    }
+    tbody td { padding: 0.7rem 0.6rem; border-bottom: 1px solid var(--ink-line); vertical-align: middle; }
+    tbody tr:hover td { background: var(--paper-2); }
+    .c-status { width: 26px; }
+    .c-time { width: 64px; white-space: nowrap; font-family: var(--font-mono); font-size: 0.78rem; color: var(--ink-3); }
+    .c-prio { width: 80px; }
+    .st {
+      width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--ink-line-2);
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .st.done { background: var(--signal); border-color: var(--signal); }
+    .st.done svg { width: 11px; height: 11px; stroke: var(--paper); fill: none; stroke-width: 2.2; }
+    .t-title { color: var(--ink); }
+    tr.is-done .t-title { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--ink-4); }
+    .prio {
+      font-family: var(--font-mono); font-size: 0.58rem; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; padding: 0.12rem 0.45rem; border-radius: 4px; border: 1px solid;
+    }
+    .prio.high { color: var(--ember); background: rgba(192,86,59,0.06); border-color: rgba(192,86,59,0.25); }
+    .prio.normal, .prio.medium { color: var(--azure); background: rgba(58,110,165,0.07); border-color: rgba(58,110,165,0.30); }
+    .prio.low { color: var(--ink-4); background: rgba(26,26,31,0.04); border-color: var(--ink-line); }
+    .date-group td {
+      font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--ink-4); padding-top: 1.3rem; border-bottom: 1px solid var(--ink-line-2);
+    }
+    .empty { text-align: center; padding: 3rem 1rem; color: var(--ink-4); font-style: italic; }
+
+    /* Search (pretraga) — u panel-head-u, ispod naslova. Uklapa se u jezik inputa. */
+    .search-wrap { position: relative; width: 100%; margin-top: 0.7rem; }
+    .search-input {
+      width: 100%; border: 1px solid var(--ink-line-2); border-radius: 9px;
+      padding: 0.5rem 2rem 0.5rem 2.3rem;
+      font-family: var(--font-sans); font-size: 0.9rem; color: var(--ink);
+      background: var(--paper-3); outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .search-input::placeholder { color: var(--ink-4); }
+    .search-input:focus { border-color: var(--beacon); box-shadow: 0 0 0 3px var(--beacon-soft); }
+    .search-icon {
+      position: absolute; left: 0.7rem; top: 50%; transform: translateY(-50%);
+      width: 15px; height: 15px; stroke: var(--ink-3); fill: none; stroke-width: 1.9;
+      pointer-events: none; transition: stroke 0.2s;
+    }
+    .search-input:focus ~ .search-icon { stroke: var(--beacon-2); }
+    .search-clear {
+      position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);
+      width: 20px; height: 20px; padding: 0;
+      display: grid; place-items: center;
+      background: none; border: 1px solid var(--ink-line); border-radius: 50%;
+      color: var(--ink-3); font-size: 0.75rem; line-height: 1; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .search-clear:hover { color: var(--ember); border-color: var(--ember); }
+    .search-clear[hidden] { display: none; }
+    .search-meta {
+      margin-top: 0.55rem; min-height: 1rem;
+      font-family: var(--font-mono); font-size: 0.68rem;
+      letter-spacing: 0.04em; color: var(--ink-4); line-height: 1;
+    }
+    /* Highlight match-a. */
+    mark.hl {
+      background: var(--beacon-soft); color: var(--beacon-2); border-radius: 3px;
+      padding: 0 1px; -webkit-user-select: none; user-select: none;
+    }
+    html[data-theme="dark"] mark.hl { color: var(--beacon); }
+
+    /* Globalni istorija search — zasebna sekcija ispod tabele. */
+    .history { margin-top: clamp(1.5rem,4vw,2.2rem); }
+    .history-head {
+      display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.85rem;
+      font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600;
+      letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3);
+    }
+    .history-head svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.9; }
+    .history-list { list-style: none; display: flex; flex-direction: column; gap: 0.45rem; }
+    .history-item {
+      display: flex; gap: 0.8rem; align-items: flex-start;
+      padding: 0.65rem 0.85rem; background: var(--paper-3);
+      border: 1px solid var(--ink-line); border-radius: 10px;
+      transition: border-color 0.2s; cursor: pointer;
+    }
+    .history-item:hover { border-color: var(--ink-line-2); }
+    .history-date {
+      flex: none; min-width: 7.5rem;
+      font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.03em;
+      color: var(--ink-4); line-height: 1.45; padding-top: 1px;
+      white-space: nowrap;
+    }
+    .history-body { flex: 1; min-width: 0; }
+    .history-title { color: var(--ink); font-size: 0.92rem; line-height: 1.4; word-break: break-word; }
+    .history-sub {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      margin-top: 0.3rem; font-family: var(--font-mono); font-size: 0.62rem; font-weight: 600;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      padding: 0.1rem 0.45rem; border-radius: 4px; border: 1px solid;
+    }
+    .history-sub.note { color: var(--azure); background: rgba(58,110,165,0.08); border-color: rgba(58,110,165,0.25); }
+    .history-sub.doc { color: var(--signal); background: rgba(74,122,94,0.08); border-color: rgba(74,122,94,0.25); }
+    .history-sub.done { color: var(--signal); background: rgba(74,122,94,0.08); border-color: rgba(74,122,94,0.25); }
+    .history-sub.open { color: var(--beacon-2); background: var(--beacon-soft); border-color: rgba(184,115,51,0.25); }
+    html[data-theme="dark"] .history-sub.open { border-color: rgba(232,176,125,0.25); }
+
+    .doc-label-pill { display: inline-flex; height: 18px; font-family: var(--font-mono); font-size: 0.55rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 0 0.35rem; border-radius: 4px; border: 1px solid; margin-left: 0.5rem; }
+    .doc-label-pill.homelab { color: var(--beacon-2); background: var(--beacon-soft); border-color: rgba(184,115,51,0.25); }
+    .doc-label-pill.work { color: var(--azure); background: rgba(58,110,165,0.06); border-color: rgba(58,110,165,0.25); }
+    .doc-label-pill.personal { color: var(--signal); background: rgba(74,122,94,0.06); border-color: rgba(74,122,94,0.25); }
+    .history-meta {
+      margin-top: 0.7rem; font-family: var(--font-mono); font-size: 0.66rem;
+      color: var(--ink-4); letter-spacing: 0.03em;
+    }
+
+    /* Google Calendar događaji za izabrani dan (azure akcenat) */
+    .cal-events { margin-bottom: 1.1rem; }
+    .cal-events:empty { display: none; }
+    .cal-ev-head {
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 600;
+      letter-spacing: 0.07em; text-transform: uppercase; color: var(--azure);
+      margin-bottom: 0.55rem;
+    }
+    .cal-ev {
+      display: flex; gap: 0.7rem; align-items: flex-start;
+      padding: 0.5rem 0.65rem; margin-bottom: 0.35rem;
+      border-left: 2px solid var(--azure); background: rgba(58,110,165,0.06);
+      border-radius: 0 8px 8px 0;
+    }
+    html[data-theme="dark"] .cal-ev { background: rgba(127,167,217,0.08); }
+    .cal-ev-time {
+      font-family: var(--font-mono); font-size: 0.72rem; color: var(--azure);
+      min-width: 3.4rem; padding-top: 1px; white-space: nowrap;
+    }
+    .cal-ev-title { color: var(--ink); font-size: 0.9rem; line-height: 1.4; }
+    .cal-ev-loc { font-size: 0.72rem; color: var(--ink-4); margin-top: 1px; }
+
+    /* FOOTER (slim) */
+    .footer {
+      max-width: var(--maxw); margin: 0 auto; padding: 1.75rem clamp(1.25rem, 4vw, 2.5rem) 3rem;
+      border-top: 1px solid var(--ink-line);
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 1rem;
+      font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-4);
+    }
+    .footer code {
+      color: var(--beacon-2); background: var(--beacon-soft);
+      padding: 0.08rem 0.35rem; border-radius: 4px;
+    }
+    .footer em { font-family: var(--font-display); font-style: italic; color: var(--beacon); }
+    .footer-left { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .footer .sys-sep { color: var(--ink-line-2); }
+    .footer .sys-stats { color: var(--ink-4); letter-spacing: 0.01em; }
+    .footer .sys-stats b { color: var(--beacon-2); font-weight: 600; }
+    .footer .gw-status { display: inline-flex; align-items: center; gap: 0.4rem; }
+    .footer .pip { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .footer .on { color: var(--signal); }
+    .footer .off { color: var(--ink-4); }
+
+    .footer-theme {
+      background: none; border: 1px solid var(--ink-line); cursor: pointer; color: var(--ink-4);
+      font-family: var(--font-mono); font-size: 1rem; line-height: 1;
+      display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 8px;
+      transition: color 0.2s var(--ease), border-color 0.2s var(--ease), background 0.2s var(--ease);
+    }
+    .footer-theme:hover { color: var(--beacon); border-color: var(--beacon); background: var(--beacon-soft); }
+  /* HAMBURGER — plutajući taster gore desno (otvara push-meni). */
+    .burger {
+      position: fixed; top: 1rem; right: 1rem; z-index: 1001;
+      display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 6px;
+      width: 46px; height: 46px; padding: 11px 9px;
+      background: var(--paper-3); border: 1px solid var(--ink-line-2); border-radius: 12px;
+      cursor: pointer; box-shadow: 0 4px 18px -8px rgba(0,0,0,0.30);
+      transition: border-color 0.2s var(--ease), background 0.3s var(--ease);
+    }
+    .burger:hover { border-color: var(--beacon); }
+    .burger span { display: block; width: 24px; height: 2px; background: var(--ink); border-radius: 2px; transition: all 0.3s var(--ocm-ease); }
+    .burger span:last-child { width: 16px; }
+
+    /* PUSH MENU — page card se gurne lijevo + 3D rotira, otkriva tamni meni
+       (port iz the original portfolio "Salient reveal"). */
+    #shell {
+      position: relative; z-index: 2; min-height: 100vh; background: var(--paper);
+      transform-origin: center center;
+      transition: transform .8s var(--ocm-ease), border-radius .8s var(--ocm-ease), box-shadow .8s var(--ocm-ease);
+    }
+    body.menu-fixed { overflow: hidden; }
+    body.menu-fixed #shell {
+      position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100dvh;
+      overflow: hidden; border-radius: 18px;
+    }
+    body.menu-pushed #shell {
+      transform: perspective(1400px) translateX(-50vw) rotateY(11deg) scale(.84);
+      box-shadow: 0 0 90px rgba(0,0,0,.55), 0 30px 60px rgba(0,0,0,.4);
+      will-change: transform;
+    }
+    .shell-scrim {
+      position: absolute; inset: 0; background: rgba(14,14,16,.30);
+      opacity: 0; visibility: hidden;
+      transition: opacity .8s var(--ocm-ease), visibility .8s var(--ocm-ease);
+      z-index: 50000; cursor: pointer;
+    }
+    body.menu-pushed .shell-scrim { opacity: 1; visibility: visible; }
+
+    .menu-overlay {
+      box-sizing: border-box; position: fixed; inset: 0; z-index: 1;
+      background: #0e0e10; color: #f5f1ea;
+      display: flex; flex-direction: column; justify-content: center; align-items: flex-end;
+      text-align: right; padding: clamp(70px,11vh,110px) clamp(24px,7vw,48px);
+    }
+    .menu-close {
+      position: absolute; top: 30px; right: 26px; background: none; border: none;
+      color: #f5f1ea; cursor: pointer; padding: 10px; opacity: 0;
+      transform: translateX(20px) rotate(-90deg);
+      transition: opacity .8s var(--ocm-ease) .15s, transform .8s var(--ocm-ease) .15s;
+    }
+    .menu-overlay.is-open .menu-close { opacity: .6; transform: translateX(0) rotate(0); }
+    .menu-close:hover { opacity: 1 !important; transform: rotate(90deg); }
+    .menu-close svg { width: 28px; height: 28px; stroke-width: 1.5; }
+
+    .menu-eyebrow {
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: .38em; text-transform: uppercase;
+      color: #d7b584; margin-bottom: clamp(16px,3.5vh,26px);
+      opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease), transform .8s var(--ocm-ease);
+    }
+    .menu-overlay.is-open .menu-eyebrow { opacity: 1; transform: translateX(0); }
+
+    .menu-nav { display: flex; flex-direction: column; align-items: flex-end; gap: clamp(3px,1.1vh,10px); }
+    .menu-link {
+      font-family: var(--font-display); font-size: clamp(16px,3vw,20px); font-weight: 300; line-height: 1.1;
+      color: #f5f1ea; text-decoration: none; opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease), transform .8s var(--ocm-ease), color .25s;
+    }
+    .menu-link .ml-tag { color: #6f6a62; font-family: var(--font-mono); font-size: 0.42em; letter-spacing: 0.1em; text-transform: uppercase; margin-left: 0.7em; }
+    .menu-link:hover { color: #d7b584; }
+    .menu-overlay.is-open .menu-link { opacity: 1; transform: translateX(0); }
+    .menu-link:nth-child(1){transition-delay:.10s}
+    .menu-link:nth-child(2){transition-delay:.14s}
+    .menu-link:nth-child(3){transition-delay:.18s}
+    .menu-link:nth-child(4){transition-delay:.22s}
+    .menu-link:nth-child(5){transition-delay:.26s}
+    .menu-link:nth-child(6){transition-delay:.30s}
+    .menu-link:nth-child(7){transition-delay:.34s}
+    .menu-link:nth-child(8){transition-delay:.38s}
+    .menu-link:nth-child(9){transition-delay:.42s}
+    .menu-archive {
+      margin-top: clamp(14px,3.5vh,26px); display: inline-flex; align-items: center; gap: 0.55em;
+      align-self: flex-end; font-family: var(--font-display); font-size: clamp(15px,2.5vw,17px);
+      font-weight: 300; color: #d7b584; text-decoration: none; padding-bottom: 4px;
+      border-bottom: 1px solid rgba(215,181,132,.3);
+      opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease) .46s, transform .8s var(--ocm-ease) .46s, color .25s;
+    }
+    .menu-archive svg { width: 0.85em; height: 0.85em; stroke: currentColor; fill: none; stroke-width: 1.6; }
+    .menu-archive:hover { color: #ecc998; }
+    .menu-overlay.is-open .menu-archive { opacity: 1; transform: translateX(0); }
+    .menu-notes { margin-top: clamp(8px,1.6vh,12px);
+      transition: opacity .8s var(--ocm-ease) .5s, transform .8s var(--ocm-ease) .5s, color .25s; }
+    .menu-terminal { margin-top: clamp(8px,1.6vh,12px);
+      transition: opacity .8s var(--ocm-ease) .54s, transform .8s var(--ocm-ease) .54s, color .25s; }
+    .menu-documents { margin-top: clamp(8px,1.6vh,12px);
+      transition: opacity .8s var(--ocm-ease) .56s, transform .8s var(--ocm-ease) .56s, color .25s; }
+    .menu-links-item { margin-top: clamp(8px,1.6vh,12px);
+      transition: opacity .8s var(--ocm-ease) .57s, transform .8s var(--ocm-ease) .57s, color .25s; }
+    .menu-foot {
+      margin-top: clamp(20px,5vh,38px); font-family: var(--font-mono);
+      letter-spacing: .22em; text-transform: uppercase; color: #6f6a62;
+      opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease) .58s, transform .8s var(--ocm-ease) .58s;
+    }
+    .menu-overlay.is-open .menu-foot { opacity: 1; transform: translateX(0); }
+    .menu-foot-name { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+    .menu-foot-tagline { font-size: 9px; opacity: .7; }
+
+      </style>
+</head>
+<body>
+
+<button class="burger" id="mobileBurger" type="button" aria-label="Otvori meni" aria-expanded="false" aria-controls="mobileMenu">
+    <span></span><span></span><span></span>
+  </button>
+
+  <button class="theme-fab" id="topTheme" type="button" title="Promijeni temu" aria-label="Promijeni temu">
+    <span class="theme-icon" id="topThemeIcon">☾</span>
+  </button>
+
+  <div class="menu-overlay" id="mobileMenu" role="dialog" aria-modal="true" aria-label="Meni">
+    <button class="menu-close" id="closeMobile" type="button" aria-label="Zatvori meni">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+
+    <a href="/" class="menu-link" style="margin-bottom: 1.5rem; color: #d7b584;">NOEMA</a>
+    <nav class="menu-nav">
+    </nav>
+
+    <a href="/arhiva" class="menu-archive">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4" stroke-linecap="round"/></svg>
+      Archive
+    </a>
+
+    <a href="/notes" class="menu-archive menu-notes">
+      <svg viewBox="0 0 24 24"><path d="M5 3h9l5 5v13a0 0 0 0 1 0 0H5a0 0 0 0 1 0 0V3z" stroke-linejoin="round"/><path d="M14 3v5h5M8 13h8M8 17h5" stroke-linecap="round"/></svg>
+      Notes
+    </a>
+
+    <a href="/documents" class="menu-archive menu-documents">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+      Documents
+    </a>
+
+    <a href="/links" class="menu-archive menu-links-item">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      Links
+    </a>
+
+    <a href="/ai-projects" class="menu-archive menu-notes">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+      AI Projects
+    </a>
+
+    <a href="/inspiration" class="menu-archive menu-documents">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-5 3 3 2-2 6 5"/></svg>
+      Inspiration
+    </a>
+
+    <a href="/backup" class="menu-foot" style="text-decoration: none; cursor: pointer;">
+      <div class="menu-foot-name">BACKUP</div>
+    </a>
+  </div>
+
+    <div class="wrap">
+    <div class="top">
+      <a class="back" href="/">
+        <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Noema
+      </a>
+      <div class="top-title">Archive</div>
+    </div>
+
+    <!-- TIME MACHINE ANALITIKA -->
+    <div class="time-machine" id="timeMachine" style="margin-bottom: 1.5rem; background: var(--paper-3); padding: 1rem 1.5rem; border-radius: 12px; border: 1px solid var(--ink-line); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+      <div style="font-family: var(--font-display); font-size: 1.15rem; color: var(--ink);">Time Machine</div>
+      <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-3); display: flex; gap: 1.2rem; flex-wrap: wrap;">
+        <span id="tmTasks"><b>0</b> completed tasks</span>
+        <span id="tmNotes"><b>0</b> notes</span>
+        <span id="tmLinks"><b>0</b> linkova</span>
+        <span id="tmDocs"><b>0</b> dokumenata</span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- KALENDAR -->
+      <aside class="cal">
+        <div class="cal-nav">
+          <button class="cal-arrow" id="prevMonth" title="Previous month">‹</button>
+          <div class="cal-month">
+            <select class="cal-sel" id="selMonth" aria-label="Month"></select>
+            <select class="cal-sel" id="selYear" aria-label="Year"></select>
+          </div>
+          <button class="cal-arrow" id="nextMonth" title="Next month">›</button>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div class="cal-foot">
+          <span class="lg"><i style="background:var(--beacon-2)"></i> tasks</span>
+          <span class="lg"><i style="background:var(--signal)"></i> documents</span>
+          <span class="lg"><i style="background:var(--ember)"></i> backup</span>
+          <span class="lg"><i style="background:var(--azure)"></i> links</span>
+        </div>
+      </aside>
+
+      <!-- TABELA -->
+      <section class="panel">
+        <div class="panel-head">
+          <div class="panel-date" id="panelDate">—</div>
+          <div style="display:flex; align-items:center; gap:0.9rem; flex-wrap:wrap;">
+            <div class="panel-stats" id="panelStats"></div>
+            <div class="seg">
+              <button id="modeDay" class="active">Day</button>
+              <button id="modeAll">All</button>
+            </div>
+          </div>
+        </div>
+        <div class="search-wrap">
+          <input class="search-input" id="searchInput" type="search" placeholder="Search archived items..." autocomplete="off" aria-label="Pretraga arhive" />
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+          <button class="search-clear" id="searchClear" title="Clear search" hidden>×</button>
+        </div>
+        <div class="search-meta" id="searchMeta"></div>
+        <div id="tableWrap"></div>
+
+        <!-- GLOBALNA PRETRAGA KOMPLETNE ISTORIJE -->
+        <div class="history">
+          <div class="history-head">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+            <span>Search entire archive</span>
+          </div>
+          <div class="search-wrap" style="margin-top:0;">
+            <input class="search-input" id="globalSearch" type="search" placeholder="Search every task and note through history..." autocomplete="off" aria-label="Global search" />
+            <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+            <button class="search-clear" id="globalClear" title="Clear search" hidden>×</button>
+          </div>
+          <div id="historyWrap"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <span class="footer-left">
+      Noema · <em>misao na dohvat ruke</em>
+      <span class="sys-sep">|</span>
+      <span class="sys-stats" id="sysStats" title="Resursi servera">CPU: <b>—</b> · RAM: <b>—</b> · Disk: <b>—</b></span>
+      <span class="sys-sep">|</span>
+      <a href="/help" class="sys-stats" style="text-decoration: none; cursor: pointer;">help</a>
+      <span class="sys-sep">|</span>
+      <a href="/logout" id="logoutBtn" class="sys-stats" style="text-decoration: none; cursor: pointer;">logout</a>
+    </span>
+    <div style="display:inline-flex; gap:0.5rem; align-items:center;">
+      <button class="footer-theme" id="pageWidth" type="button" title="Promijeni širinu stranice (90% ili normalno)" aria-label="Širina stranice" style="width:auto; padding: 0 8px; font-weight:600; font-size:0.75rem;">WIDTH</button>
+      <button class="footer-theme" id="fontDec" type="button" title="Smanji tekst" aria-label="Smanji tekst">
+        <span style="font-size: 0.85em; font-family: var(--font-sans); font-weight:600;">A</span>
+      </button>
+      <button class="footer-theme" id="fontReset" type="button" title="Vrati na original" aria-label="Vrati na original" style="width:auto; padding: 0 8px;">
+        <span style="font-size: 0.85em; font-family: var(--font-sans); font-weight:600;">100%</span>
+      </button>
+      <button class="footer-theme" id="fontInc" type="button" title="Povećaj tekst" aria-label="Povećaj tekst">
+        <span style="font-size: 1.25em; font-family: var(--font-sans); font-weight:600;">A</span>
+      </button>
+      <span class="sys-sep" style="margin: 0 20px;">|</span>
+      <button class="footer-theme" id="footerTheme" type="button" title="Promijeni temu" aria-label="Promijeni temu">
+        <span id="ftIcon">☾</span>
+      </button>
+    </div>
+  </footer>
+
+  <script>
+    const MONTHS = ["januar","februar","mart","april","maj","jun","jul","avgust","septembar","oktobar","novembar","decembar"];
+    const DOW = ["pon","uto","sri","čet","pet","sub","ned"]; // sedmica počinje ponedjeljkom
+    const DAYNAMES = ["nedjelja","ponedjeljak","utorak","srijeda","četvrtak","petak","subota"];
+    const PRIO_RANK = { high: 0, normal: 1, medium: 1, low: 2 };
+
+    let tasks = [];               // svi tasks
+    let byDate = new Map();        // "YYYY-MM-DD" -> [task]
+    let view = new Date();         // mjesec koji se prikazuje
+    let selected = isoLocal(new Date());
+    let mode = "day";              // "day" | "all"
+    let query = "";                // pretraga tabele (Dan/Sve) — mala slova, trimovano
+    let globalQuery = "";          // pretraga cijele istorije — mala slova, trimovano
+
+    function isoLocal(d) {
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    }
+    function parseIso(s) { const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); }
+    function fmtLong(iso) {
+      const d = parseIso(iso);
+      return `${DAYNAMES[d.getDay()]}, ${d.getDate()}. ${MONTHS[d.getMonth()]} ${d.getFullYear()}.`;
+    }
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+
+    /** Esc za regex meta-karaktere. */
+    function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+    /** Da li task odgovara query-ju (naslov, prioritet, vrijeme; za linkove i URL/opis/labela). */
+    function matchesSearch(t, q) {
+      if (!q) return true;
+      if ((t.title || "").toLowerCase().includes(q)) return true;
+      if ((t.priority || "").toLowerCase().includes(q)) return true;
+      if ((t.time || "").includes(q)) return true;
+      if (t.type === "link") {
+        if ((t.url || "").toLowerCase().includes(q)) return true;
+        if ((t.description || "").toLowerCase().includes(q)) return true;
+        if ((t.label || "").toLowerCase().includes(q)) return true;
+      }
+      return false;
+    }
+
+    /** highlight(text, q) — escaped HTML sa <mark> oko match-ova. q je opcioni (default: query). */
+    function hl(text, q) {
+      const safe = esc(text || "");
+      q = q || query || globalQuery || "";
+      if (!q) return safe;
+      try {
+        const re = new RegExp(`(${escRe(q)})`, "gi");
+        return safe.replace(re, '<mark class="hl">$1</mark>');
+      } catch { return safe; }
+    }
+
+    /** Kratak datum za prikaz u istoriji (npr. "pon, 24. jun 2025"). */
+    function fmtDay(iso) {
+      const d = parseIso(iso);
+      if (isNaN(d.getTime())) return iso;
+      return `${DAYNAMES[d.getDay()].slice(0,3)}, ${d.getDate()}. ${MONTHS[d.getMonth()]} ${d.getFullYear()}.`;
+    }
+
+    let backupDates = [];
+
+    async function load() {
+      let loadedNotes = [];
+      let loadedDocs = [];
+      let loadedLinks = [];
+      try {
+        const res = await fetch("/api/archive");
+        const data = await res.json();
+        tasks = (data && data.todos) || [];
+        loadedNotes = (data && data.notes) || [];
+        loadedDocs = (data && data.documents) || [];
+        loadedLinks = (data && data.links) || [];
+        backupDates = (data && data.backupDates) || [];
+      } catch (e) { tasks = []; loadedNotes = []; loadedDocs = []; loadedLinks = []; backupDates = []; }
+      byDate = new Map();
+      for (const t of tasks) {
+        const k = t.scheduledFor;
+        if (!k) continue;
+        if (!byDate.has(k)) byDate.set(k, []);
+        byDate.get(k).push(t);
+      }
+      for (const n of loadedNotes) {
+        const d = new Date(n.createdAt);
+        if (isNaN(d.getTime())) continue;
+        const k = isoLocal(d);
+        if (!byDate.has(k)) byDate.set(k, []);
+        byDate.get(k).push({ ...n, type: "note" });
+      }
+      for (const d of loadedDocs) {
+        const date = new Date(d.createdAt);
+        if (isNaN(date.getTime())) continue;
+        const k = isoLocal(date);
+        if (!byDate.has(k)) byDate.set(k, []);
+        byDate.get(k).push({ ...d, type: "document" });
+      }
+      for (const l of loadedLinks) {
+        const date = new Date(l.createdAt);
+        if (isNaN(date.getTime())) continue;
+        const k = isoLocal(date);
+        if (!byDate.has(k)) byDate.set(k, []);
+        byDate.get(k).push({ ...l, type: "link" });
+      }
+      // Otvori mjesec/dan koji ima podatke ako danas nema ništa — inače današnji.
+      if (!byDate.has(selected) && byDate.size) {
+        const keys = [...byDate.keys()].sort();
+        selected = keys[keys.length - 1]; // najnoviji dan sa obavezama
+      }
+      
+      // Ažuriraj Time Machine
+      const doneTasksCount = tasks.filter(t => t.done).length;
+      document.getElementById("tmTasks").innerHTML = `<b style="color:var(--beacon-2)">${doneTasksCount}</b> completed tasks`;
+      document.getElementById("tmNotes").innerHTML = `<b style="color:var(--azure)">${loadedNotes.length}</b> notes`;
+      document.getElementById("tmLinks").innerHTML = `<b style="color:var(--azure)">${loadedLinks.length}</b> linkova`;
+      document.getElementById("tmDocs").innerHTML = `<b style="color:var(--signal)">${loadedDocs.length}</b> dokumenata`;
+      
+      view = parseIso(selected);
+      buildSelectors();
+      renderCalendar();
+      renderPanel();
+    }
+
+    function sortTasks(arr) {
+      return arr.slice().sort((a, b) => {
+        if (a.type === "note" && b.type !== "note") return 1;
+        if (a.type !== "note" && b.type === "note") return -1;
+        if (a.type === "document" && b.type !== "document") return 1;
+        if (a.type !== "document" && b.type === "document") return -1;
+        if (a.type === "link" && b.type !== "link") return 1;
+        if (a.type !== "link" && b.type === "link") return -1;
+        if (a.type !== "task" && a.type === b.type) return b.createdAt - a.createdAt;
+
+        if (a.done !== b.done) return a.done ? 1 : -1;
+        if (!!a.time !== !!b.time) return a.time ? -1 : 1;
+        if (a.time && b.time && a.time !== b.time) return a.time < b.time ? -1 : 1;
+        return (PRIO_RANK[a.priority] ?? 1) - (PRIO_RANK[b.priority] ?? 1);
+      });
+    }
+
+    // Popuni padajuće: mjeseci (12) + godine (raspon iz podataka ± par godina).
+    function buildSelectors() {
+      const selM = document.getElementById("selMonth");
+      const selY = document.getElementById("selYear");
+      selM.innerHTML = MONTHS.map((name, i) => `<option value="${i}">${name}</option>`).join("");
+      const years = new Set([new Date().getFullYear(), view.getFullYear()]);
+      for (const k of byDate.keys()) years.add(Number(k.slice(0, 4)));
+      const minY = Math.min(...years) - 1, maxY = Math.max(...years) + 1;
+      let opts = "";
+      for (let y = minY; y <= maxY; y++) opts += `<option value="${y}">${y}</option>`;
+      selY.innerHTML = opts;
+      selM.addEventListener("change", () => { view.setMonth(Number(selM.value)); renderCalendar(); });
+      selY.addEventListener("change", () => { view.setFullYear(Number(selY.value)); renderCalendar(); });
+    }
+    // Ako strelice odu van raspona godina, dodaj opciju u letu.
+    function ensureYearOption(y) {
+      const selY = document.getElementById("selYear");
+      if ([...selY.options].some((o) => Number(o.value) === y)) return;
+      const opt = document.createElement("option");
+      opt.value = y; opt.textContent = y;
+      if (y < Number(selY.options[0].value)) selY.prepend(opt); else selY.append(opt);
+    }
+
+    function renderCalendar() {
+      const y = view.getFullYear(), m = view.getMonth();
+      ensureYearOption(y);
+      document.getElementById("selMonth").value = m;
+      document.getElementById("selYear").value = y;
+      const grid = document.getElementById("calGrid");
+      grid.innerHTML = "";
+      for (const d of DOW) {
+        const h = document.createElement("div");
+        h.className = "cal-dow"; h.textContent = d; grid.appendChild(h);
+      }
+      const first = new Date(y, m, 1);
+      const lead = (first.getDay() + 6) % 7;          // koliko praznih do ponedjeljka
+      const daysInMonth = new Date(y, m + 1, 0).getDate();
+      const todayIso = isoLocal(new Date());
+      for (let i = 0; i < lead; i++) {
+        const e = document.createElement("div"); e.className = "cal-day empty"; grid.appendChild(e);
+      }
+      for (let day = 1; day <= daysInMonth; day++) {
+        const iso = `${y}-${String(m+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+        const cell = document.createElement("div");
+        cell.className = "cal-day";
+        if (iso === todayIso) cell.classList.add("today");
+        if (iso === selected) cell.classList.add("selected");
+        cell.textContent = day;
+        const items = byDate.get(iso);
+        const hasTasks = items && items.some(t => t.type !== "note" && t.type !== "document" && t.type !== "link");
+        const hasDocs = items && items.some(t => t.type === "document");
+        const hasLinks = items && items.some(t => t.type === "link");
+        const hasBackup = backupDates.includes(iso);
+        if (hasTasks || hasDocs || hasLinks || hasBackup) {
+          const wrap = document.createElement("span");
+          wrap.className = "cal-dots";
+          if (hasTasks) { const d = document.createElement("span"); d.className = "cal-dot tasks"; wrap.appendChild(d); }
+          if (hasDocs) { const d = document.createElement("span"); d.className = "cal-dot docs"; wrap.appendChild(d); }
+          if (hasLinks) { const d = document.createElement("span"); d.className = "cal-dot links"; wrap.appendChild(d); }
+          if (hasBackup) { const d = document.createElement("span"); d.className = "cal-dot backup"; wrap.appendChild(d); }
+          cell.appendChild(wrap);
+        }
+        cell.addEventListener("click", () => {
+          selected = iso; mode = "day";
+          setSeg();
+          renderCalendar(); renderPanel();
+        });
+        grid.appendChild(cell);
+      }
+    }
+
+    // ── Google Calendar događaji za izabrani dan ──
+    const eventsCache = new Map(); // iso -> events[]
+    let calConnected = null;       // null=nepoznato; false=nije povezan (sakrij sekciju)
+
+    async function fetchDayEvents(iso) {
+      if (eventsCache.has(iso)) return eventsCache.get(iso);
+      try {
+        const res = await fetch(`/api/calendar?day=${iso}`);
+        const data = await res.json();
+        calConnected = data.configured !== false && data.connected !== false && !data.notConnected;
+        const evs = data.events || [];
+        eventsCache.set(iso, evs);
+        return evs;
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function fmtEventTime(iso) {
+      if (!iso || iso.length === 10) return "ceo dan"; // YYYY-MM-DD = celodnevni
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return "—";
+      return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+    }
+
+    async function renderDayEvents(iso) {
+      const host = document.getElementById("calEvents");
+      if (!host) return;
+      const evs = await fetchDayEvents(iso);
+      // Korisnik je možda u međuvremenu promijenio dan/režim — ne gazi noviji prikaz.
+      if (iso !== selected || mode !== "day") return;
+      if (calConnected === false || !evs.length) { host.innerHTML = ""; return; }
+      host.innerHTML = `<div class="cal-ev-head">Kalendar</div>` + evs.map((e) => `
+        <div class="cal-ev">
+          <span class="cal-ev-time">${esc(fmtEventTime(e.start))}</span>
+          <div class="cal-ev-body">
+            <div class="cal-ev-title">${esc(e.title)}</div>
+            ${e.location ? `<div class="cal-ev-loc">${esc(e.location)}</div>` : ""}
+          </div>
+        </div>`).join("");
+    }
+
+    function statusCell(done) {
+      return done
+        ? `<span class="st done"><svg viewBox="0 0 14 14"><polyline points="2,7 6,11 12,3"/></svg></span>`
+        : `<span class="st"></span>`;
+    }
+    function row(t) {
+      if (t.type === "note") {
+        return `<tr class="is-note">
+          <td class="c-status"><span class="st" style="border:none; background:none; padding:0; display:flex; align-items:center; justify-content:center;"><svg viewBox="0 0 24 24" stroke="var(--ink-4)" fill="none" stroke-width="1.8" style="width:16px; height:16px;"><path d="M5 3h9l5 5v13a0 0 0 0 1 0 0H5a0 0 0 0 1 0 0V3z" stroke-linejoin="round"/><path d="M14 3v5h5M8 13h8M8 17h5" stroke-linecap="round"/></svg></span></td>
+          <td colspan="3"><a href="/notes" style="text-decoration:none; display:flex; align-items:center; gap:0.6rem;"><span style="font-family: var(--font-mono); font-size: 0.86rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--azure);">Bilješka:</span> <span style="color:var(--ink);">${hl(t.title)}</span></a></td>
+        </tr>`;
+      }
+      if (t.type === "document") {
+        const label = t.label ? `<span class="doc-label-pill ${t.label}">${t.label}</span>` : '';
+        return `<tr class="is-note">
+          <td class="c-status"><span class="st" style="border:none; background:none; padding:0; display:flex; align-items:center; justify-content:center;"><svg viewBox="0 0 24 24" stroke="var(--signal)" fill="none" stroke-width="1.8" style="width:16px; height:16px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span></td>
+          <td colspan="3"><a href="/documents" style="text-decoration:none; display:flex; align-items:center; gap:0.6rem;"><span style="font-family: var(--font-mono); font-size: 0.86rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--signal);">Dokument:</span> <span style="color:var(--ink);">${hl(t.title)}</span>${label}</a></td>
+        </tr>`;
+      }
+      if (t.type === "link") {
+        return `<tr class="is-note">
+          <td class="c-status"><span class="st" style="border:none; background:none; padding:0; display:flex; align-items:center; justify-content:center;"><svg viewBox="0 0 24 24" stroke="var(--azure)" fill="none" stroke-width="1.8" style="width:16px; height:16px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span></td>
+          <td colspan="3"><a href="${esc(t.url)}" target="_blank" rel="noopener" style="text-decoration:none; display:flex; align-items:center; gap:0.6rem;"><span style="font-family: var(--font-mono); font-size: 0.86rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--azure);">Link:</span> <span style="color:var(--ink);">${hl(t.title)}</span><span style="font-family:var(--font-mono); font-size:0.66rem; color:var(--ink-4);">${esc(t.domain || "")}</span></a></td>
+        </tr>`;
+      }
+      return `<tr class="${t.done ? "is-done" : ""}">
+        <td class="c-status">${statusCell(t.done)}</td>
+        <td><span class="t-title">${hl(t.title)}</span></td>
+        <td class="c-time">${t.time ? esc(t.time) : "—"}</td>
+        <td class="c-prio"><span class="prio ${t.priority}">${esc(t.priority)}</span></td>
+      </tr>`;
+    }
+
+    function renderPanel() {
+      const dateEl = document.getElementById("panelDate");
+      const statsEl = document.getElementById("panelStats");
+      const wrap = document.getElementById("tableWrap");
+      const q = query;
+
+      // Search UI state.
+      document.getElementById("searchClear").hidden = !q;
+      const metaEl = document.getElementById("searchMeta");
+
+      if (mode === "all") {
+        dateEl.textContent = "Sve obaveze";
+        const total = tasks.length, done = tasks.filter((t) => t.done).length;
+        statsEl.innerHTML = `<b>${done}</b> završeno · <span class="open">${total - done}</span> otvoreno · ${total} ukupno`;
+        const keys = [...byDate.keys()].sort().reverse(); // najnoviji dan prvo
+        if (!keys.length) { wrap.innerHTML = `<div class="empty">Još nema nijedne obaveze.</div>`; return; }
+        let body = "", shown = 0, groupsShown = 0;
+        for (const k of keys) {
+          const items = q ? sortTasks(byDate.get(k)).filter((t) => matchesSearch(t, q)) : sortTasks(byDate.get(k));
+          if (!items.length) continue;
+          groupsShown++;
+          body += `<tr class="date-group"><td colspan="4">${fmtLong(k)}</td></tr>`;
+          for (const t of items) { body += row(t); shown++; }
+        }
+        if (q) {
+          metaEl.textContent = `${shown} ${shown === 1 ? "rezultat" : "rezultata"}${groupsShown ? ` u ${groupsShown} ${groupsShown === 1 ? "danu" : "dana"}` : ""}`;
+          metaEl.classList.add("show");
+        } else {
+          metaEl.textContent = ""; metaEl.classList.remove("show");
+        }
+        if (!shown) { wrap.innerHTML = `<div class="empty">${q ? "Nema rezultata za „" + esc(q) + "“." : "Još nema nijedne obaveze."}</div>`; return; }
+        wrap.innerHTML = `<table><thead><tr>
+          <th class="c-status"></th><th>Obaveza</th><th class="c-time">Vrijeme</th><th class="c-prio">Prioritet</th>
+        </tr></thead><tbody>${body}</tbody></table>`;
+        return;
+      }
+
+      // mode === "day"
+      dateEl.textContent = fmtLong(selected);
+      let items = sortTasks(byDate.get(selected) || []);
+      const allItems = items;
+      if (q) items = items.filter((t) => matchesSearch(t, q));
+      const done = items.filter((t) => t.done).length;
+      statsEl.innerHTML = items.length
+        ? `<b>${done}</b> završeno · <span class="open">${items.length - done}</span> otvoreno`
+        : (q ? "" : "");
+      if (q) {
+        metaEl.textContent = `${items.length} ${items.length === 1 ? "rezultat" : "rezultata"} od ${allItems.length}`;
+        metaEl.classList.add("show");
+      } else {
+        metaEl.textContent = ""; metaEl.classList.remove("show");
+      }
+      const tableHtml = items.length
+        ? `<table><thead><tr>
+            <th class="c-status"></th><th>Obaveza</th><th class="c-time">Vrijeme</th><th class="c-prio">Prioritet</th>
+          </tr></thead><tbody>${items.map(row).join("")}</tbody></table>`
+        : `<div class="empty">${q ? "Nema rezultata za „" + esc(q) + "“ ovog dana." : "Nema obaveza za ovaj dan."}</div>`;
+      // Kalendar događaji se učitavaju asinhrono i upadaju iznad tabele.
+      wrap.innerHTML = `<div id="calEvents" class="cal-events"></div>${tableHtml}`;
+      renderDayEvents(selected);
+    }
+
+    function setSeg() {
+      document.getElementById("modeDay").classList.toggle("active", mode === "day");
+      document.getElementById("modeAll").classList.toggle("active", mode === "all");
+    }
+
+    // ── Theme toggle ──
+    function getStoredTheme() {
+      try { return localStorage.getItem("noema-theme"); } catch (e) { return null; }
+    }
+    function storeTheme(t) {
+      try { localStorage.setItem("noema-theme", t); } catch (e) {}
+    }
+    function applyTheme(t) {
+      document.documentElement.setAttribute("data-theme", t);
+      const icon = document.getElementById("ftIcon");
+      if (icon) icon.textContent = t === "dark" ? "☀" : "☾";
+    }
+    applyTheme(getStoredTheme() || "dark");
+    const themeBtn = document.getElementById("footerTheme");
+    if (themeBtn) {
+      themeBtn.addEventListener("click", () => {
+        const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        applyTheme(next);
+        storeTheme(next);
+      });
+    }
+
+    // ── Font Scale ──
+    let fontScale = Number(localStorage.getItem("noema-font-scale")) || 1;
+    function applyFontScale(scale) {
+      document.documentElement.style.fontSize = (16 * scale) + "px";
+      document.body.style.fontSize = (16 * scale) + "px";
+    }
+    function initFontScale() {
+      applyFontScale(fontScale);
+      const decBtn = document.getElementById("fontDec");
+      const incBtn = document.getElementById("fontInc");
+      const resBtn = document.getElementById("fontReset");
+      if (decBtn) decBtn.addEventListener("click", () => {
+        fontScale = Math.max(0.4, fontScale - 0.3);
+        localStorage.setItem("noema-font-scale", fontScale);
+        applyFontScale(fontScale);
+      });
+      if (incBtn) incBtn.addEventListener("click", () => {
+        fontScale = Math.min(2.5, fontScale + 0.3);
+        localStorage.setItem("noema-font-scale", fontScale);
+        applyFontScale(fontScale);
+      });
+      if (resBtn) resBtn.addEventListener("click", () => {
+        fontScale = 1;
+        localStorage.setItem("noema-font-scale", fontScale);
+        applyFontScale(fontScale);
+      });
+    }
+    initFontScale();
+
+    // ── Sistemski resursi servera (CPU/RAM/Disk) u futeru ──
+    function fmtGB(bytes) { return (bytes / 1073741824).toFixed(1); }
+    async function loadSystem() {
+      const el = document.getElementById("sysStats");
+      if (!el) return;
+      try {
+        const res = await fetch("/api/system");
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const cpu = data.cpu ? `${data.cpu.percent}%` : "—";
+        const ram = data.mem ? `${data.mem.percent}%` : "—";
+        const disk = data.disk ? `${data.disk.percent}%` : "—";
+        el.innerHTML = `CPU: <b>${cpu}</b> · RAM: <b>${ram}</b> · Disk: <b>${disk}</b>`;
+        const parts = [];
+        if (data.cpu) parts.push(`CPU ${data.cpu.cores} jezgara`);
+        if (data.mem) parts.push(`RAM ${fmtGB(data.mem.used)}/${fmtGB(data.mem.total)} GB`);
+        if (data.disk) parts.push(`Disk ${fmtGB(data.disk.used)}/${fmtGB(data.disk.total)} GB`);
+        el.title = parts.join(" · ") || "Resursi servera";
+      } catch (err) {
+        el.innerHTML = `<span style="font-style:italic">sistem nedostupan</span>`;
+      }
+    }
+    loadSystem();
+    setInterval(loadSystem, 5000);
+
+    document.getElementById("prevMonth").addEventListener("click", () => { view.setMonth(view.getMonth() - 1); renderCalendar(); });
+    document.getElementById("nextMonth").addEventListener("click", () => { view.setMonth(view.getMonth() + 1); renderCalendar(); });
+    document.getElementById("modeDay").addEventListener("click", () => { mode = "day"; setSeg(); renderPanel(); });
+    document.getElementById("modeAll").addEventListener("click", () => { mode = "all"; setSeg(); renderPanel(); });
+
+    // ── Pretraga tabele (Dan/Sve) ──
+    const searchInput = document.getElementById("searchInput");
+    const searchClear = document.getElementById("searchClear");
+    searchInput.addEventListener("input", () => {
+      query = searchInput.value.trim().toLowerCase();
+      renderPanel();
+    });
+    searchClear.addEventListener("click", () => {
+      searchInput.value = '';
+      query = '';
+      renderPanel();
+      searchInput.focus();
+    });
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && query) {
+        searchInput.value = '';
+        query = '';
+        renderPanel();
+      }
+    });
+
+    // ── Global search cijele istorije ──
+    const globalInput = document.getElementById("globalSearch");
+    const globalClear = document.getElementById("globalClear");
+    globalInput.addEventListener("input", () => {
+      globalQuery = globalInput.value.trim().toLowerCase();
+      renderHistory();
+    });
+    globalClear.addEventListener("click", () => {
+      globalInput.value = '';
+      globalQuery = '';
+      renderHistory();
+      globalInput.focus();
+    });
+    globalInput.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && globalQuery) {
+        globalInput.value = '';
+        globalQuery = '';
+        renderHistory();
+      }
+    });
+
+    /** Renderuje rezultate globalne pretrage kao flat listu sa datumom + statusom. */
+    function renderHistory() {
+      const wrap = document.getElementById("historyWrap");
+      const q = globalQuery;
+      globalClear.hidden = !q;
+
+      if (!q) { wrap.innerHTML = ""; return; }
+
+      // Flat lista: (task/note) + datumski ISO. Idemo po byDate da zadržimo vezu sa danom.
+      const flat = [];
+      for (const [iso, items] of byDate.entries()) {
+        for (const t of items) {
+          if (matchesSearch(t, q)) flat.push({ t, iso });
+        }
+      }
+      // Sortiraj: najnoviji datum prvo; unutar datuma ista logika kao tabela.
+      flat.sort((a, b) => {
+        if (a.iso !== b.iso) return a.iso < b.iso ? 1 : -1;
+        return 0;
+      });
+
+      if (!flat.length) {
+        wrap.innerHTML = `<div class="history-meta">Nema rezultata za „${esc(q)}“.</div>`;
+        return;
+      }
+
+      wrap.innerHTML =
+        `<div class="history-meta">${flat.length} ${flat.length === 1 ? "rezultat" : "rezultata"}</div>` +
+        `<ul class="history-list">` + flat.map(({ t, iso }) => {
+          const isNote = t.type === "note";
+          const isDoc = t.type === "document";
+          const isLink = t.type === "link";
+          const sub = isNote
+            ? `<span class="history-sub note">Bilješka</span>`
+            : isDoc
+              ? `<span class="history-sub doc">Dokument</span>`
+              : isLink
+                ? `<span class="history-sub doc" style="color: var(--azure); border-color: rgba(58,110,165,0.35);">Link</span>`
+                : (t.done
+                    ? `<span class="history-sub done">Završeno</span>`
+                    : `<span class="history-sub open">Otvoreno</span>`);
+          const extra = !isNote && !isDoc && !isLink
+            ? ` <span style="font-family:var(--font-mono); font-size:0.66rem; color:var(--ink-4); margin-left:0.4rem;">${t.time ? esc(t.time) : ""}${t.priority ? (t.time ? " · " : "") + esc(t.priority) : ""}</span>`
+            : isLink
+              ? ` <span style="font-family:var(--font-mono); font-size:0.66rem; color:var(--ink-4); margin-left:0.4rem;">${esc(t.domain || "")}</span>`
+              : "";
+          // Klik vodi na taj dan u tabeli (osim za note/docs/links → njihove stranice).
+          const onclick = isNote
+            ? `window.location.href='/notes'`
+            : isDoc
+              ? `window.location.href='/documents'`
+              : isLink
+                ? `window.location.href='/links'`
+                : `selectHistoryDay("${iso}")`;
+          return `<li class="history-item" onclick="${onclick}">
+            <div class="history-date">${fmtDay(iso)}</div>
+            <div class="history-body">
+              <span class="history-title">${hl(t.title, q)}</span>
+              <div>${sub}${extra}</div>
+            </div>
+          </li>`;
+        }).join("") + `</ul>`;
+    }
+
+    /** Klik na rezultat istorije → otvori taj dan u tabeli (Dan mod). */
+    function selectHistoryDay(iso) {
+      selected = iso;
+      view = parseIso(iso);
+      mode = "day";
+      setSeg();
+      buildSelectors();
+      renderCalendar();
+      renderPanel();
+      // Skroluj gore do tabele.
+      document.querySelector(".panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    // "/" fokusira gornju pretragu (ako korisnik ne uređuje drugi input).
+    document.addEventListener("keydown", (e) => {
+      if (e.key === '/' && document.activeElement.tagName !== 'INPUT' &&
+          document.activeElement.tagName !== 'SELECT' &&
+          document.activeElement.isContentEditable !== true) {
+        e.preventDefault();
+        searchInput.focus();
+      }
+    });
+
+    load();
+  // ── Push-meni (port "Salient reveal" iz the original portfolio) ──
+    function initMenu() {
+      const burger = document.getElementById("mobileBurger");
+      const overlay = document.getElementById("mobileMenu");
+      const closeBtn = document.getElementById("closeMobile");
+      if (!burger || !overlay) return;
+
+      // Umotaj cijelu stranicu u #shell (karticu); meni izvuci IZA kartice.
+      const shell = document.createElement("div");
+      shell.id = "shell";
+      const inner = document.createElement("div");
+      inner.id = "shell-inner";
+      while (document.body.firstChild) inner.appendChild(document.body.firstChild);
+      shell.appendChild(inner);
+      const scrim = document.createElement("div");
+      scrim.className = "shell-scrim";
+      scrim.setAttribute("aria-hidden", "true");
+      shell.appendChild(scrim);
+      document.body.appendChild(shell);
+      document.body.appendChild(overlay); // meni iza kartice (niži z-index)
+
+      let sy = 0, unfixTimer = null;
+      const setExpanded = (o) => burger.setAttribute("aria-expanded", o ? "true" : "false");
+
+      function open() {
+        if (unfixTimer) { clearTimeout(unfixTimer); unfixTimer = null; }
+        if (!document.body.classList.contains("menu-fixed")) {
+          sy = window.scrollY || window.pageYOffset || 0;
+          inner.style.transform = "translateY(" + (-sy) + "px)";
+          document.body.classList.add("menu-fixed");
+          void shell.offsetWidth; // reflow da se .8s transform animira iz mira
+        }
+        requestAnimationFrame(() => {
+          document.body.classList.add("menu-pushed");
+          overlay.classList.add("is-open");
+        });
+        setExpanded(true);
+      }
+      function close() {
+        overlay.classList.remove("is-open");
+        document.body.classList.remove("menu-pushed");
+        setExpanded(false);
+        if (unfixTimer) clearTimeout(unfixTimer);
+        unfixTimer = setTimeout(() => {
+          document.body.classList.remove("menu-fixed");
+          inner.style.transform = "";
+          window.scrollTo(0, sy);
+          unfixTimer = null;
+        }, 850);
+      }
+
+      burger.addEventListener("click", open);
+      closeBtn.addEventListener("click", close);
+      scrim.addEventListener("click", close);
+      overlay.querySelectorAll("a").forEach((l) => {
+        l.addEventListener("click", (e) => {
+          const href = l.getAttribute("href");
+          const target = l.getAttribute("target");
+          if (!href || href === "#" || target === "_blank") {
+            close();
+            return;
+          }
+          e.preventDefault();
+          close();
+          setTimeout(() => {
+            window.location.href = href;
+          }, 850);
+        });
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && document.body.classList.contains("menu-pushed")) close();
+      });
+    }
+
+        initMenu();
+  </script>
+<script src="/noema-header-footer.js"></script>
+<script src="/cmdk.js"></script></body>
+</html>

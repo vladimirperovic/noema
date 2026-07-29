@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Noema — Sign In</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,300&family=JetBrains+Mono:wght@400;500;600&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* NOEMA — obsidian dark theme design tokens */
+    :root {
+      --paper:      #0a0a0c;
+      --paper-2:    #0f0f12;
+      --paper-3:    #16161b;
+      --ink-line:   rgba(244, 239, 230, 0.08);
+      --ink-line-2: rgba(244, 239, 230, 0.14);
+      --ink:        #f4efe6;
+      --ink-2:      #d8d2c4;
+      --ink-3:      #9b958a;
+      --ink-4:      #5c574f;
+      --beacon:     #e8b07d;
+      --beacon-2:   #d4a574;
+      --beacon-glow:rgba(232, 176, 125, 0.22);
+      --beacon-soft:rgba(232, 176, 125, 0.10);
+      --ember:      #d97757;
+      --ember-bg:   rgba(217, 119, 87, 0.15);
+      --ember-border:rgba(217, 119, 87, 0.35);
+      --font-display: 'Fraunces', Georgia, serif;
+      --font-sans:    'Geist', -apple-system, system-ui, sans-serif;
+      --font-mono:    'JetBrains Mono', 'IBM Plex Mono', monospace;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--paper);
+      background-image: 
+        radial-gradient(at 30% 20%, var(--beacon-glow) 0px, transparent 60%),
+        radial-gradient(at 70% 80%, rgba(127, 167, 217, 0.08) 0px, transparent 60%);
+      color: var(--ink-2);
+      font-family: var(--font-sans);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .login-card {
+      background: var(--paper-2);
+      border: 1px solid var(--ink-line-2);
+      border-radius: 20px;
+      padding: 44px 40px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.7);
+      animation: fadeIn 0.4s var(--ease);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .brand {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .brand-logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: var(--paper-3);
+      border: 1px solid var(--ink-line-2);
+      color: var(--beacon);
+      margin-bottom: 18px;
+      box-shadow: 0 0 20px var(--beacon-soft);
+    }
+
+    .brand-logo svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    .brand h1 {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 400;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+
+    .brand h1 em {
+      font-style: italic;
+      color: var(--beacon);
+    }
+
+    .brand p {
+      font-size: 14px;
+      color: var(--ink-3);
+      line-height: 1.5;
+    }
+
+    .form-group {
+      margin-bottom: 22px;
+    }
+
+    .form-label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      margin-bottom: 8px;
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    .form-input {
+      width: 100%;
+      background: var(--paper-3);
+      border: 1px solid var(--ink-line-2);
+      border-radius: 12px;
+      padding: 13px 44px 13px 14px;
+      font-size: 15px;
+      color: var(--ink);
+      outline: none;
+      transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+    }
+
+    .form-input:focus {
+      border-color: var(--beacon);
+      box-shadow: 0 0 0 3px var(--beacon-soft);
+    }
+
+    .toggle-pass {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--ink-3);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s;
+    }
+
+    .toggle-pass:hover {
+      color: var(--beacon);
+    }
+
+    .btn-submit {
+      width: 100%;
+      background: var(--beacon);
+      border: 1px solid var(--beacon-2);
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--paper);
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s, opacity 0.2s;
+      box-shadow: 0 4px 16px var(--beacon-glow);
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      opacity: 0.94;
+      transform: translateY(-1px);
+    }
+
+    .btn-submit:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-submit:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .alert {
+      padding: 12px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 20px;
+      display: none;
+      animation: shake 0.3s var(--ease);
+    }
+
+    .alert-error {
+      background: var(--ember-bg);
+      border: 1px solid var(--ember-border);
+      color: var(--ember);
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-4px); }
+      40%, 80% { transform: translateX(4px); }
+    }
+
+    .footer-note {
+      text-align: center;
+      margin-top: 24px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ink-4);
+      letter-spacing: 0.02em;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-card">
+    <div class="brand">
+      <div class="brand-logo">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+        </svg>
+      </div>
+      <h1>Noema <em>.</em></h1>
+      <p>Enter your password to access the app</p>
+    </div>
+
+    <div id="alertBox" class="alert"></div>
+
+    <form id="loginForm" autocomplete="off">
+      <div class="form-group">
+        <label class="form-label" for="passwordInput">Password</label>
+        <div class="input-wrapper">
+          <input type="password" id="passwordInput" class="form-input" placeholder="••••••••" required autofocus>
+          <button type="button" class="toggle-pass" id="togglePassBtn" title="Toggle password visibility">
+            <svg id="eyeIcon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <button type="submit" id="submitBtn" class="btn-submit">Sign In</button>
+    </form>
+
+    <div class="footer-note">
+      Protected by rate-limiting (max 5 failed attempts)
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const passInput = document.getElementById('passwordInput');
+    const toggleBtn = document.getElementById('togglePassBtn');
+    const eyeIcon = document.getElementById('eyeIcon');
+    const alertBox = document.getElementById('alertBox');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // Toggle password visibility
+    toggleBtn.addEventListener('click', () => {
+      const isPass = passInput.type === 'password';
+      passInput.type = isPass ? 'text' : 'password';
+      eyeIcon.style.opacity = isPass ? '0.6' : '1';
+    });
+
+    function showAlert(msg) {
+      alertBox.textContent = msg;
+      alertBox.className = 'alert alert-error';
+      alertBox.style.display = 'block';
+    }
+
+    function hideAlert() {
+      alertBox.style.display = 'none';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAlert();
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Checking...';
+
+      const password = passInput.value;
+
+      try {
+        const res = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+
+        const data = await res.json();
+
+        if (res.status === 200 && data.ok) {
+          const next = new URLSearchParams(window.location.search).get('next') || '/';
+          window.location.href = next;
+        } else if (res.status === 429) {
+          showAlert(data.error || 'Too many failed attempts (5/5). Your IP address is temporarily blocked for 15 minutes.');
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Blocked (15m)';
+        } else {
+          const remaining = data.remainingAttempts !== undefined ? data.remainingAttempts : '';
+          const extra = remaining !== '' ? ` (Attempts remaining: ${remaining})` : '';
+          showAlert((data.error || 'Incorrect password.') + extra);
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Sign In';
+          passInput.focus();
+          passInput.select();
+        }
+      } catch (err) {
+        showAlert('Server connection error. Please try again.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Sign In';
+      }
+    });
+  </script>
+</body>
+</html>

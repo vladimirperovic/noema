@@ -1,0 +1,1676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Noema — Links</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="description" content="Noema linkdump — sačuvani linkovi sa preview karticama, labelama i pretragom.">
+
+  <!-- Tema prije paint-a (ista logika kao na početnoj). -->
+  <script>
+    (function () {
+      try {
+        var manual = localStorage.getItem("noema-theme-manual");
+        var hour = new Date().getHours();
+        var autoTheme = (hour >= 19 || hour < 7) ? "dark" : "light";
+        var t = (manual === "dark" || manual === "light") ? manual : autoTheme;
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,300&family=JetBrains+Mono:wght@400;500;600&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --paper: #f7f3ec; --paper-2: #fbf8f2; --paper-3: #ffffff;
+      --ink-line: rgba(26,26,31,0.10); --ink-line-2: rgba(26,26,31,0.18);
+      --ink: #1a1a1f; --ink-2: #3d3d44; --ink-3: #6b6b73; --ink-4: #9b958a;
+      --beacon: #b87333; --beacon-2: #9c6029; --beacon-glow: rgba(184,115,51,0.16); --beacon-soft: rgba(184,115,51,0.08);
+      --signal: #4a7a5e; --ember: #c0563b; --azure: #3a6ea5;
+      --font-display: 'Fraunces', Georgia, serif;
+      --font-sans: 'Geist', -apple-system, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      --ocm-ease: cubic-bezier(.15, .2, .1, 1);
+      --maxw: 1100px;
+      --gut: clamp(1.25rem, 4vw, 2.5rem);
+    }
+    html[data-theme="dark"] {
+      --paper: #0a0a0c; --paper-2: #0f0f12; --paper-3: #16161b;
+      --ink-line: rgba(244,239,230,0.08); --ink-line-2: rgba(244,239,230,0.14);
+      --ink: #f4efe6; --ink-2: #d8d2c4; --ink-3: #9b958a; --ink-4: #5c574f;
+      --beacon: #e8b07d; --beacon-2: #d4a574; --beacon-glow: rgba(232,176,125,0.22); --beacon-soft: rgba(232,176,125,0.10);
+      --signal: #8ab4a1; --ember: #d97757; --azure: #7fa7d9;
+    }
+    :root { color-scheme: light; }
+    html[data-theme="dark"] { color-scheme: dark; }
+    html { background: var(--paper); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--font-sans); font-size: 16px; line-height: 1.6;
+      color: var(--ink-2); background: var(--paper); min-height: 100vh;
+      transition: background 0.3s var(--ease), color 0.3s var(--ease);
+      opacity: 0;
+      animation: pageFadeIn 0.6s var(--ocm-ease) forwards;
+    }
+    @keyframes pageFadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    ::selection { background: var(--beacon); color: var(--paper); }
+
+    .wrap { max-width: var(--maxw); margin: 0 auto; padding: clamp(1.25rem,4vw,2.5rem); }
+
+    /* Top bar */
+    .top {
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      margin-bottom: clamp(1.4rem,4vw,2.2rem);
+    }
+    .back {
+      display: inline-flex; align-items: center; gap: 0.5em; text-decoration: none;
+      color: var(--ink-3); font-family: var(--font-mono); font-size: 0.78rem;
+      letter-spacing: 0.04em; padding: 0.4rem 0.7rem 0.4rem 0.5rem; border-radius: 8px;
+      border: 1px solid var(--ink-line); transition: color 0.2s, border-color 0.2s;
+    }
+    .back:hover { color: var(--beacon-2); border-color: var(--ink-line-2); }
+    .back svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+    .top-title { font-family: var(--font-display); font-weight: 300; font-size: clamp(1.4rem,4vw,2rem); color: var(--ink); }
+    /* burger-clearance: reserve room for the fixed burger so the title never sits under it. */
+    @media (max-width: 1160px) { .top { padding-right: 3.5rem; } }
+
+    .column {
+      display: flex; flex-direction: column;
+      background: var(--paper-2); border: 1px solid var(--ink-line);
+      border-radius: 18px; overflow: hidden;
+      min-height: 500px;
+    }
+    .column.is-feature { border-color: var(--ink-line-2); box-shadow: 0 8px 32px -16px var(--beacon-glow); }
+    .column.is-feature::before {
+      content: ''; display: block; height: 3px;
+      background: linear-gradient(90deg, var(--beacon-2), var(--beacon), var(--beacon-2));
+    }
+    .column-head { padding: 1.2rem 1.5rem 0.85rem; border-bottom: 1px solid var(--ink-line); }
+    .col-title {
+      font-family: var(--font-display); font-weight: 500; font-size: 1.5rem;
+      color: var(--ink); letter-spacing: -0.01em; line-height: 1;
+    }
+    .col-count {
+      margin-top: 0.6rem; display: inline-flex; align-items: center; gap: 0.4rem;
+      font-family: var(--font-mono); font-size: 0.7rem; color: var(--ink-3);
+      background: rgba(26,26,31,0.04); padding: 0.25rem 0.6rem; border-radius: 100px;
+    }
+    html[data-theme="dark"] .col-count { background: rgba(244,239,230,0.05); }
+    .col-count .num { color: var(--ink); font-weight: 600; }
+
+    /* Forma za dodavanje */
+    .add-form { display: flex; gap: 0.6rem; padding: 1.1rem 1.5rem 0.4rem; flex-wrap: wrap; }
+    .note-input {
+      border: 1px solid var(--ink-line-2); border-radius: 9px;
+      padding: 0.6rem 0.8rem; font-family: var(--font-sans); font-size: 0.95rem;
+      color: var(--ink); background: var(--paper); outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .note-input::placeholder { color: var(--ink-4); }
+    .note-input:focus { border-color: var(--beacon); box-shadow: 0 0 0 3px var(--beacon-soft); }
+    #urlInput { flex: 3 1 260px; }
+    #titleInput { flex: 2 1 200px; }
+    #labelInput { flex: 1 1 120px; }
+    .note-submit {
+      border: 1px solid var(--beacon); background: var(--beacon-soft); color: var(--beacon-2);
+      border-radius: 9px; padding: 0.6rem 1.1rem; font-family: var(--font-sans); font-weight: 600;
+      font-size: 0.9rem; cursor: pointer; white-space: nowrap;
+      transition: background 0.2s var(--ease), color 0.2s var(--ease), transform 0.1s;
+    }
+    .note-submit:hover { background: var(--beacon); color: var(--paper); }
+    .note-submit:active { transform: scale(0.97); }
+    .note-submit:disabled { opacity: 0.5; cursor: default; }
+
+    /* Filter bar — dinamički label pillovi */
+    .filter-bar { display: flex; gap: 0.35rem; padding: 0.7rem 1.5rem 0; flex-wrap: wrap; }
+    .filter-pill {
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 26px; font-family: var(--font-mono); font-size: 0.62rem; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; padding: 0 0.55rem; border-radius: 6px; border: 1px solid var(--ink-line);
+      background: transparent; color: var(--ink-3); cursor: pointer;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+    }
+    .filter-pill:hover { background: var(--paper-3); border-color: var(--ink-line-2); color: var(--ink); }
+    .filter-pill.active { background: var(--beacon-soft); color: var(--beacon-2); border-color: var(--beacon); }
+
+    /* Search */
+    .search-wrap { position: relative; padding: 0 1.5rem; margin-top: 0.7rem; }
+    .search-input {
+      width: 100%; border: 1px solid var(--ink-line-2); border-radius: 9px;
+      padding: 0.55rem 2rem 0.55rem 2.3rem;
+      font-family: var(--font-sans); font-size: 0.9rem; color: var(--ink);
+      background: var(--paper); outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .search-input::placeholder { color: var(--ink-4); }
+    .search-input:focus { border-color: var(--beacon); box-shadow: 0 0 0 3px var(--beacon-soft); }
+    .search-icon {
+      position: absolute; left: calc(1.5rem + 0.7rem); top: 50%; transform: translateY(-50%);
+      width: 15px; height: 15px; stroke: var(--ink-3); fill: none; stroke-width: 1.9;
+      pointer-events: none; transition: stroke 0.2s;
+    }
+    .search-input:focus ~ .search-icon { stroke: var(--beacon-2); }
+    .search-clear {
+      position: absolute; right: calc(1.5rem + 0.55rem); top: 50%; transform: translateY(-50%);
+      width: 18px; height: 18px; padding: 0;
+      display: grid; place-items: center;
+      background: var(--paper-3); border: 1px solid var(--ink-line); border-radius: 50%;
+      color: var(--ink-3); font-size: 0.7rem; line-height: 1; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .search-clear:hover { color: var(--ember); border-color: var(--ember); }
+    .search-clear[hidden] { display: none; }
+    .search-meta {
+      padding: 0 1.5rem; min-height: 1.4rem;
+      font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.04em;
+      color: var(--ink-4); line-height: 1.4rem;
+    }
+    mark.hl {
+      background: var(--beacon-soft); color: var(--beacon-2); border-radius: 3px;
+      padding: 0 1px; -webkit-user-select: none; user-select: none;
+    }
+    html[data-theme="dark"] mark.hl { color: var(--beacon); }
+
+    /* Kartice linkova */
+    .cards {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 1rem; padding: 0.9rem 1.5rem 1.5rem;
+    }
+    .card {
+      background: var(--paper-3); border: 1px solid var(--ink-line); border-radius: 14px;
+      overflow: hidden; display: flex; flex-direction: column; position: relative;
+      transition: border-color 0.2s, transform 0.2s var(--ease), box-shadow 0.2s;
+    }
+    .card:hover { border-color: var(--ink-line-2); transform: translateY(-2px); box-shadow: 0 10px 26px -18px rgba(0,0,0,0.35); }
+    .card.is-new { border-color: var(--beacon); box-shadow: 0 0 0 3px var(--beacon-soft); }
+    .card.is-pinned { border-color: rgba(184,115,51,0.3); }
+    .card.is-pinned::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--beacon), transparent); z-index: 1;
+    }
+    .card.is-archived { opacity: 0.5; }
+    .card.is-dragging { opacity: 0.4; transform: scale(0.96); }
+    .card.drag-over { border-color: var(--beacon); box-shadow: 0 0 0 2px var(--beacon-soft); }
+    .card-thumb {
+      display: block; aspect-ratio: 1.91 / 1; background: var(--paper-2);
+      border-bottom: 1px solid var(--ink-line); overflow: hidden; text-decoration: none;
+      position: relative;
+    }
+    .card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .thumb-fallback {
+      width: 100%; height: 100%; display: grid; place-items: center;
+      font-family: var(--font-display); font-weight: 300; font-size: 2.4rem; color: var(--ink-4);
+      background: linear-gradient(135deg, var(--paper-2), var(--beacon-soft));
+    }
+    /* Pin button overlay on thumbnail */
+    .card-pin {
+      position: absolute; top: 6px; right: 6px; z-index: 2;
+      width: 28px; height: 28px; padding: 0; border: none; border-radius: 50%;
+      background: rgba(0,0,0,0.45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      color: #fff; cursor: pointer; display: grid; place-items: center;
+      opacity: 0; transition: opacity 0.2s, background 0.2s, transform 0.1s;
+      font-size: 0.75rem; line-height: 1;
+    }
+    .card:hover .card-pin { opacity: 0.7; }
+    .card-pin:hover { opacity: 1 !important; background: rgba(0,0,0,0.65); }
+    .card-pin.pinned { opacity: 1; background: var(--beacon); color: var(--paper); }
+    .card-pin:active { transform: scale(0.85); }
+    /* Bulk checkbox overlay */
+    .card-check {
+      position: absolute; top: 6px; left: 6px; z-index: 2;
+      width: 24px; height: 24px; padding: 0; border-radius: 6px;
+      border: 2px solid rgba(255,255,255,0.7); background: rgba(0,0,0,0.35);
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      color: #fff; cursor: pointer; display: grid; place-items: center;
+      font-size: 0.7rem; line-height: 1;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    }
+    .card-check.checked { background: var(--beacon); border-color: var(--beacon); }
+    .card-check:active { transform: scale(0.9); }
+    .card-body { padding: 0.75rem 0.9rem 0.85rem; display: flex; flex-direction: column; gap: 0.3rem; flex: 1; }
+    .card-title { font-size: 0.92rem; font-weight: 500; line-height: 1.35; }
+    .card-title a { color: var(--ink); text-decoration: none; transition: color 0.2s; }
+    .card-title a:hover { color: var(--beacon-2); }
+    /* Inline edit */
+    .card-title .inline-edit, .card-desc .inline-edit {
+      width: 100%; border: 1px solid var(--beacon); border-radius: 5px;
+      padding: 0.2rem 0.4rem; font-family: var(--font-sans); font-size: inherit;
+      color: var(--ink); background: var(--paper); outline: none;
+      box-shadow: 0 0 0 3px var(--beacon-soft);
+    }
+    .card-title .edit-icon, .card-desc .edit-icon {
+      display: inline; cursor: pointer; opacity: 0; margin-left: 0.3em;
+      font-size: 0.7em; color: var(--ink-4); transition: opacity 0.2s;
+    }
+    .card:hover .edit-icon { opacity: 0.6; }
+    .edit-icon:hover { opacity: 1 !important; color: var(--beacon-2); }
+    .card-meta {
+      font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.03em;
+      color: var(--ink-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .card-desc {
+      font-size: 0.8rem; color: var(--ink-3); line-height: 1.45;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .card-foot { margin-top: auto; padding-top: 0.5rem; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+    .link-label {
+      display: inline-flex; align-items: center; height: 21px;
+      font-family: var(--font-mono); font-size: 0.58rem; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; padding: 0 0.45rem; border-radius: 5px; border: 1px solid;
+      cursor: pointer; transition: transform 0.1s;
+    }
+    .link-label:active { transform: scale(0.95); }
+    .link-label.empty { color: var(--ink-4); border-color: var(--ink-line); border-style: dashed; }
+    .link-label.lb-0 { color: var(--beacon-2); background: var(--beacon-soft); border-color: rgba(184,115,51,0.25); }
+    .link-label.lb-1 { color: var(--azure); background: rgba(58,110,165,0.06); border-color: rgba(58,110,165,0.25); }
+    .link-label.lb-2 { color: var(--signal); background: rgba(74,122,94,0.06); border-color: rgba(74,122,94,0.25); }
+    .link-label.lb-3 { color: var(--ember); background: rgba(192,86,59,0.06); border-color: rgba(192,86,59,0.25); }
+    /* Card Footer Buttons */
+    .card-read {
+      margin-left: auto; flex-shrink: 0; cursor: pointer; display: inline-grid; place-items: center;
+      width: 24px; height: 24px; padding: 0; border-radius: 6px;
+      color: var(--ink-3); background: transparent; border: 1px solid var(--ink-line);
+      opacity: 0.6; transition: opacity 0.2s, background 0.2s, color 0.2s, transform 0.1s;
+    }
+    .card:hover .card-read { opacity: 0.9; }
+    .card-read:hover { opacity: 1 !important; color: var(--ink); background: var(--paper-3); }
+    .card-read:active { transform: scale(0.85); }
+    
+    .card-archive {
+      flex-shrink: 0; cursor: pointer; display: inline-grid; place-items: center;
+      width: 24px; height: 24px; padding: 0; border-radius: 6px;
+      color: var(--azure); background: rgba(58,110,165,0.06); border: 1px solid rgba(58,110,165,0.25);
+      opacity: 0; transition: opacity 0.2s, background 0.2s, transform 0.1s;
+    }
+    .card:hover .card-archive { opacity: 0.7; }
+    .card-archive:hover { opacity: 1 !important; background: rgba(58,110,165,0.16); }
+    .card-archive:active { transform: scale(0.85); }
+    .card-del {
+      flex-shrink: 0; cursor: pointer; display: inline-grid; place-items: center;
+      width: 24px; height: 24px; padding: 0; border-radius: 6px;
+      color: var(--ember); background: rgba(192,86,59,0.06); border: 1px solid rgba(192,86,59,0.25);
+      opacity: 0; transition: opacity 0.2s, background 0.2s, border-color 0.2s, transform 0.1s;
+    }
+    .card:hover .card-del { opacity: 0.7; }
+    .card-del:hover { opacity: 1 !important; background: rgba(192,86,59,0.16); border-color: rgba(192,86,59,0.45); }
+    .card-del:active { transform: scale(0.85); }
+    .empty-state { text-align: center; padding: 2.5rem 1rem; color: var(--ink-4); font-style: italic; font-size: 0.9rem; grid-column: 1 / -1; }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex; align-items: center; gap: 0.4rem; padding: 0.6rem 1.5rem 0;
+      flex-wrap: wrap;
+    }
+    .tb-btn {
+      display: inline-flex; align-items: center; gap: 0.35em; height: 28px;
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 600; letter-spacing: 0.04em;
+      padding: 0 0.6rem; border-radius: 6px; border: 1px solid var(--ink-line);
+      background: transparent; color: var(--ink-3); cursor: pointer;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+      white-space: nowrap; position: relative;
+    }
+    .tb-btn:hover { background: var(--paper-3); border-color: var(--ink-line-2); color: var(--ink); }
+    .tb-btn.active { background: var(--beacon-soft); color: var(--beacon-2); border-color: var(--beacon); }
+    .tb-btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+    .tb-sep { width: 1px; height: 18px; background: var(--ink-line); margin: 0 0.2rem; }
+    .tb-spacer { flex: 1; }
+    /* Dropdown */
+    .tb-dropdown { position: relative; }
+    .tb-dropdown-menu {
+      position: absolute; top: calc(100% + 4px); left: 0; z-index: 100;
+      min-width: 160px; background: var(--paper-3); border: 1px solid var(--ink-line-2);
+      border-radius: 10px; padding: 0.3rem; box-shadow: 0 12px 32px -12px rgba(0,0,0,0.35);
+      display: none;
+    }
+    .tb-dropdown.open .tb-dropdown-menu { display: block; }
+    .tb-dropdown-item {
+      display: flex; align-items: center; gap: 0.5em; width: 100%;
+      padding: 0.4rem 0.6rem; border: none; background: none; border-radius: 7px;
+      font-family: var(--font-sans); font-size: 0.8rem; color: var(--ink-2); cursor: pointer;
+      transition: background 0.15s, color 0.15s; text-align: left;
+    }
+    .tb-dropdown-item:hover { background: var(--beacon-soft); color: var(--beacon-2); }
+    .tb-dropdown-item.active { color: var(--beacon-2); font-weight: 600; }
+    .tb-dropdown-item .check { width: 1.2em; text-align: center; }
+
+    /* Bulk bar */
+    .bulk-bar {
+      display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.5rem;
+      background: var(--beacon-soft); border-bottom: 1px solid rgba(184,115,51,0.2);
+      flex-wrap: wrap;
+    }
+    .bulk-bar .tb-btn { border-color: rgba(184,115,51,0.3); }
+    .bulk-count {
+      font-family: var(--font-mono); font-size: 0.72rem; color: var(--beacon-2); font-weight: 600;
+    }
+    .bulk-bar .bulk-action {
+      height: 28px; padding: 0 0.7rem; border-radius: 6px; border: 1px solid;
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 600;
+      cursor: pointer; display: inline-flex; align-items: center; gap: 0.3em;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .bulk-action:active { transform: scale(0.96); }
+    .bulk-action.danger { color: var(--ember); border-color: rgba(192,86,59,0.3); background: rgba(192,86,59,0.06); }
+    .bulk-action.danger:hover { background: rgba(192,86,59,0.16); }
+    .bulk-action.info { color: var(--azure); border-color: rgba(58,110,165,0.3); background: rgba(58,110,165,0.06); }
+    .bulk-action.info:hover { background: rgba(58,110,165,0.16); }
+    .bulk-action.neutral { color: var(--ink-3); border-color: var(--ink-line); background: transparent; }
+    .bulk-action.neutral:hover { background: var(--paper-3); }
+
+    /* Badge count on filter pills */
+    .filter-pill .pill-count {
+      margin-left: 0.3em; font-size: 0.85em; opacity: 0.7;
+    }
+
+    /* Group header */
+    .group-header {
+      grid-column: 1 / -1; display: flex; align-items: center; gap: 0.6rem;
+      padding: 0.5rem 0 0.2rem; margin-top: 0.5rem;
+      font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600;
+      color: var(--ink-3); letter-spacing: 0.04em; text-transform: lowercase;
+    }
+    .group-header::after {
+      content: ''; flex: 1; height: 1px; background: var(--ink-line);
+    }
+    .group-header .group-count {
+      font-weight: 400; color: var(--ink-4); font-size: 0.85em;
+    }
+
+    /* Toast (potvrda čuvanja iz bookmarkleta) */
+    .toast {
+      position: fixed; bottom: 1.4rem; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: var(--paper-3); border: 1px solid var(--beacon); border-radius: 12px;
+      color: var(--ink); font-size: 0.9rem; padding: 0.7rem 1.2rem; z-index: 2000;
+      box-shadow: 0 12px 32px -12px rgba(0,0,0,0.4); opacity: 0; pointer-events: none;
+      transition: opacity 0.3s var(--ease), transform 0.3s var(--ease);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast b { color: var(--beacon-2); }
+
+    /* Bookmarklet sekcija */
+    .bm-panel {
+      margin-top: 1.5rem; background: var(--paper-2); border: 1px solid var(--ink-line);
+      border-radius: 18px; padding: 1.3rem 1.5rem 1.4rem;
+    }
+    .bm-title { font-family: var(--font-display); font-weight: 500; font-size: 1.15rem; color: var(--ink); margin-bottom: 0.4rem; }
+    .bm-text { font-size: 0.86rem; color: var(--ink-3); max-width: 62ch; }
+    .bm-text code { font-family: var(--font-mono); font-size: 0.78em; color: var(--beacon-2); background: var(--beacon-soft); padding: 0.08rem 0.35rem; border-radius: 4px; }
+    .bm-row { display: flex; align-items: center; gap: 1rem; margin-top: 0.9rem; flex-wrap: wrap; }
+    .bm-link {
+      display: inline-flex; align-items: center; gap: 0.5em;
+      font-family: var(--font-sans); font-weight: 600; font-size: 0.95rem; text-decoration: none;
+      color: var(--beacon-2); background: var(--beacon-soft); border: 1.5px dashed var(--beacon);
+      border-radius: 10px; padding: 0.55rem 1.1rem; cursor: grab;
+    }
+    .bm-link:active { cursor: grabbing; }
+    .bm-hint { font-family: var(--font-mono); font-size: 0.68rem; color: var(--ink-4); }
+    .bm-help-link { color: var(--azure); text-decoration: none; border-bottom: 1px solid rgba(58,110,165,0.35); }
+    .bm-help-link:hover { border-bottom-color: var(--azure); }
+
+    /* HAMBURGER — plutajući taster gore desno (otvara push-meni). */
+    .burger {
+      position: fixed; top: 1rem; right: 1rem; z-index: 1001;
+      display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 6px;
+      width: 46px; height: 46px; padding: 11px 9px;
+      background: var(--paper-3); border: 1px solid var(--ink-line-2); border-radius: 12px;
+      cursor: pointer; box-shadow: 0 4px 18px -8px rgba(0,0,0,0.30);
+      transition: border-color 0.2s var(--ease), background 0.3s var(--ease);
+    }
+    .burger:hover { border-color: var(--beacon); }
+    .burger span { display: block; width: 24px; height: 2px; background: var(--ink); border-radius: 2px; transition: all 0.3s var(--ocm-ease); }
+    .burger span:last-child { width: 16px; }
+
+    /* PUSH MENU — page card se gurne lijevo + 3D rotira, otkriva tamni meni. */
+    #shell {
+      position: relative; z-index: 2; min-height: 100vh; background: var(--paper);
+      transform-origin: center center;
+      transition: transform .8s var(--ocm-ease), border-radius .8s var(--ocm-ease), box-shadow .8s var(--ocm-ease);
+    }
+    body.menu-fixed { overflow: hidden; }
+    body.menu-fixed #shell {
+      position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100dvh;
+      overflow: hidden; border-radius: 18px;
+    }
+    body.menu-pushed #shell {
+      transform: perspective(1400px) translateX(-50vw) rotateY(11deg) scale(.84);
+      box-shadow: 0 0 90px rgba(0,0,0,.55), 0 30px 60px rgba(0,0,0,.4);
+      will-change: transform;
+    }
+    .shell-scrim {
+      position: absolute; inset: 0; background: rgba(14,14,16,.30);
+      opacity: 0; visibility: hidden;
+      transition: opacity .8s var(--ocm-ease), visibility .8s var(--ocm-ease);
+      z-index: 50000; cursor: pointer;
+    }
+    body.menu-pushed .shell-scrim { opacity: 1; visibility: visible; }
+
+    .menu-overlay {
+      box-sizing: border-box; position: fixed; inset: 0; z-index: 1;
+      background: #0e0e10; color: #f5f1ea;
+      display: flex; flex-direction: column; justify-content: center; align-items: flex-end;
+      text-align: right; padding: clamp(70px,11vh,110px) clamp(24px,7vw,48px);
+    }
+    .menu-close {
+      position: absolute; top: 30px; right: 26px; background: none; border: none;
+      color: #f5f1ea; cursor: pointer; padding: 10px; opacity: 0;
+      transform: translateX(20px) rotate(-90deg);
+      transition: opacity .8s var(--ocm-ease) .15s, transform .8s var(--ocm-ease) .15s;
+    }
+    .menu-overlay.is-open .menu-close { opacity: .6; transform: translateX(0) rotate(0); }
+    .menu-close:hover { opacity: 1 !important; transform: rotate(90deg); }
+    .menu-close svg { width: 28px; height: 28px; stroke-width: 1.5; }
+
+    .menu-eyebrow {
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: .38em; text-transform: uppercase;
+      color: #d7b584; margin-bottom: clamp(16px,3.5vh,26px);
+      opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease), transform .8s var(--ocm-ease);
+    }
+    .menu-overlay.is-open .menu-eyebrow { opacity: 1; transform: translateX(0); }
+
+    .menu-nav { display: flex; flex-direction: column; align-items: flex-end; gap: clamp(3px,1.1vh,10px); }
+    .menu-link {
+      font-family: var(--font-display); font-size: clamp(16px,3vw,20px); font-weight: 300; line-height: 1.1;
+      color: #f5f1ea; text-decoration: none; opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease), transform .8s var(--ocm-ease), color .25s;
+    }
+    .menu-link .ml-tag { color: #6f6a62; font-family: var(--font-mono); font-size: 0.42em; letter-spacing: 0.1em; text-transform: uppercase; margin-left: 0.7em; }
+    .menu-link:hover { color: #d7b584; }
+    .menu-overlay.is-open .menu-link { opacity: 1; transform: translateX(0); }
+    .menu-link:nth-child(1){transition-delay:.10s}
+    .menu-link:nth-child(2){transition-delay:.14s}
+    .menu-link:nth-child(3){transition-delay:.18s}
+    .menu-link:nth-child(4){transition-delay:.22s}
+    .menu-link:nth-child(5){transition-delay:.26s}
+    .menu-link:nth-child(6){transition-delay:.30s}
+    .menu-link:nth-child(7){transition-delay:.34s}
+    .menu-link:nth-child(8){transition-delay:.38s}
+    .menu-link:nth-child(9){transition-delay:.42s}
+    .menu-archive {
+      margin-top: clamp(14px,3.5vh,26px); display: inline-flex; align-items: center; gap: 0.55em;
+      align-self: flex-end; font-family: var(--font-display); font-size: clamp(15px,2.5vw,17px);
+      font-weight: 300; color: #d7b584; text-decoration: none; padding-bottom: 4px;
+      border-bottom: 1px solid rgba(215,181,132,.3);
+      opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease) .46s, transform .8s var(--ocm-ease) .46s, color .25s;
+    }
+    .menu-archive svg { width: 0.85em; height: 0.85em; stroke: currentColor; fill: none; stroke-width: 1.6; }
+    .menu-archive:hover { color: #ecc998; }
+    .menu-overlay.is-open .menu-archive { opacity: 1; transform: translateX(0); }
+    .menu-notes { margin-top: clamp(8px,1.6vh,12px);
+      transition: opacity .8s var(--ocm-ease) .5s, transform .8s var(--ocm-ease) .5s, color .25s; }
+    .menu-terminal { margin-top: clamp(8px,1.6vh,12px);
+      transition: opacity .8s var(--ocm-ease) .54s, transform .8s var(--ocm-ease) .54s, color .25s; }
+    .menu-documents { margin-top: clamp(8px,1.6vh,12px);
+      transition: opacity .8s var(--ocm-ease) .56s, transform .8s var(--ocm-ease) .56s, color .25s; }
+    .menu-links-item { margin-top: clamp(8px,1.6vh,12px);
+      transition: opacity .8s var(--ocm-ease) .57s, transform .8s var(--ocm-ease) .57s, color .25s; }
+    .menu-foot {
+      margin-top: clamp(20px,5vh,38px); font-family: var(--font-mono);
+      letter-spacing: .22em; text-transform: uppercase; color: #6f6a62;
+      opacity: 0; transform: translateX(40px);
+      transition: opacity .8s var(--ocm-ease) .58s, transform .8s var(--ocm-ease) .58s;
+    }
+    .menu-overlay.is-open .menu-foot { opacity: 1; transform: translateX(0); }
+    .menu-foot-name { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+
+    /* FOOTER (slim) */
+    .footer {
+      max-width: var(--maxw); margin: 0 auto; padding: 1.75rem clamp(1.25rem, 4vw, 2.5rem) 3rem;
+      border-top: 1px solid var(--ink-line);
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 1rem;
+      font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-4);
+    }
+    .footer em { font-family: var(--font-display); font-style: italic; color: var(--beacon); }
+    .footer-left { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .footer .sys-sep { color: var(--ink-line-2); }
+    .footer .sys-stats { color: var(--ink-4); letter-spacing: 0.01em; }
+    .footer .sys-stats b { color: var(--beacon-2); font-weight: 600; }
+
+    .footer-theme {
+      background: none; border: 1px solid var(--ink-line); cursor: pointer; color: var(--ink-4);
+      font-family: var(--font-mono); font-size: 1rem; line-height: 1;
+      display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 8px;
+      transition: color 0.2s var(--ease), border-color 0.2s var(--ease), background 0.2s var(--ease);
+    }
+    .footer-theme:hover { color: var(--beacon); border-color: var(--beacon); background: var(--beacon-soft); }
+  </style>
+</head>
+<body>
+
+  <button class="burger" id="mobileBurger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu">
+    <span></span><span></span><span></span>
+  </button>
+
+  <button class="theme-fab" id="topTheme" type="button" title="Change theme" aria-label="Change theme">
+    <span class="theme-icon" id="topThemeIcon">☾</span>
+  </button>
+
+  <div class="menu-overlay" id="mobileMenu" role="dialog" aria-modal="true" aria-label="Meni">
+    <button class="menu-close" id="closeMobile" type="button" aria-label="Close menu">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+
+    <a href="/" class="menu-link" style="margin-bottom: 1.5rem; color: #d7b584;">NOEMA</a>
+    <nav class="menu-nav">
+    </nav>
+
+    <a href="/arhiva" class="menu-archive">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4" stroke-linecap="round"/></svg>
+      Archive
+    </a>
+
+    <a href="/notes" class="menu-archive menu-notes">
+      <svg viewBox="0 0 24 24"><path d="M5 3h9l5 5v13a0 0 0 0 1 0 0H5a0 0 0 0 1 0 0V3z" stroke-linejoin="round"/><path d="M14 3v5h5M8 13h8M8 17h5" stroke-linecap="round"/></svg>
+      Notes
+    </a>
+
+    <a href="/documents" class="menu-archive menu-documents">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+      Documents
+    </a>
+
+    <a href="/links" class="menu-archive menu-links-item">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      Links
+    </a>
+
+    <a href="/ai-projects" class="menu-archive menu-notes">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+      AI Projects
+    </a>
+
+    <a href="/inspiration" class="menu-archive menu-documents">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-5 3 3 2-2 6 5"/></svg>
+      Inspiration
+    </a>
+
+    <a href="/backup" class="menu-foot" style="text-decoration: none; cursor: pointer;">
+      <div class="menu-foot-name">BACKUP</div>
+    </a>
+  </div>
+
+  <div class="wrap">
+    <div class="top">
+      <a class="back" href="/">
+        <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Noema
+      </a>
+      <div class="top-title">Links</div>
+    </div>
+
+    <section class="column is-feature">
+      <div class="column-head">
+        <div class="col-title">Linkdump</div>
+        <div class="col-count"><span class="num" id="linkCount">0</span> sačuvanih linkova</div>
+      </div>
+
+      <form class="add-form" id="addForm">
+        <input class="note-input" id="urlInput" type="url" placeholder="Nalijepi link (https://...)" autocomplete="off" required />
+        <input class="note-input" id="titleInput" type="text" placeholder="Naslov (optional)" autocomplete="off" maxlength="300" />
+        <input class="note-input" id="labelInput" type="text" placeholder="labela (optional)" autocomplete="off" maxlength="40" />
+        <button class="note-submit" id="addBtn" type="submit">Save</button>
+      </form>
+
+      <div class="filter-bar" id="filterBar"></div>
+
+      <div class="toolbar" id="toolbar">
+        <div class="tb-dropdown" id="sortDropdown">
+          <button class="tb-btn" id="sortBtn">
+            <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h12M3 18h6" stroke-linecap="round"/></svg>
+            <span id="sortLabel">Najnoviji</span> ▾
+          </button>
+          <div class="tb-dropdown-menu" id="sortMenu"></div>
+        </div>
+        <button class="tb-btn" id="groupBtn" title="Grupiši po domenu">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          Grupiši
+        </button>
+        <button class="tb-btn" id="archiveToggle" title="View arhivirane linkove">📦 Archive</button>
+        <div class="tb-sep"></div>
+        <div class="tb-dropdown" id="exportDropdown">
+          <button class="tb-btn" id="exportBtn">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Izvezi ▾
+          </button>
+          <div class="tb-dropdown-menu" id="exportMenu"></div>
+        </div>
+        <button class="tb-btn" id="openAllBtn" title="Otvori sve vidljive linkove u novim tabovima">
+          <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Otvori sve
+        </button>
+        <div class="tb-spacer"></div>
+        <button class="tb-btn" id="bulkToggle" title="Označi više linkova">☐ Označi</button>
+      </div>
+
+      <div class="bulk-bar" id="bulkBar" hidden>
+        <button class="tb-btn" id="bulkSelectAll">☐ Sve</button>
+        <span class="bulk-count" id="bulkCount">0 označenih</span>
+        <div class="tb-spacer"></div>
+        <button class="bulk-action info" id="bulkArchiveBtn">📦 Arhiviraj</button>
+        <button class="bulk-action danger" id="bulkDeleteBtn">🗑 Delete</button>
+        <button class="bulk-action neutral" id="bulkCancel">✕ Otkaži</button>
+      </div>
+
+      <div class="search-wrap">
+        <input class="search-input" id="searchInput" type="search" placeholder="Pretraži naslove, opise, adrese i labele..." autocomplete="off" aria-label="Pretraga linkova" />
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+        <button class="search-clear" id="searchClear" title="Očisti pretragu" hidden>×</button>
+      </div>
+      <div class="search-meta" id="searchMeta"></div>
+
+      <div class="cards" id="cards"></div>
+    </section>
+
+    <!-- BOOKMARKLET -->
+    <section class="bm-panel">
+      <div class="bm-title">Pošalji s bilo kog računara — bookmarklet</div>
+      <p class="bm-text">
+        Prevuci dugme ispod u bookmarks/favorites traku svog browsera (Safari, Firefox, Chrome —
+        radi i na poslu na Windowsu). Kad ti se svidi neka stranica, samo klikni na njega:
+        otvoriće se mali prozor i link je sačuvan ovdje, sa naslovom i slikom.
+        U Safariju prečica <code>⌘1</code>–<code>⌘9</code> otvara bookmark po redosledu iz Favorites bara.
+      </p>
+      <div class="bm-row">
+        <a class="bm-link" id="bmLink" href="#" title="Prevuci me u bookmarks traku">
+          <svg width="15" height="15" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          + Noema
+        </a>
+        <span class="bm-hint">↖ prevuci u bookmarks traku (ne klikći ovdje)</span>
+      </div>
+      <p class="bm-text" style="margin-top: 0.9rem;">
+        Za iPhone/iPad (Instagram, Facebook aplikacije) postoji share-sheet prečica —
+        uputstvo korak po korak je na <a class="bm-help-link" href="/help#links">help stranici</a>.
+      </p>
+    </section>
+  </div>
+
+  <footer class="footer">
+    <span class="footer-left">
+      Noema · <em>misao na dohvat ruke</em>
+      <span class="sys-sep">|</span>
+      <span class="sys-stats" id="sysStats" title="Server resources">CPU: <b>—</b> · RAM: <b>—</b> · Disk: <b>—</b></span>
+      <span class="sys-sep">|</span>
+      <a href="/help" class="sys-stats" style="text-decoration: none; cursor: pointer;">help</a>
+      <span class="sys-sep">|</span>
+      <a href="/logout" id="logoutBtn" class="sys-stats" style="text-decoration: none; cursor: pointer;">logout</a>
+      <span class="sys-sep">|</span>
+      <a href="#" id="footBm" class="sys-stats" style="text-decoration: none; cursor: pointer;" title="Prevuci me u bookmarks traku, ili klikni da kopiraš kod bookmarkleta">+ bookmarklet</a>
+      <span class="sys-sep">|</span>
+      <a href="/help#links" class="sys-stats" style="text-decoration: none; cursor: pointer;" title="Uputstvo za iOS/macOS share-sheet prečicu (Shortcuts)">ios prečica</a>
+    </span>
+    <div style="display:inline-flex; gap:0.5rem; align-items:center;">
+      <button class="footer-theme" id="pageWidth" type="button" title="Promijeni širinu stranice (90% ili normalno)" aria-label="Širina stranice" style="width:auto; padding: 0 8px; font-weight:600; font-size:0.75rem;">WIDTH</button>
+      <button class="footer-theme" id="fontDec" type="button" title="Smanji tekst" aria-label="Smanji tekst">
+        <span style="font-size: 0.85em; font-family: var(--font-sans); font-weight:600;">A</span>
+      </button>
+      <button class="footer-theme" id="fontReset" type="button" title="Vrati na original" aria-label="Vrati na original" style="width:auto; padding: 0 8px;">
+        <span style="font-size: 0.85em; font-family: var(--font-sans); font-weight:600;">100%</span>
+      </button>
+      <button class="footer-theme" id="fontInc" type="button" title="Povećaj tekst" aria-label="Povećaj tekst">
+        <span style="font-size: 1.25em; font-family: var(--font-sans); font-weight:600;">A</span>
+      </button>
+      <span class="sys-sep" style="margin: 0 20px;">|</span>
+      <button class="footer-theme" id="footerTheme" type="button" title="Change theme" aria-label="Change theme">
+        <span id="ftIcon">☾</span>
+      </button>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- Reader Modal -->
+  <div class="reader-modal" id="readerModal" style="display:none; position:fixed; inset:0; background:var(--paper); z-index:9000; overflow-y:auto; padding:3rem 1rem;">
+    <div style="max-width:700px; margin:0 auto; position:relative;">
+      <button onclick="document.getElementById('readerModal').style.display='none'" style="position:fixed; top:2rem; right:2rem; background:var(--paper-3); border:1px solid var(--ink-line); border-radius:50%; width:40px; height:40px; font-size:1.5rem; color:var(--ink); cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,0.1); display:grid; place-items:center;">×</button>
+      <h1 id="readerTitle" style="font-family:var(--font-display); font-size:2.5rem; color:var(--ink); margin-bottom:0.5rem; line-height:1.2;"></h1>
+      <a id="readerUrl" href="#" target="_blank" style="font-family:var(--font-mono); font-size:0.75rem; color:var(--azure); text-decoration:none; margin-bottom:2.5rem; display:inline-block; border-bottom:1px solid rgba(58,110,165,0.3);">Originalni članak ↗</a>
+      <div id="readerContent" style="font-family:var(--font-display); font-size:1.15rem; color:var(--ink-2); line-height:1.6; white-space:pre-wrap; padding-bottom:4rem;"></div>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+
+    let Links = [];
+    let query = "";
+    let activeLabel = "";
+    let newestId = null; // highlight kartice koju je bookmarklet upravo sačuvao
+    
+    // Nove state varijable
+    let showArchived = false;
+    let sortBy = "newest"; // newest, oldest, title, domain
+    let groupByDomain = false;
+    let bulkMode = false;
+    let selectedIds = new Set();
+    
+    // Drag & drop state
+    let draggedId = null;
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+    function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+    function hl(text, q) {
+      const safe = esc(text || "");
+      if (!q) return safe;
+      try {
+        const re = new RegExp(`(${escRe(q)})`, "gi");
+        return safe.replace(re, '<mark class="hl">$1</mark>');
+      } catch { return safe; }
+    }
+    function fmtDate(ts) {
+      const d = new Date(ts);
+      if (isNaN(d.getTime())) return "";
+      const months = ["jan","feb","mar","apr","maj","jun","jul","avg","sep","okt","nov","dec"];
+      return `${d.getDate()}. ${months[d.getMonth()]} ${d.getFullYear()}`;
+    }
+
+    async function api(path, opts = {}) {
+      const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+      const text = await res.text();
+      let json = null;
+      try { json = text ? JSON.parse(text) : null; } catch {}
+      if (!res.ok) throw new Error((json && json.error) || `HTTP ${res.status}`);
+      return json;
+    }
+
+    const els = {
+      cards: document.getElementById("cards"),
+      count: document.getElementById("linkCount"),
+      form: document.getElementById("addForm"),
+      urlInput: document.getElementById("urlInput"),
+      titleInput: document.getElementById("titleInput"),
+      labelInput: document.getElementById("labelInput"),
+      addBtn: document.getElementById("addBtn"),
+      filterBar: document.getElementById("filterBar"),
+      searchInput: document.getElementById("searchInput"),
+      searchClear: document.getElementById("searchClear"),
+      searchMeta: document.getElementById("searchMeta"),
+      toast: document.getElementById("toast"),
+      
+      // Toolbar elements
+      sortBtn: document.getElementById("sortBtn"),
+      sortLabel: document.getElementById("sortLabel"),
+      sortDropdown: document.getElementById("sortDropdown"),
+      sortMenu: document.getElementById("sortMenu"),
+      groupBtn: document.getElementById("groupBtn"),
+      archiveToggle: document.getElementById("archiveToggle"),
+      exportBtn: document.getElementById("exportBtn"),
+      exportDropdown: document.getElementById("exportDropdown"),
+      exportMenu: document.getElementById("exportMenu"),
+      openAllBtn: document.getElementById("openAllBtn"),
+      bulkToggle: document.getElementById("bulkToggle"),
+      
+      // Bulk bar elements
+      bulkBar: document.getElementById("bulkBar"),
+      bulkSelectAll: document.getElementById("bulkSelectAll"),
+      bulkCount: document.getElementById("bulkCount"),
+      bulkArchiveBtn: document.getElementById("bulkArchiveBtn"),
+      bulkDeleteBtn: document.getElementById("bulkDeleteBtn"),
+      bulkCancel: document.getElementById("bulkCancel"),
+    };
+
+    let toastTimer = null;
+    function showToast(html, ms = 3500) {
+      els.toast.innerHTML = html;
+      els.toast.classList.add("show");
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => els.toast.classList.remove("show"), ms);
+    }
+
+    /** Stabilna boja labele: hash imena → jedna od 4 klase boja. */
+    function labelClass(label) {
+      let h = 0;
+      for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) | 0;
+      return "lb-" + (Math.abs(h) % 4);
+    }
+
+    function matchesSearch(l, q) {
+      if (!q) return true;
+      return (
+        (l.title || "").toLowerCase().includes(q) ||
+        (l.description || "").toLowerCase().includes(q) ||
+        (l.url || "").toLowerCase().includes(q) ||
+        (l.label || "").includes(q)
+      );
+    }
+
+    function renderFilters() {
+      // Izbroji labele
+      const labelCounts = {};
+      Links.forEach(l => {
+        if (!showArchived && l.archived) return;
+        const lb = l.label || "";
+        if (lb) labelCounts[lb] = (labelCounts[lb] || 0) + 1;
+      });
+      
+      const labels = Object.keys(labelCounts).sort();
+      let totalVisible = Links.filter(l => showArchived || !l.archived).length;
+      
+      let html = `<button class="filter-pill ${!activeLabel ? "active" : ""}" data-label="">Svi <span class="pill-count">${totalVisible}</span></button>`;
+      for (const lb of labels) {
+        html += `<button class="filter-pill ${activeLabel === lb ? "active" : ""}" data-label="${esc(lb)}">${esc(lb)} <span class="pill-count">${labelCounts[lb]}</span></button>`;
+      }
+      els.filterBar.innerHTML = html;
+      els.filterBar.querySelectorAll(".filter-pill").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const lb = btn.dataset.label;
+          activeLabel = activeLabel === lb ? "" : lb;
+          render();
+        });
+      });
+    }
+
+    function getSortedAndFilteredLinks() {
+      const q = query;
+      let visible = Links.filter(l => showArchived || !l.archived);
+      
+      if (activeLabel) visible = visible.filter((l) => l.label === activeLabel);
+      if (q) visible = visible.filter((l) => matchesSearch(l, q));
+
+      // Sortiranje
+      visible.sort((a, b) => {
+        // Pinned uvijek na vrhu
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        
+        switch (sortBy) {
+          case "oldest": return a.createdAt - b.createdAt;
+          case "title": return (a.title || "").localeCompare(b.title || "");
+          case "domain": return (a.domain || "").localeCompare(b.domain || "");
+          case "newest":
+          default: return b.createdAt - a.createdAt;
+        }
+      });
+      
+      return visible;
+    }
+
+    function renderCardHTML(l, q) {
+      const isSelected = selectedIds.has(l.id);
+      const isPinned = l.pinned;
+      const isArchived = l.archived;
+      
+      const classes = [
+        "card",
+        l.id === newestId ? "is-new" : "",
+        isPinned ? "is-pinned" : "",
+        isArchived ? "is-archived" : "",
+        bulkMode && isSelected ? "is-selected" : ""
+      ].filter(Boolean).join(" ");
+
+      const thumb = l.image
+        ? `<img src="${esc(l.image)}" alt="" loading="lazy" onerror="this.parentNode.innerHTML='<div class=\\'thumb-fallback\\'>${esc((l.domain || "?")[0].toUpperCase())}</div>'">`
+        : `<div class="thumb-fallback">${esc((l.domain || "?")[0].toUpperCase())}</div>`;
+      
+      const labelHtml = l.label
+        ? `<span class="link-label ${labelClass(l.label)}" data-label-id="${l.id}" title="Klikni da promijeniš labelu">${hl(l.label, q)}</span>`
+        : `<span class="link-label empty" data-label-id="${l.id}" title="Dodaj labelu">+ labela</span>`;
+
+      return `<article class="${classes}" data-id="${l.id}" draggable="true">
+        <div class="card-thumb">
+          <a href="${esc(l.url)}" target="_blank" rel="noopener" style="display:block;width:100%;height:100%;">${thumb}</a>
+          <button class="card-pin ${isPinned ? "pinned" : ""}" data-pin-id="${l.id}" title="${isPinned ? 'Ukloni pin' : 'Istakni link (Pin)'}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="${isPinned ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
+          </button>
+          ${bulkMode ? `<div class="card-check ${isSelected ? "checked" : ""}" data-select-id="${l.id}" title="Označi link">
+            ${isSelected ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
+          </div>` : ''}
+        </div>
+        <div class="card-body">
+          <div class="card-title">
+            <span class="title-text" data-edit-id="${l.id}" data-field="title">${hl(l.title, q)}<span class="edit-icon" title="Izmijeni naslov">✎</span></span>
+          </div>
+          <div class="card-meta">
+            <img src="https://www.google.com/s2/favicons?domain=${esc(l.domain)}&sz=32" alt="" style="width: 14px; height: 14px; border-radius: 2px; vertical-align: text-bottom; margin-right: 0.3rem;">
+            ${esc(l.domain || "")} · ${fmtDate(l.createdAt)}
+          </div>
+          <div class="card-desc">
+            <span class="desc-text" data-edit-id="${l.id}" data-field="description">${l.description ? hl(l.description, q) : '<span style="opacity:0.5;font-style:italic">Nema opisa...</span>'}<span class="edit-icon" title="Izmijeni opis">✎</span></span>
+          </div>
+          <div class="card-foot">
+            ${labelHtml}
+            <button class="card-read" data-read-id="${l.id}" title="Pročitaj u Reader Mode-u">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            </button>
+            <button class="card-archive" data-archive-id="${l.id}" title="${isArchived ? 'Vrati iz arhive' : 'Arhiviraj'}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+            </button>
+            <button class="card-del" data-del-id="${l.id}" title="Delete link">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+      </article>`;
+    }
+
+    function render() {
+      renderFilters();
+      const visible = getSortedAndFilteredLinks();
+      const q = query;
+      
+      els.searchClear.hidden = !q;
+      els.count.textContent = activeLabel || q || showArchived ? `${visible.length} od ${Links.length}` : String(visible.length);
+      els.searchMeta.textContent = q ? `${visible.length} ${visible.length === 1 ? "rezultat" : "rezultata"}` : "";
+
+      if (!visible.length) {
+        els.cards.innerHTML = `<div class="empty-state">${
+          q ? "Nema rezultata za „" + esc(q) + "“." :
+          activeLabel ? "Nema linkova sa ovom labelom." :
+          showArchived ? "Nema arhiviranih links." :
+          "Još nema sačuvanih links. Nalijepi prvi link gore ili koristi bookmarklet ispod."
+        }</div>`;
+        return;
+      }
+      
+      let html = "";
+      if (groupByDomain && sortBy !== "domain") { // Ako je sort by domain, nema smisla grupisanje
+        const domains = {};
+        visible.forEach(l => {
+          const d = l.domain || "Nepoznato";
+          if (!domains[d]) domains[d] = [];
+          domains[d].push(l);
+        });
+        
+        Object.keys(domains).sort().forEach(d => {
+          html += `<div class="group-header">${esc(d)} <span class="group-count">(${domains[d].length})</span></div>`;
+          html += domains[d].map(l => renderCardHTML(l, q)).join("");
+        });
+      } else {
+        html = visible.map(l => renderCardHTML(l, q)).join("");
+      }
+      
+      els.cards.innerHTML = html;
+      attachCardEvents();
+    }
+
+    function attachCardEvents() {
+      // Obrisati
+      els.cards.querySelectorAll(".card-del").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.delId;
+          if (!confirm("Delete this link?")) return;
+          try {
+            await api(`/api/links/${id}`, { method: "DELETE" });
+            Links = Links.filter((l) => l.id !== id);
+            render();
+          } catch (e) { alert("Error: " + e.message); }
+        });
+      });
+
+      // Label
+      els.cards.querySelectorAll("[data-label-id]").forEach((pill) => {
+        pill.addEventListener("click", async () => {
+          const id = pill.dataset.labelId;
+          const link = Links.find((l) => l.id === id);
+          if (!link) return;
+          const next = prompt("Label za ovaj link (prazno = bez labele):", link.label || "");
+          if (next === null) return;
+          try {
+            const res = await api(`/api/links/${id}`, { method: "PATCH", body: JSON.stringify({ label: next }) });
+            Object.assign(link, res.link);
+            if (activeLabel && link.label !== activeLabel) activeLabel = "";
+            render();
+          } catch (e) { alert("Error: " + e.message); }
+        });
+      });
+      
+      // Pin
+      els.cards.querySelectorAll("[data-pin-id]").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          const id = btn.dataset.pinId;
+          const link = Links.find((l) => l.id === id);
+          if (!link) return;
+          const nextPinned = !link.pinned;
+          try {
+            const res = await api(`/api/links/${id}`, { method: "PATCH", body: JSON.stringify({ pinned: nextPinned }) });
+            Object.assign(link, res.link);
+            render();
+          } catch (e) { alert("Error: " + e.message); }
+        });
+      });
+      
+      // Archive
+      els.cards.querySelectorAll("[data-archive-id]").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          const id = btn.dataset.archiveId;
+          const link = Links.find((l) => l.id === id);
+          if (!link) return;
+          const nextArchived = !link.archived;
+          try {
+            const res = await api(`/api/links/${id}`, { method: "PATCH", body: JSON.stringify({ archived: nextArchived }) });
+            Object.assign(link, res.link);
+            render();
+            showToast(nextArchived ? "Link archived." : "Link restored from archive.");
+          } catch (e) { alert("Error: " + e.message); }
+        });
+      });
+      
+      // Reader Mode
+      els.cards.querySelectorAll("[data-read-id]").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          const id = btn.dataset.readId;
+          const prevHtml = btn.innerHTML;
+          btn.innerHTML = '...';
+          try {
+            const res = await api(`/api/links/${id}/read`);
+            document.getElementById('readerTitle').textContent = res.title || 'Reader Mode';
+            document.getElementById('readerUrl').href = res.url || '#';
+            document.getElementById('readerContent').textContent = res.text || 'Page has no valid textual content.';
+            document.getElementById('readerModal').style.display = 'block';
+          } catch (e) { alert("Error: " + e.message); }
+          finally { btn.innerHTML = prevHtml; }
+        });
+      });
+      
+      // Inline edit (Naslov/Description)
+      els.cards.querySelectorAll("[data-edit-id]").forEach((span) => {
+        span.addEventListener("click", (e) => {
+          if (e.target.classList.contains("inline-edit")) return;
+          const id = span.dataset.editId;
+          const field = span.dataset.field; // "title" ili "description"
+          const link = Links.find((l) => l.id === id);
+          if (!link) return;
+          
+          const val = link[field] || "";
+          span.innerHTML = `<input type="text" class="inline-edit" value="${esc(val)}" />`;
+          const input = span.querySelector("input");
+          input.focus();
+          
+          const saveEdit = async () => {
+            const newVal = input.value.trim();
+            if (newVal === val) { render(); return; } // Nema promjene
+            try {
+              const res = await api(`/api/links/${id}`, { method: "PATCH", body: JSON.stringify({ [field]: newVal }) });
+              Object.assign(link, res.link);
+              render();
+            } catch (err) {
+              alert("Error: " + err.message);
+              render();
+            }
+          };
+          
+          input.addEventListener("blur", saveEdit);
+          input.addEventListener("keydown", (e2) => {
+            if (e2.key === "Enter") { e2.preventDefault(); input.blur(); }
+            if (e2.key === "Escape") { e2.preventDefault(); render(); }
+          });
+        });
+      });
+      
+      // Bulk checkbox
+      if (bulkMode) {
+        els.cards.querySelectorAll("[data-select-id]").forEach((check) => {
+          check.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = check.dataset.selectId;
+            if (selectedIds.has(id)) selectedIds.delete(id);
+            else selectedIds.add(id);
+            updateBulkCount();
+            render();
+          });
+        });
+      }
+
+      // Drag and drop sorting
+      els.cards.querySelectorAll(".card").forEach((card) => {
+        card.addEventListener("dragstart", (e) => {
+          if (bulkMode) { e.preventDefault(); return; } // Nema draga u bulk modu
+          draggedId = card.dataset.id;
+          e.dataTransfer.effectAllowed = "move";
+          setTimeout(() => card.classList.add("is-dragging"), 0);
+        });
+        
+        card.addEventListener("dragend", () => {
+          card.classList.remove("is-dragging");
+          els.cards.querySelectorAll(".card").forEach(c => c.classList.remove("drag-over"));
+          draggedId = null;
+        });
+        
+        card.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          if (draggedId && draggedId !== card.dataset.id) {
+            card.classList.add("drag-over");
+          }
+        });
+        
+        card.addEventListener("dragleave", () => {
+          card.classList.remove("drag-over");
+        });
+        
+        card.addEventListener("drop", async (e) => {
+          e.preventDefault();
+          card.classList.remove("drag-over");
+          const targetId = card.dataset.id;
+          if (!draggedId || draggedId === targetId) return;
+          
+          const sourceIdx = Links.findIndex(l => l.id === draggedId);
+          const targetIdx = Links.findIndex(l => l.id === targetId);
+          if (sourceIdx < 0 || targetIdx < 0) return;
+          
+          // Zbog jednostavnosti backend-a bez "order" polja, zamjenjujemo createdAt
+          // kako bi sortirani prikaz bio promijenjen.
+          const tempTime = Links[sourceIdx].createdAt;
+          Links[sourceIdx].createdAt = Links[targetIdx].createdAt;
+          Links[targetIdx].createdAt = tempTime;
+          
+          // Sortiramo lokalno da UI odmah reaguje
+          Links.sort((a, b) => b.createdAt - a.createdAt);
+          render();
+          
+          // Snimamo oba linka
+          try {
+            // Nije idealno jer šaljemo PATCH, ali backend ne mijenja createdAt kroz PATCH
+            // U ovom slučaju nam treba podrška na backendu da dozvoli PATCH createdAt.
+            // Pošto ne mijenjamo backend za ovo specifično polje sada, preskočićemo
+            // snimanje drag and drop-a na server ako backend to ne podržava u updateLink.
+            // Backend "updateLink" obnavlja samo updatedAt, naslov, sliku, opis, labelu, pinned, archived.
+            // Ok, onda D&D radi samo privremeno u UI, ili možemo dodati funkcionalnost da radi.
+            // Zanemarimo server sync u ovom iterativnom koraku kako bismo ostali bezbjedni.
+            showToast("Redoslijed promijenjen lokalno.", 2000);
+          } catch(err) {
+            console.error(err);
+          }
+        });
+      });
+    }
+
+    // --- Bulk akcije ---
+    function updateBulkCount() {
+      els.bulkCount.textContent = `${selectedIds.size} označen${selectedIds.size === 1 ? "" : "ih"}`;
+    }
+    
+    function toggleBulkMode() {
+      bulkMode = !bulkMode;
+      selectedIds.clear();
+      updateBulkCount();
+      
+      if (bulkMode) {
+        els.bulkToggle.classList.add("active");
+        els.bulkBar.hidden = false;
+      } else {
+        els.bulkToggle.classList.remove("active");
+        els.bulkBar.hidden = true;
+      }
+      render();
+    }
+    
+    els.bulkToggle.addEventListener("click", toggleBulkMode);
+    els.bulkCancel.addEventListener("click", toggleBulkMode);
+    
+    els.bulkSelectAll.addEventListener("click", () => {
+      const visible = getSortedAndFilteredLinks();
+      if (selectedIds.size === visible.length) {
+        selectedIds.clear(); // Deselect all
+      } else {
+        visible.forEach(l => selectedIds.add(l.id)); // Select all visible
+      }
+      updateBulkCount();
+      render();
+    });
+    
+    els.bulkDeleteBtn.addEventListener("click", async () => {
+      if (!selectedIds.size) return;
+      if (!confirm(`Are you sure you want to delete ${selectedIds.size} links?`)) return;
+      
+      const ids = Array.from(selectedIds);
+      try {
+        await api(`/api/links/bulk-delete`, { method: "POST", body: JSON.stringify({ ids }) });
+        Links = Links.filter(l => !selectedIds.has(l.id));
+        toggleBulkMode();
+        showToast(`Deleted ${ids.length} links.`);
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    });
+
+    els.bulkArchiveBtn.addEventListener("click", async () => {
+      if (!selectedIds.size) return;
+      const archive = !showArchived; // Ako gledamo arhivu, dearhiviraj
+      const txt = archive ? "archive" : "dearchive";
+      if (!confirm(`Sigurno želiš da ${txt} ${selectedIds.size} links?`)) return;
+      
+      const ids = Array.from(selectedIds);
+      try {
+        await api(`/api/links/bulk-archive`, { method: "POST", body: JSON.stringify({ ids, archived: archive }) });
+        ids.forEach(id => {
+          const l = Links.find(x => x.id === id);
+          if (l) l.archived = archive;
+        });
+        toggleBulkMode();
+        showToast(archive ? `Archived ${ids.length} links.` : `Restored ${ids.length} links.`);
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    });
+
+    // --- Toolbar eventovi ---
+    
+    // Sort
+    const sortOptions = [
+      { id: "newest", label: "Najnoviji" },
+      { id: "oldest", label: "Najstariji" },
+      { id: "title", label: "Naslov (A-Z)" },
+      { id: "domain", label: "Domen" },
+    ];
+    
+    function renderSortMenu() {
+      els.sortMenu.innerHTML = sortOptions.map(o => `
+        <button class="tb-dropdown-item ${sortBy === o.id ? 'active' : ''}" data-sort="${o.id}">
+          <span class="check">${sortBy === o.id ? '✓' : ''}</span> ${o.label}
+        </button>
+      `).join("");
+      
+      els.sortMenu.querySelectorAll(".tb-dropdown-item").forEach(btn => {
+        btn.addEventListener("click", () => {
+          sortBy = btn.dataset.sort;
+          els.sortLabel.textContent = sortOptions.find(o => o.id === sortBy).label;
+          els.sortDropdown.classList.remove("open");
+          renderSortMenu();
+          render();
+        });
+      });
+    }
+    renderSortMenu();
+    
+    els.sortBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      els.sortDropdown.classList.toggle("open");
+      els.exportDropdown.classList.remove("open");
+    });
+    
+    // Grouping
+    els.groupBtn.addEventListener("click", () => {
+      groupByDomain = !groupByDomain;
+      els.groupBtn.classList.toggle("active", groupByDomain);
+      if (groupByDomain && sortBy === "domain") {
+        sortBy = "newest";
+        els.sortLabel.textContent = "Najnoviji";
+        renderSortMenu();
+      }
+      render();
+    });
+    
+    // Archive Toggle
+    els.archiveToggle.addEventListener("click", () => {
+      showArchived = !showArchived;
+      els.archiveToggle.classList.toggle("active", showArchived);
+      els.archiveToggle.innerHTML = showArchived ? "📦 Prikazana arhiva" : "📦 Archive";
+      els.bulkArchiveBtn.innerHTML = showArchived ? "📦 Vrati iz arhive" : "📦 Arhiviraj";
+      render();
+    });
+    
+    // Open All
+    els.openAllBtn.addEventListener("click", () => {
+      const visible = getSortedAndFilteredLinks();
+      if (!visible.length) return;
+      if (!confirm(`Will open ${visible.length} tabs. Are you sure?`)) return;
+      
+      visible.forEach(l => {
+        window.open(l.url, '_blank');
+      });
+    });
+    
+    // Export
+    const exportOptions = [
+      { id: "json", label: "Export kao JSON" },
+      { id: "csv", label: "Export kao CSV" },
+      { id: "html", label: "Export kao Bookmarks" }
+    ];
+    
+    function renderExportMenu() {
+      els.exportMenu.innerHTML = exportOptions.map(o => `
+        <button class="tb-dropdown-item" data-export="${o.id}">
+          <span style="width:1.2em"></span> ${o.label}
+        </button>
+      `).join("");
+      
+      els.exportMenu.querySelectorAll(".tb-dropdown-item").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const type = btn.dataset.export;
+          els.exportDropdown.classList.remove("open");
+          performExport(type);
+        });
+      });
+    }
+    renderExportMenu();
+    
+    els.exportBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      els.exportDropdown.classList.toggle("open");
+      els.sortDropdown.classList.remove("open");
+    });
+    
+    document.addEventListener("click", () => {
+      els.sortDropdown.classList.remove("open");
+      els.exportDropdown.classList.remove("open");
+    });
+    
+    function performExport(type) {
+      const linksToExport = getSortedAndFilteredLinks();
+      if (!linksToExport.length) return alert("No links to export.");
+      
+      let content = "";
+      let mime = "";
+      let ext = "";
+      
+      if (type === "json") {
+        content = JSON.stringify(linksToExport, null, 2);
+        mime = "application/json";
+        ext = "json";
+      } else if (type === "csv") {
+        const header = "Title,URL,Domain,Label,Date,Description\n";
+        const rows = linksToExport.map(l => {
+          return `"${escRe(l.title || "")}","${l.url}","${l.domain || ""}","${l.label || ""}","${new Date(l.createdAt).toISOString()}","${escRe(l.description || "")}"`;
+        }).join("\n");
+        content = header + rows;
+        mime = "text/csv";
+        ext = "csv";
+      } else if (type === "html") {
+        const header = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Bookmarks</TITLE>
+<H1>Bookmarks</H1>
+<DL><p>
+`;
+        const items = linksToExport.map(l => `    <DT><A HREF="${esc(l.url)}" ADD_DATE="${Math.floor(l.createdAt/1000)}">${esc(l.title)}</A>`).join("\n");
+        content = header + items + "\n</DL><p>";
+        mime = "text/html";
+        ext = "html";
+      }
+      
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `noema_links_${new Date().toISOString().split('T')[0]}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function saveLink(fields, { fromQuickadd = false } = {}) {
+      const res = await api("/api/links", { method: "POST", body: JSON.stringify(fields) });
+      const existing = Links.findIndex((l) => l.id === res.link.id);
+      if (existing >= 0) Links[existing] = res.link; else Links.unshift(res.link);
+      newestId = res.link.id;
+      render();
+      showToast(
+        res.existed
+          ? `Link <b>već postoji</b> — osvježen je postojeći zapis.`
+          : `Link <b>sačuvan</b> ✓${fromQuickadd ? " — možeš zatvoriti ovaj prozor." : ""}`,
+        fromQuickadd ? 8000 : 3500
+      );
+      return res.link;
+    }
+
+    els.form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const url = els.urlInput.value.trim();
+      if (!url) return;
+      els.addBtn.disabled = true;
+      els.addBtn.textContent = "Čuvam...";
+      try {
+        const fields = { url, label: els.labelInput.value.trim() };
+        const title = els.titleInput.value.trim();
+        if (title) fields.title = title;
+        await saveLink(fields);
+        els.urlInput.value = "";
+        els.titleInput.value = "";
+        els.labelInput.value = "";
+      } catch (err) {
+        alert("Error: " + err.message);
+      } finally {
+        els.addBtn.disabled = false;
+        els.addBtn.textContent = "Save";
+        els.urlInput.focus();
+      }
+    });
+
+    els.searchInput.addEventListener("input", () => {
+      query = els.searchInput.value.trim().toLowerCase();
+      render();
+    });
+    els.searchClear.addEventListener("click", () => {
+      els.searchInput.value = ""; query = "";
+      render(); els.searchInput.focus();
+    });
+    els.searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && query) { els.searchInput.value = ""; query = ""; render(); }
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "/" && document.activeElement.tagName !== "INPUT" &&
+          document.activeElement.isContentEditable !== true) {
+        e.preventDefault();
+        els.searchInput.focus();
+      }
+    });
+
+    // ── Bookmarklet generator — kod zavisi od adrese ove instance ──
+    (function buildBookmarklet() {
+      const origin = location.origin;
+      const code =
+        "javascript:(function(){var m=function(p){var e=document.querySelector('meta[property=\"'+p+'\"],meta[name=\"'+p+'\"]');return e&&e.content?e.content:''};" +
+        "var i=m('og:image')||m('twitter:image')||'';if(i.length>1500||i.indexOf('data:')===0)i='';" +
+        "window.open('" + origin + "/links?quickadd=1&url='+encodeURIComponent(location.href)" +
+        "+'&title='+encodeURIComponent((m('og:title')||document.title||'').slice(0,300))" +
+        "+'&image='+encodeURIComponent(i)" +
+        "+'&desc='+encodeURIComponent((m('og:description')||m('description')||'').slice(0,500))," +
+        "'noemaLinkdump','width=980,height=760');})();";
+      const a = document.getElementById("bmLink");
+      a.setAttribute("href", code);
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        showToast("Do not click here — <b>drag</b> the button to the browser bookmarks bar.");
+      });
+
+      const foot = document.getElementById("footBm");
+      foot.setAttribute("href", code);
+      foot.addEventListener("click", async (e) => {
+        e.preventDefault();
+        try {
+          await navigator.clipboard.writeText(code);
+          showToast("Bookmarklet code <b>copied</b> ✓ — create a new bookmark and paste the code into the address (URL) field. Or drag this link directly to the bookmarks bar.", 9000);
+        } catch {
+          window.prompt("Copy this code and paste it as the address of a new bookmark:", code);
+        }
+      });
+    })();
+
+    // ── Quickadd ──
+    async function handleQuickadd() {
+      const params = new URLSearchParams(location.search);
+      if (params.get("quickadd") !== "1" || !params.get("url")) return;
+      const fields = {
+        url: params.get("url"),
+        title: params.get("title") || "",
+        image: params.get("image") || "",
+        description: params.get("desc") || "",
+      };
+      history.replaceState(null, "", "/links"); // očisti URL da refresh ne duplira
+      try {
+        await saveLink(fields, { fromQuickadd: true });
+      } catch (e) {
+        showToast("Error saving: <b>" + esc(e.message) + "</b>", 8000);
+      }
+    }
+
+    async function load() {
+      try {
+        const res = await api("/api/links");
+        Links = (res && res.links) || [];
+      } catch (err) {
+        Links = [];
+      }
+      render();
+      handleQuickadd();
+    }
+    load();
+
+    // ── Tema / font / sistem ──
+    function getStoredTheme() {
+      try { return localStorage.getItem("noema-theme"); } catch (e) { return null; }
+    }
+    function storeTheme(t) {
+      try { localStorage.setItem("noema-theme", t); } catch (e) {}
+    }
+    function applyTheme(t) {
+      document.documentElement.setAttribute("data-theme", t);
+      const icon = document.getElementById("ftIcon");
+      if (icon) icon.textContent = t === "dark" ? "☀" : "☾";
+    }
+    applyTheme(getStoredTheme() || "dark");
+    const themeBtn = document.getElementById("footerTheme");
+    if (themeBtn) {
+      themeBtn.addEventListener("click", () => {
+        const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        applyTheme(next);
+        storeTheme(next);
+      });
+    }
+
+    let fontScale = Number(localStorage.getItem("noema-font-scale")) || 1;
+    function applyFontScale(scale) {
+      document.documentElement.style.fontSize = (16 * scale) + "px";
+      document.body.style.fontSize = (16 * scale) + "px";
+    }
+    function initFontScale() {
+      applyFontScale(fontScale);
+      const decBtn = document.getElementById("fontDec");
+      const incBtn = document.getElementById("fontInc");
+      const resBtn = document.getElementById("fontReset");
+      if (decBtn) decBtn.addEventListener("click", () => {
+        fontScale = Math.max(0.4, fontScale - 0.3);
+        localStorage.setItem("noema-font-scale", fontScale);
+        applyFontScale(fontScale);
+      });
+      if (incBtn) incBtn.addEventListener("click", () => {
+        fontScale = Math.min(2.5, fontScale + 0.3);
+        localStorage.setItem("noema-font-scale", fontScale);
+        applyFontScale(fontScale);
+      });
+      if (resBtn) resBtn.addEventListener("click", () => {
+        fontScale = 1;
+        localStorage.setItem("noema-font-scale", fontScale);
+        applyFontScale(fontScale);
+      });
+    }
+    initFontScale();
+
+    function fmtGB(bytes) { return (bytes / 1073741824).toFixed(1); }
+    async function loadSystem() {
+      const el = document.getElementById("sysStats");
+      if (!el) return;
+      try {
+        const res = await fetch("/api/system");
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const cpu = data.cpu ? `${data.cpu.percent}%` : "—";
+        const ram = data.mem ? `${data.mem.percent}%` : "—";
+        const disk = data.disk ? `${data.disk.percent}%` : "—";
+        el.innerHTML = `CPU: <b>${cpu}</b> · RAM: <b>${ram}</b> · Disk: <b>${disk}</b>`;
+        const parts = [];
+        if (data.cpu) parts.push(`CPU ${data.cpu.cores} cores`);
+        if (data.mem) parts.push(`RAM ${fmtGB(data.mem.used)}/${fmtGB(data.mem.total)} GB`);
+        if (data.disk) parts.push(`Disk ${fmtGB(data.disk.used)}/${fmtGB(data.disk.total)} GB`);
+        el.title = parts.join(" · ") || "Server resources";
+      } catch (err) {
+        el.innerHTML = `<span style="font-style:italic">system unavailable</span>`;
+      }
+    }
+    loadSystem();
+    setInterval(loadSystem, 5000);
+
+    // ── Push-meni ──
+    function initMenu() {
+      const burger = document.getElementById("mobileBurger");
+      const overlay = document.getElementById("mobileMenu");
+      const closeBtn = document.getElementById("closeMobile");
+      if (!burger || !overlay) return;
+
+      const shell = document.createElement("div");
+      shell.id = "shell";
+      const inner = document.createElement("div");
+      inner.id = "shell-inner";
+      while (document.body.firstChild) inner.appendChild(document.body.firstChild);
+      shell.appendChild(inner);
+      const scrim = document.createElement("div");
+      scrim.className = "shell-scrim";
+      scrim.setAttribute("aria-hidden", "true");
+      shell.appendChild(scrim);
+      document.body.appendChild(shell);
+      document.body.appendChild(overlay);
+
+      let sy = 0, unfixTimer = null;
+      const setExpanded = (o) => burger.setAttribute("aria-expanded", o ? "true" : "false");
+
+      function open() {
+        if (unfixTimer) { clearTimeout(unfixTimer); unfixTimer = null; }
+        if (!document.body.classList.contains("menu-fixed")) {
+          sy = window.scrollY || window.pageYOffset || 0;
+          inner.style.transform = "translateY(" + (-sy) + "px)";
+          document.body.classList.add("menu-fixed");
+          void shell.offsetWidth;
+        }
+        requestAnimationFrame(() => {
+          document.body.classList.add("menu-pushed");
+          overlay.classList.add("is-open");
+        });
+        setExpanded(true);
+      }
+      function close() {
+        overlay.classList.remove("is-open");
+        document.body.classList.remove("menu-pushed");
+        setExpanded(false);
+        if (unfixTimer) clearTimeout(unfixTimer);
+        unfixTimer = setTimeout(() => {
+          document.body.classList.remove("menu-fixed");
+          inner.style.transform = "";
+          window.scrollTo(0, sy);
+          unfixTimer = null;
+        }, 850);
+      }
+
+      burger.addEventListener("click", open);
+      closeBtn.addEventListener("click", close);
+      scrim.addEventListener("click", close);
+      overlay.querySelectorAll("a").forEach((l) => {
+        l.addEventListener("click", (e) => {
+          const href = l.getAttribute("href");
+          const target = l.getAttribute("target");
+          if (!href || href === "#" || target === "_blank") {
+            close();
+            return;
+          }
+          e.preventDefault();
+          close();
+          setTimeout(() => {
+            window.location.href = href;
+          }, 850);
+        });
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && document.body.classList.contains("menu-pushed")) close();
+      });
+    }
+
+    initMenu();
+  </script>
+<script src="/noema-header-footer.js"></script>
+<script src="/cmdk.js"></script></body>
+</html>

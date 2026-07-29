@@ -1,0 +1,39 @@
+{
+  "name": "noema",
+  "version": "0.1.0",
+  "description": "A self-hosted, customizable personal workspace built around yesterday, today, and tomorrow, with MCP and OpenAPI integrations.",
+  "license": "MIT",
+  "author": "Vladimir Perović",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "homepage": "https://github.com/vladimirperovic/noema#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vladimirperovic/noema.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vladimirperovic/noema/issues"
+  },
+  "keywords": [
+    "todo",
+    "personal-workspace",
+    "self-hosted",
+    "reference-application",
+    "mcp",
+    "model-context-protocol",
+    "openapi",
+    "llm",
+    "siri",
+    "zero-dependencies"
+  ],
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "check": "node --check src/index.js && node --check src/server.js && node --check src/services/analytics.js && node --test test/stats*.test.js",
+    "test": "node --test test/*.test.js",
+    "test:stats": "node --test test/stats*.test.js"
+  }
+}

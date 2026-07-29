@@ -1,0 +1,25 @@
+# Log fajlovi
+logs
+*.log
+npm-debug.log*
+
+# (bez node_modules — ovaj projekat nema eksternih dependency-ja)
+
+# Build izlaz
+dist/
+
+# Podaci aplikacije (taskovi) — NE commitovati
+data/
+
+# Konfiguracija i tajni ključevi (NAJBITNIJE!)
+.env
+.env.local
+*.key
+*.pem
+
+# Mac/Windows sistemski fajlovi
+.DS_Store
+Thumbs.db
+
+# Lokalne postavke editora / agenata
+.claude/
