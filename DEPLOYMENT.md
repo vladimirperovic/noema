@@ -1,6 +1,6 @@
 # Deployment
 
-Noema is a single-process Node.js application with no runtime package dependencies. It can run directly with Node.js or from the included Dockerfile.
+Noema is a single-process Node.js application with no runtime **Node.js package** dependencies. It can run directly with Node.js or from the included Dockerfile.
 
 Noema is a reference application. Review the code, authentication model, storage model, integrations, and backup policy before exposing a customized fork to the internet.
 
@@ -8,8 +8,11 @@ Noema is a reference application. Review the code, authentication model, storage
 
 - Node.js 20 or newer, or Docker
 - a persistent writable directory for `data/`
+- the system `zip` command when running directly with Node.js and using full ZIP archive downloads; JSON export does not require it
 - HTTPS through a reverse proxy for internet-facing deployments
 - strong values for `UI_PASSWORD`, `NOEMA_API_TOKEN`, and `ENCRYPTION_KEY`
+
+The included Dockerfile installs `zip`, so the full archive-backup feature works in the container image without additional setup.
 
 ## Run with Node.js
 
@@ -110,7 +113,7 @@ After deployment, verify:
 - task dates use the expected timezone;
 - the `data/` volume remains populated after a redeploy;
 - uploads and image collections persist;
-- backups can be downloaded and restored in a test environment;
+- both JSON export and full ZIP archive backup work in a test environment;
 - optional Calendar, analytics, MCP, and OpenAPI integrations only expose intended data.
 
 See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), and [CUSTOMIZATION.md](CUSTOMIZATION.md) before production use.
