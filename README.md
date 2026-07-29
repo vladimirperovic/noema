@@ -80,7 +80,9 @@ The name reflects the original use case, not a technical limitation. The module 
 
 ### Backup and snapshots
 
-Backup provides JSON export/import, archive downloads, local snapshots, storage statistics, and snapshot restore. Application data and uploaded media live in the local `data/` directory, which is excluded from Git.
+Backup provides JSON export/import, full ZIP archive downloads, local snapshots, storage statistics, and snapshot restore. Application data and uploaded media live in the local `data/` directory, which is excluded from Git.
+
+The full ZIP archive feature uses the system `zip` command. It is installed by the included Dockerfile; direct Node.js deployments need `zip` available on the host. JSON export and import do not require it.
 
 This implementation is suitable for a single-user self-hosted application. Production forks should define their own retention, off-site backup, encryption-key recovery, and disaster-recovery policies.
 
@@ -125,7 +127,7 @@ Screenshots are generated from neutral demo data by `scripts/capture-screenshots
 
 ## Quick start
 
-Requirements: **Node.js 20 or newer**.
+Requirements: **Node.js 20 or newer**. The optional full ZIP archive-backup feature also needs the system `zip` command; the included Docker image already provides it.
 
 ```bash
 git clone https://github.com/vladimirperovic/noema.git
@@ -136,7 +138,7 @@ node src/index.js
 
 Open `http://localhost:3000`.
 
-No build step or runtime dependency installation is required.
+No build step or npm dependency installation is required.
 
 ## Configuration
 
@@ -217,7 +219,7 @@ Read [CUSTOMIZATION.md](CUSTOMIZATION.md), [DEPLOYMENT.md](DEPLOYMENT.md), [PRIV
 npm run check
 ```
 
-The check command validates the main JavaScript files and runs the test suite.
+The check command validates the main JavaScript files and runs the complete test suite.
 
 ## Documentation
 
