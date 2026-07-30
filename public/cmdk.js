@@ -13,6 +13,26 @@ const cmdkHtml = `
 
 document.body.insertAdjacentHTML('beforeend', cmdkHtml);
 
+// Mobile Safari can center fixed dialogs against the layout viewport instead of
+// the currently visible area. Keep the task time picker centered in the dynamic
+// viewport and inside the device safe area without changing its desktop layout.
+if (document.querySelector('.tp-modal') && !document.getElementById('noema-mobile-time-picker-fix')) {
+  const timePickerStyle = document.createElement('style');
+  timePickerStyle.id = 'noema-mobile-time-picker-fix';
+  timePickerStyle.textContent = `
+    @media (max-width: 980px) {
+      .tp-modal {
+        top: 50dvh !important;
+        width: min(280px, calc(100vw - 2rem)) !important;
+        max-height: calc(100dvh - max(1rem, env(safe-area-inset-top)) - max(1rem, env(safe-area-inset-bottom))) !important;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+    }
+  `;
+  document.head.appendChild(timePickerStyle);
+}
+
 // Jedan izvor istine za brzi desni meni na svim Noema stranicama.
 const projectMenu = document.querySelector('.menu-nav');
 if (projectMenu) {
