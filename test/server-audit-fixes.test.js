@@ -21,16 +21,26 @@ function freePort() {
   });
 }
 
-async function waitFor(url, child) {
+async function waitFor(url, child, logs) {
   for (let attempt = 0; attempt < 80; attempt++) {
-    if (child.exitCode !== null) throw new Error("Server exited with " + child.exitCode);
+    if (child.exitCode !== null) throw new Error("Server exited with " + child.exitCode + ":\n" + logs());
     try {
       const response = await fetch(url);
       if (response.ok) return;
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error("Server did not become healthy");
+  throw new Error("Server did not become healthy:\n" + logs());
+}
+
+async function stopChild(child) {
+  if (child.exitCode !== null) return;
+  child.kill("SIGTERM");
+  await Promise.race([
+    new Promise((resolve) => child.once("exit", resolve)),
+    new Promise((resolve) => setTimeout(resolve, 3000)),
+  ]);
+  if (child.exitCode === null) child.kill("SIGKILL");
 }
 
 test("OAuth initiation is protected, English UI assets are public, and snapshots cover all metadata modules", async () => {
@@ -38,6 +48,7 @@ test("OAuth initiation is protected, English UI assets are public, and snapshots
   const port = await freePort();
   const base = "http://127.0.0.1:" + port;
   const token = "test-api-token";
+  let output = "";
   const child = spawn(process.execPath, [entry], {
     cwd,
     stdio: ["ignore", "pipe", "pipe"],
@@ -56,13 +67,15 @@ test("OAuth initiation is protected, English UI assets are public, and snapshots
       GOOGLE_CLIENT_SECRET: "test-secret",
     },
   });
+  child.stdout.on("data", (chunk) => { output += chunk.toString(); });
+  child.stderr.on("data", (chunk) => { output += chunk.toString(); });
 
   try {
-    await waitFor(base + "/healthz", child);
+    await waitFor(base + "/healthz", child, () => output);
 
     const oauth = await fetch(base + "/auth/google", { redirect: "manual", headers: { Accept: "text/html" } });
     assert.equal(oauth.status, 302);
-    assert.match(oauth.headers.get("location"), /^/login?next=/);
+    assert.match(oauth.headers.get("location"), /^\/login\?next=/);
 
     const callback = await fetch(base + "/auth/google/callback?error=access_denied", { redirect: "manual" });
     assert.equal(callback.status, 302);
@@ -70,16 +83,31 @@ test("OAuth initiation is protected, English UI assets are public, and snapshots
 
     const i18n = await fetch(base + "/noema-i18n.js");
     assert.equal(i18n.status, 200);
-    assert.match(await i18n.text(), /USER_CONTENT_SELECTOR/);
+    const i18nSource = await i18n.text();
+    assert.match(i18nSource, /USER_CONTENT_SELECTOR/);
+    assert.ok(i18nSource.includes("(?<![\\\\p{L}\\\\p{N}])"));
 
-    const home = await fetch(base + "/", { headers: { Authorization: "Bearer " + token } });
+    const auth = { Authorization: "Bearer " + token };
+    const home = await fetch(base + "/", { headers: auth });
     assert.equal(home.status, 200);
     const html = await home.text();
     assert.match(html, /<html[^>]*lang="en"/i);
-    assert.match(html, /<script src="/noema-i18n.js"></script>/);
+    assert.match(html, /<script src="\/noema-i18n\.js"><\/script>/);
 
-    const authHeaders = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
-    const snapshotResponse = await fetch(base + "/api/backup/snapshot", { method: "POST", headers: authHeaders, body: "{}" });
+    const missing = await fetch(base + "/this-page-does-not-exist", {
+      headers: { ...auth, Accept: "text/html" },
+    });
+    assert.equal(missing.status, 404);
+    const missingHtml = await missing.text();
+    assert.match(missingHtml, /<html[^>]*lang="en"/i);
+    assert.match(missingHtml, /<script src="\/noema-i18n\.js"><\/script>/);
+
+    const authHeaders = { ...auth, "Content-Type": "application/json" };
+    const snapshotResponse = await fetch(base + "/api/backup/snapshot", {
+      method: "POST",
+      headers: authHeaders,
+      body: "{}",
+    });
     assert.equal(snapshotResponse.status, 200);
     const { filename } = await snapshotResponse.json();
     const snapshotPath = path.join(cwd, "data", "snapshots", filename);
@@ -103,8 +131,7 @@ test("OAuth initiation is protected, English UI assets are public, and snapshots
     assert.equal(restored.buildingSites, 1);
     assert.equal(restored.inspirations, 1);
   } finally {
-    child.kill("SIGTERM");
-    await new Promise((resolve) => child.once("exit", resolve));
+    await stopChild(child);
     await rm(cwd, { recursive: true, force: true });
   }
 });
