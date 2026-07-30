@@ -1,12 +1,12 @@
 {
   "name": "noema",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A self-hosted, customizable personal workspace built around yesterday, today, and tomorrow, with MCP and OpenAPI integrations.",
   "license": "MIT",
   "author": "Vladimir Perović",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.16.0"
   },
   "main": "src/index.js",
   "homepage": "https://github.com/vladimirperovic/noema#readme",
@@ -22,6 +22,7 @@
     "personal-workspace",
     "self-hosted",
     "reference-application",
+    "sqlite",
     "mcp",
     "model-context-protocol",
     "openapi",
@@ -32,7 +33,7 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "check": "node --check src/index.js && node --check src/server.js && node --check src/core/outbound.js && node --check src/services/analytics.js && node --check public/noema-i18n.js && node --check scripts/capture-screenshots.mjs && node --test test/*.test.js",
+    "check": "node --check src/index.js && node --check src/server.js && node --check src/store/database.js && node --check src/store/collection.js && node --check src/store/todos.js && node --check src/store/notes.js && node --check src/store/documents.js && node --check src/store/links.js && node --check src/store/inspirations.js && node --check src/store/buildingsites.js && node --check src/core/outbound.js && node --check src/services/analytics.js && node --check public/noema-i18n.js && node --check scripts/capture-screenshots.mjs && node --test test/*.test.js",
     "test": "node --test test/*.test.js",
     "test:stats": "node --test test/stats*.test.js"
   }
