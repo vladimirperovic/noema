@@ -106,3 +106,46 @@ input.addEventListener('keydown', async (e) => {
     }
   }
 });
+
+async function installBuildVersion() {
+  const footer = document.querySelector('footer.footer');
+  const helpLink = footer?.querySelector('a[href="/help"]');
+  if (!helpLink || document.getElementById('noemaBuildVersion')) return;
+
+  const separator = document.createElement('span');
+  separator.className = 'sys-sep';
+  separator.textContent = '|';
+
+  const versionLink = document.createElement('a');
+  versionLink.id = 'noemaBuildVersion';
+  versionLink.className = 'sys-stats';
+  versionLink.style.textDecoration = 'none';
+  versionLink.textContent = 'build …';
+
+  helpLink.insertAdjacentElement('afterend', separator);
+  separator.insertAdjacentElement('afterend', versionLink);
+
+  try {
+    const response = await fetch('/build-version.json', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const fullCommit = String(data.commit || '').trim();
+    if (!/^[0-9a-f]{7,40}$/i.test(fullCommit)) throw new Error('Commit SHA unavailable');
+
+    const shortCommit = fullCommit.slice(0, 7);
+    versionLink.textContent = `build ${shortCommit}`;
+    versionLink.title = `Deployed commit ${fullCommit}`;
+    versionLink.href = `https://github.com/vladimirperovic/noema/commit/${fullCommit}`;
+    versionLink.target = '_blank';
+    versionLink.rel = 'noopener noreferrer';
+  } catch (error) {
+    versionLink.textContent = 'build unknown';
+    versionLink.title = 'Coolify did not provide SOURCE_COMMIT for this build.';
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', installBuildVersion, { once: true });
+} else {
+  installBuildVersion();
+}
