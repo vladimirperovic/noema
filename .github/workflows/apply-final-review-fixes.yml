@@ -20,6 +20,18 @@ jobs:
           ref: agent/fix-audit-findings
           fetch-depth: 0
 
+      - name: Drop superseded test-edit section
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/apply-final-review-fixes.py')
+          text = p.read_text()
+          start = text.index('test_file = ROOT / "test" / "server-audit-fixes.test.js"')
+          end = text.index('# Remove this one-use script and workflow from the final branch.')
+          p.write_text(text[:start] + text[end:])
+          PY
+
       - name: Apply corrections
         run: python3 scripts/apply-final-review-fixes.py
 
@@ -28,6 +40,7 @@ jobs:
           node --check public/noema-i18n.js
           node --check src/server.js
           node --check src/core/outbound.js
+          node --check test/server-audit-fixes.test.js
           node --test test/outbound.test.js test/server-audit-fixes.test.js test/utils-timezone.test.js
 
       - name: Commit corrections
