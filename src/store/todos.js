@@ -1,4 +1,4 @@
-import { todayISO } from "../core/utils.js";
+import { todayISO, weekdayKey } from "../core/utils.js";
 
 import { randomUUID } from "node:crypto";
 import { mkdirSync, existsSync } from "node:fs";
@@ -122,11 +122,11 @@ export function loadStore() {
 
 function seedDemo() {
   const demo = [
-    { title: "Pregledati pull requestove", day: "yesterday", priority: "high", done: true },
-    { title: "Poslati izveštaj klijentu", day: "yesterday", priority: "normal", done: false },
-    { title: "Sastanak sa timom u 10h", day: "today", priority: "high", done: false },
-    { title: "Pročitati MCP specifikaciju", day: "today", priority: "low", done: false },
-    { title: "Pripremiti demo za klijenta", day: "tomorrow", priority: "high", done: false },
+    { title: "Review pull requests", day: "yesterday", priority: "high", done: true },
+    { title: "Send the report to the client", day: "yesterday", priority: "normal", done: false },
+    { title: "Team meeting at 10:00", day: "today", priority: "high", done: false },
+    { title: "Read the MCP specification", day: "today", priority: "low", done: false },
+    { title: "Prepare a demo for the client", day: "tomorrow", priority: "high", done: false },
   ];
   for (const d of demo) addTask(d.title, d.day, d.priority, d.done);
   flushNow();
@@ -239,10 +239,9 @@ export function removeTask(id) {
  * Prolazi kroz sve taskove sa postavljenim `repeat` i kreira instancu za danas
  * ako već ne postoji task sa istim naslovom za današnji datum.
  */
-export function generateRecurring() {
-  const today = todayISO();
-  const dow = new Date().getDay();
-  const dayName = REPEAT_DAYS[dow];
+export function generateRecurring(now = Date.now()) {
+  const today = todayISO(now);
+  const dayName = weekdayKey(now);
   let created = 0;
 
   for (const t of [...tasks.values()]) {

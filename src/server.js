@@ -130,7 +130,7 @@ function cookieValue(req, name) {
 function isPublicGalleryPath(pathname) {
   return pathname === "/buildingsite" || pathname === "/buildingsite/" || pathname === "/buildingsite.html"
     || pathname === "/inspiration" || pathname === "/inspiration/" || pathname === "/inspiration.html"
-    || pathname === "/buildingsite.js" || pathname === "/noema-header-footer.js" || pathname === "/favicon.ico"
+    || pathname === "/buildingsite.js" || pathname === "/noema-header-footer.js" || pathname === "/noema-i18n.js" || pathname === "/favicon.ico"
     || pathname === "/api/buildingsites" || pathname === "/api/inspirations"
     || pathname.startsWith("/buildingsite-files/") || pathname.startsWith("/inspiration-files/");
 }
@@ -269,7 +269,7 @@ function setBaseHeaders(res, extra = {}) {
 
 /**
  * Rute koje OSTAJU javne i kad je UI lozinka uključena: health-check (Coolify),
- * mašinski endpoint-i (MCP/OpenAPI/alati sa svojim bearer tokenom) i OAuth flow.
+ * machine endpoints (MCP/OpenAPI/tools with their own bearer token), login assets, and the OAuth callback.
  */
 function isPublicRoute(p) {
   return (
@@ -278,7 +278,7 @@ function isPublicRoute(p) {
     p === "/mcp" ||
     p === "/login" ||
     p === "/logout" ||
-    p === "/auth/google" ||
+    p === "/noema-i18n.js" ||
     p === "/auth/google/callback" ||
     p.startsWith("/api/tools/")
   );
@@ -1499,10 +1499,14 @@ export function createServer() {
           const notes = listNotes();
           const documents = listDocuments();
           const links = listLinks();
+          const buildingSites = listBuildingSites();
+          const inspirations = listInspirations();
           const backup = {
-            version: 1,
+            version: 2,
+            scope: "metadata",
+            includesMedia: false,
             exportedAt: new Date().toISOString(),
-            data: { todos, notes, documents, links }
+            data: { todos, notes, documents, links, buildingSites, inspirations }
           };
           const dataPath = path.join(process.cwd(), "data", "snapshots");
           if (!existsSync(dataPath)) {
@@ -1565,7 +1569,7 @@ export function createServer() {
           const content = await readFile(dataPath, "utf-8");
           const b = JSON.parse(content);
           
-          let restored = { todos: 0, notes: 0, documents: 0, links: 0 };
+          let restored = { todos: 0, notes: 0, documents: 0, links: 0, buildingSites: 0, inspirations: 0 };
           if (b.data && Array.isArray(b.data.todos)) {
             replaceTasks(b.data.todos);
             restored.todos = b.data.todos.length;
@@ -1581,6 +1585,14 @@ export function createServer() {
           if (b.data && Array.isArray(b.data.links)) {
             replaceLinks(b.data.links);
             restored.links = b.data.links.length;
+          }
+          if (b.data && Array.isArray(b.data.buildingSites)) {
+            replaceBuildingSites(b.data.buildingSites);
+            restored.buildingSites = b.data.buildingSites.length;
+          }
+          if (b.data && Array.isArray(b.data.inspirations)) {
+            replaceInspirations(b.data.inspirations);
+            restored.inspirations = b.data.inspirations.length;
           }
 
           return json(res, 200, { ok: true, restored });
@@ -1754,8 +1766,19 @@ async function serveStatic(req, res, pathname) {
   }
 
   try {
-    const data = await readFile(filePath);
+    let data = await readFile(filePath);
     const ext = path.extname(filePath).toLowerCase();
+    if (ext === ".html") {
+      let html = data.toString("utf8");
+      html = html.replace(/<html\b([^>]*)>/i, (_match, attributes) => {
+        const clean = attributes.replace(/\s+lang=(["\']).*?\1/i, "");
+        return `<html${clean} lang="en">`;
+      });
+      if (!html.includes('/noema-i18n.js')) {
+        html = html.replace(/<head\b[^>]*>/i, (head) => `${head}\n  <script src="/noema-i18n.js"></script>`);
+      }
+      data = Buffer.from(html, "utf8");
+    }
     setBaseHeaders(res, { "Content-Type": MIME[ext] || "application/octet-stream" });
     res.writeHead(200, { "Cache-Control": "no-cache" });
     res.end(data);

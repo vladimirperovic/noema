@@ -3,6 +3,7 @@ import { mkdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { readEncryptedJson, writeEncryptedJson } from "./crypto.js";
+import { safeFetchText } from "../core/outbound.js";
 
 /**
  * JSON-file backed storage za linkove (linkdump).
@@ -254,42 +255,36 @@ function metaContent(html, key) {
  */
 export async function fetchArticleText(url) {
   const safe = normalizeUrl(url);
-  if (!safe) return "Nevažeći URL.";
-  
+  if (!safe) return "Invalid URL.";
+
   try {
-    const res = await fetch(safe, {
-      redirect: "follow",
+    const response = await safeFetchText(safe, {
+      timeoutMs: 8000,
+      maxBytes: 1024 * 1024,
       headers: {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
-      }
+        "User-Agent": "Mozilla/5.0 (compatible; Noema/0.1; self-hosted)",
+        Accept: "text/html,application/xhtml+xml,text/plain;q=0.8",
+      },
     });
-    
-    const html = await res.text();
-    
-    // 1. Probaj naći <article> ili <main>
+    const type = String(response.headers["content-type"] || "").toLowerCase();
+    if (!response.ok) throw new Error("Remote server returned HTTP " + response.status + ".");
+    if (type && !type.includes("html") && !type.includes("text/plain")) throw new Error("The URL did not return readable text or HTML.");
+
+    const html = response.text;
     let contentMatch = html.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
     if (!contentMatch) contentMatch = html.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
     if (!contentMatch) contentMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-    
+
     let text = contentMatch ? contentMatch[1] : html;
-    
-    // 2. Očisti neželjene tagove
-    text = text.replace(/<(script|style|svg|nav|footer|header|aside|button|form|iframe)[^>]*>[\s\S]*?<\/\1>/gi, '');
-    
-    // 3. Pretvori naslove i paragrafe u nove redove
-    text = text.replace(/<\/(p|div|h[1-6]|li|blockquote|br)>/gi, '\n\n');
-    text = text.replace(/<br[^>]*>/gi, '\n');
-    
-    // 4. Ukloni preostale HTML tagove
-    text = text.replace(/<[^>]+>/g, ' ');
-    
-    // 5. Dekodiraj entitete i sredi razmake
+    text = text.replace(/<(script|style|svg|nav|footer|header|aside|button|form|iframe)[^>]*>[\s\S]*?<\/\1>/gi, "");
+    text = text.replace(/<\/(p|div|h[1-6]|li|blockquote|br)>/gi, "\n\n");
+    text = text.replace(/<br[^>]*>/gi, "\n");
+    text = text.replace(/<[^>]+>/g, " ");
     text = decodeEntities(text);
-    text = text.replace(/[ \t]+/g, ' ').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-    
-    return text || "Nije moguće automatski izvući tekst sa ove stranice.";
+    text = text.replace(/[ \t]+/g, " ").replace(/\n[ \t]+/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    return text || "Text could not be extracted from this page automatically.";
   } catch (err) {
-    return "Greška prilikom preuzimanja članka: " + err.message;
+    return "Unable to download the article: " + err.message;
   }
 }
 
@@ -302,55 +297,33 @@ export async function fetchPageMeta(url) {
   const empty = { title: "", description: "", image: "" };
   const safe = normalizeUrl(url);
   if (!safe) return empty;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), OG_TIMEOUT_MS);
   try {
-    const res = await fetch(safe, {
-      signal: ctrl.signal,
-      redirect: "follow",
+    const response = await safeFetchText(safe, {
+      timeoutMs: OG_TIMEOUT_MS,
+      maxBytes: OG_MAX_BYTES,
       headers: {
-        // Realan UA — mnogi sajtovi botovima vraćaju prazan HTML.
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+        "User-Agent": "Mozilla/5.0 (compatible; Noema/0.1; self-hosted)",
         Accept: "text/html,application/xhtml+xml",
       },
     });
-    const type = res.headers.get("content-type") || "";
-    if (!res.ok || !type.includes("html")) return empty;
-    const reader = res.body.getReader();
-    const chunks = [];
-    let total = 0;
-    while (total < OG_MAX_BYTES) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      total += value.length;
-    }
-    reader.cancel().catch(() => {});
-    const html = Buffer.concat(chunks).toString("utf8");
-    let title =
-      metaContent(html, "og:title") ||
-      decodeEntities((html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] || "").trim());
-    // Filtriraj generičke/beskorisne naslove (redirect/login zidovi).
+    const type = String(response.headers["content-type"] || "").toLowerCase();
+    if (!response.ok || !type.includes("html")) return empty;
+    const html = response.text;
+    let title = metaContent(html, "og:title") || decodeEntities((html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] || "").trim());
     const junkTitles = [
       "redirecting", "redirecting...", "just a moment...", "just a moment",
       "log in", "log into facebook", "login", "attention required",
       "please wait", "loading", "loading...", "verify",
     ];
-    if (title && junkTitles.includes(title.toLowerCase().replace(/[.\u2026]+$/, "").trim())) {
-      title = "";
-    }
+    if (title && junkTitles.includes(title.toLowerCase().replace(/[.\u2026]+$/, "").trim())) title = "";
     const description = metaContent(html, "og:description") || metaContent(html, "description");
     let image = metaContent(html, "og:image") || metaContent(html, "twitter:image");
-    // Relativna og:image putanja → apsolutna.
     if (image && !/^https?:\/\//i.test(image)) {
-      try { image = new URL(image, res.url || safe).href; } catch { image = ""; }
+      try { image = new URL(image, response.url).href; } catch { image = ""; }
     }
     return { title, description, image };
   } catch {
     return empty;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
