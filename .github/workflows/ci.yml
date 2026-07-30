@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, agent/prepare-public-release]
+    branches: [main, agent/prepare-public-release, agent/sqlite-store-refactor]
   pull_request:
     branches: [main]
 
@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: [20, 22]
+        node: [22, 24]
 
     steps:
       - name: Check out repository
@@ -61,6 +61,7 @@ jobs:
           node -e "const r=await fetch('http://127.0.0.1:3999/openapi.json');const j=await r.json();if(j.openapi!=='3.1.0')process.exit(1)"
           node -e "const r=await fetch('http://127.0.0.1:3999/api/calendar?day=banana');if(r.status!==400)process.exit(1)"
           node -e "const r=await fetch('http://127.0.0.1:3999/');if(!r.ok||!(await r.text()).includes('Noema'))process.exit(1)"
+          test -s "$NOEMA_DATA_DIR/noema.sqlite"
 
   docker:
     runs-on: ubuntu-latest
@@ -73,7 +74,7 @@ jobs:
         run: docker build --tag noema-ci .
 
       - name: Verify runtime tools
-        run: docker run --rm --entrypoint sh noema-ci -c 'command -v zip >/dev/null && node --version'
+        run: docker run --rm --entrypoint sh noema-ci -c 'command -v zip >/dev/null && node -e "import(\"node:sqlite\")"'
 
       - name: Smoke-test container and ZIP backup
         shell: bash
