@@ -1,118 +1,43 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, existsSync } from "node:fs";
-import path from "node:path";
-import { config } from "../config.js";
-import { readEncryptedJson, writeEncryptedJson } from "./crypto.js";
+import { createCollection } from "./collection.js";
 
-/**
- * JSON-file backed storage za dokumente.
- */
-
-const DATA_DIR = config.DATA_DIR;
-const DATA_FILE = path.join(DATA_DIR, "documents.json");
-
-const documents = new Map();
-let dirty = false;
-let persistTimer = null;
-
-export function loadDocuments() {
-  mkdirSync(DATA_DIR, { recursive: true });
-  documents.clear();
-  try {
-    if (existsSync(DATA_FILE)) {
-      const arr = readEncryptedJson(DATA_FILE, []);
-      if (Array.isArray(arr)) {
-        for (const d of arr) {
-          if (!d || typeof d.id !== "string") continue;
-          if (!d.body) d.body = "";
-          documents.set(d.id, d);
-        }
-      }
-    }
-  } catch (err) {
-    console.error("[noema] Ne mogu da pročitam", DATA_FILE, "— krećem prazno:", err.message);
-  }
+function normalizeDocument(raw) {
+  const document = { ...raw };
+  const now = Date.now();
+  document.title = String(document.title || "").trim();
+  document.body = String(document.body || "");
+  document.label = String(document.label || "");
+  document.createdAt = Number.isFinite(document.createdAt) ? document.createdAt : now;
+  document.updatedAt = Number.isFinite(document.updatedAt) ? document.updatedAt : document.createdAt;
+  return document;
 }
 
-function flushNow() {
-  mkdirSync(DATA_DIR, { recursive: true });
-  const arr = [...documents.values()].sort((a, b) => a.createdAt - b.createdAt);
-  writeEncryptedJson(DATA_FILE, arr);
-  dirty = false;
-}
+const documents = createCollection({
+  name: "documents",
+  legacyFile: "documents.json",
+  normalize: normalizeDocument,
+  validate: (document) => Boolean(document && typeof document.id === "string" && document.id),
+});
 
-function schedulePersist() {
-  dirty = true;
-  if (persistTimer) return;
-  persistTimer = setTimeout(() => {
-    persistTimer = null;
-    if (dirty) flushNow();
-  }, 150);
-  persistTimer.unref?.();
-}
+export function loadDocuments() { documents.load(); }
 
 export function addDocument(title, body = "", label = "") {
-  const doc = {
-    id: randomUUID(),
-    title: String(title).trim(),
-    body: String(body),
-    label: String(label),
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-  documents.set(doc.id, doc);
-  schedulePersist();
-  return doc;
+  const now = Date.now();
+  return documents.set(normalizeDocument({ id: randomUUID(), title, body, label, createdAt: now, updatedAt: now }));
 }
 
 export function updateDocument(id, patch) {
-  const d = documents.get(id);
-  if (!d) return null;
-  const next = { ...d };
-  if (typeof patch.title === "string" && patch.title.trim()) {
-    next.title = patch.title.trim();
-  }
-  if (typeof patch.body === "string") {
-    next.body = patch.body;
-  }
-  if (typeof patch.label === "string") {
-    next.label = patch.label;
-  }
+  const document = documents.get(id);
+  if (!document) return null;
+  const next = { ...document };
+  if (typeof patch.title === "string" && patch.title.trim()) next.title = patch.title;
+  if (typeof patch.body === "string") next.body = patch.body;
+  if (typeof patch.label === "string") next.label = patch.label;
   next.updatedAt = Date.now();
-  documents.set(id, next);
-  schedulePersist();
-  return next;
+  return documents.set(normalizeDocument(next));
 }
 
-export function removeDocument(id) {
-  const existed = documents.delete(id);
-  if (existed) schedulePersist();
-  return existed;
-}
-
-export function listDocuments() {
-  return [...documents.values()].sort((a, b) => b.createdAt - a.createdAt);
-}
-
-export function closeDocuments() {
-  if (persistTimer) {
-    clearTimeout(persistTimer);
-    persistTimer = null;
-  }
-  if (dirty) flushNow();
-}
-
-/**
- * Zamijeni sve dokumente (za backup restore).
- * @param {Array} newDocuments
- */
-export function replaceDocuments(newDocuments) {
-  documents.clear();
-  if (!Array.isArray(newDocuments)) return;
-  for (const d of newDocuments) {
-    if (!d || typeof d.id !== "string") continue;
-    if (!d.body) d.body = "";
-    documents.set(d.id, d);
-  }
-  flushNow();
-}
+export function removeDocument(id) { return documents.remove(id); }
+export function listDocuments() { return documents.list().sort((a, b) => b.createdAt - a.createdAt); }
+export function replaceDocuments(values) { documents.replace(values); }
+export function closeDocuments() { documents.close(); }
