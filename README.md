@@ -7,7 +7,7 @@
 > [!IMPORTANT]
 > **Noema is published as a reference application and a starting point for customization.** It is not intended to be installed and used unchanged as a universal productivity product. Fork it, rename the modules, remove what you do not need, change the data model, and adapt the interface to your own work and habits.
 
-Noema is written in vanilla Node.js and exposes the same data to its web interface, MCP clients, OpenAPI-compatible agents, Siri Shortcuts, and other tools.
+Noema is written in vanilla Node.js, stores structured records in a local encrypted SQLite database, and exposes the same data to its web interface, MCP clients, OpenAPI-compatible agents, Siri Shortcuts, and other tools.
 
 ## The three-day idea
 
@@ -44,7 +44,7 @@ Possible adaptations include meeting notes, shopping lists, punch lists, inspect
 
 Documents are longer rich-text records with labels and file uploads. They are useful for specifications, project briefs, decisions, instructions, reports, contracts, research, or any content that should live beside the daily workflow.
 
-The document module is deliberately simple and can be replaced with Markdown, a database-backed editor, object storage, collaborative editing, or an external document service.
+The document module is deliberately simple and can be replaced with Markdown, a different database-backed editor, object storage, collaborative editing, or an external document service.
 
 ### Links
 
@@ -78,11 +78,15 @@ The name reflects the original use case, not a technical limitation. The module 
 - deliveries, installations, defects, or service records;
 - any collection that combines a place, photos, tags, and chronological observations.
 
-### Backup and snapshots
+### Storage, backup, and snapshots
+
+Structured records are stored in `data/noema.sqlite`. Record payloads remain protected with AES-256-GCM before they are written to SQLite. Existing encrypted JSON files are imported automatically on first start and continue to be updated as rollback and backup mirrors.
 
 Backup provides JSON export/import, archive downloads, local metadata snapshots, storage statistics, and snapshot restore. Metadata snapshots cover every structured module but intentionally exclude uploaded media; use the full ZIP archive for a complete media backup. Application data and uploaded media live in the local `data/` directory, which is excluded from Git.
 
 The full ZIP archive feature uses the system `zip` command. It is installed by the included Dockerfile; direct Node.js deployments need `zip` available on the host. JSON export and import do not require it.
+
+Read [SQLITE_MIGRATION.md](SQLITE_MIGRATION.md) before upgrading an existing installation. It documents automatic import, encryption, backup behavior, and rollback to an older commit.
 
 This implementation is suitable for a single-user self-hosted application. Production forks should define their own retention, off-site backup, encryption-key recovery, and disaster-recovery policies.
 
@@ -99,7 +103,7 @@ Noema also includes:
 - a built-in Help page;
 - optional password protection for the web UI;
 - bearer-token protection for machine tools;
-- AES-256-GCM encryption for local JSON data;
+- encrypted SQLite record payloads and encrypted JSON compatibility mirrors;
 - optional read-only Google Calendar integration;
 - an MCP endpoint for compatible AI clients;
 - an auto-generated OpenAPI 3.1 document;
@@ -127,7 +131,7 @@ The public application is served in English. `public/noema-i18n.js` localizes in
 
 ## Quick start
 
-Requirements: **Node.js 20 or newer**. The optional full ZIP archive-backup feature also needs the system `zip` command; the included Docker image already provides it.
+Requirements: **Node.js 22.16.0 or newer**. The included Docker image uses Node.js 24. The optional full ZIP archive-backup feature also needs the system `zip` command; the Docker image already provides it.
 
 ```bash
 git clone https://github.com/vladimirperovic/noema.git
@@ -151,7 +155,7 @@ No build step or npm dependency installation is required.
 | `UI_PASSWORD` | empty | Password protecting the browser UI |
 | `ENCRYPTION_KEY` | empty | Passphrase used to derive the local data-encryption key |
 | `NOEMA_TIMEZONE` | `UTC` | IANA timezone used for date boundaries |
-| `NOEMA_DATA_DIR` | `./data` | Persistent data, uploads, snapshots, tokens, and local encryption-key directory |
+| `NOEMA_DATA_DIR` | `./data` | SQLite, JSON mirrors, uploads, snapshots, tokens, and local encryption-key directory |
 | `NOEMA_CORS_ORIGIN` | `*` | Allowed browser origin(s) |
 | `NOEMA_HTTP_USER_AGENT` | generic Noema identifier | Operator contact sent to services that require an identifiable user agent |
 | `NOEMA_ANALYTICS_PROJECTS` | empty | JSON array defining optional analytics projects |
@@ -191,13 +195,13 @@ src/
   core/                  auth, MCP, OpenAPI, validation, shared utilities
   modules/               registered tools
   services/              optional external services and analytics
-  store/                 encrypted local stores
+  store/                 shared encrypted SQLite collections and media stores
   server.js              HTTP, REST, static files, uploads, backup
 public/                   browser interface
 scripts/                  maintenance and screenshot tooling
 test/                     Node.js tests
 docs/                     architecture, customization, and screenshots
-data/                     local encrypted data and uploads; never committed
+data/                     SQLite, encrypted mirrors, uploads, and keys; never committed
 ```
 
 ## Customize before deployment
@@ -220,13 +224,14 @@ Read [CUSTOMIZATION.md](CUSTOMIZATION.md), [DEPLOYMENT.md](DEPLOYMENT.md), [PRIV
 npm run check
 ```
 
-The check command validates the main JavaScript files and runs the complete test suite.
+The check command validates the main JavaScript files and runs the complete test suite, including SQLite import, encryption, persistence, and rollback-mirror coverage.
 
 ## Documentation
 
 - [Product definition](PRODUCT.md)
 - [Customization guide](CUSTOMIZATION.md)
 - [Deployment guide](DEPLOYMENT.md)
+- [SQLite migration and rollback](SQLITE_MIGRATION.md)
 - [Privacy and data flows](PRIVACY.md)
 - [Architecture](ARCHITECTURE.md)
 - [Contributing](CONTRIBUTING.md)
