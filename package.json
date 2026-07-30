@@ -32,7 +32,7 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "check": "node --check src/index.js && node --check src/server.js && node --check src/services/analytics.js && node --check scripts/capture-screenshots.mjs && node --test test/*.test.js",
+    "check": "node --check src/index.js && node --check src/server.js && node --check src/core/outbound.js && node --check src/services/analytics.js && node --check public/noema-i18n.js && node --check scripts/capture-screenshots.mjs && node --test test/*.test.js",
     "test": "node --test test/*.test.js",
     "test:stats": "node --test test/stats*.test.js"
   }

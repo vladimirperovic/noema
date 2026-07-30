@@ -2,7 +2,6 @@ import { todayISO, zonedDayBoundsUTC, resolveIsoDay } from "../core/utils.js";
 
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { config } from "../config.js";
 
@@ -22,8 +21,7 @@ import { config } from "../config.js";
  * Bez eksternih dependency-ja — sve preko fetch-a i node:crypto.
  */
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.resolve(__dirname, "../../data");
+const DATA_DIR = config.DATA_DIR;
 const TOKEN_FILE = path.join(DATA_DIR, "google-token.json");
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";

@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import path from "node:path";
 
 /**
  * Centralized, validated environment configuration.
@@ -53,6 +54,7 @@ const NOEMA_API_TOKEN = stringValue("NOEMA_API_TOKEN", "");
 const UI_PASSWORD = stringValue("UI_PASSWORD", "");
 const ENCRYPTION_KEY = stringValue("ENCRYPTION_KEY", "");
 const NOEMA_TIMEZONE = stringValue("NOEMA_TIMEZONE", "UTC");
+const DATA_DIR = path.resolve(stringValue("NOEMA_DATA_DIR", path.join(process.cwd(), "data")));
 const NOEMA_HTTP_USER_AGENT = stringValue(
   "NOEMA_HTTP_USER_AGENT",
   "Noema/0.1 (self-hosted; configure NOEMA_HTTP_USER_AGENT with an operator contact)",
@@ -88,6 +90,7 @@ export const config = Object.freeze({
   UI_PASSWORD,
   ENCRYPTION_KEY,
   NOEMA_TIMEZONE,
+  DATA_DIR,
   NOEMA_HTTP_USER_AGENT,
   NOEMA_ANALYTICS_PROJECTS,
   uiAuthEnabled: UI_PASSWORD.length > 0,

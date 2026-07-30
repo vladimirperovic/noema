@@ -82,3 +82,12 @@ export function resolveIsoDay(dayStr, baseIso) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
 }
+
+
+/** Return the weekday key (sun..sat) in the configured timezone. */
+export function weekdayKey(d = Date.now(), timeZone = config.NOEMA_TIMEZONE) {
+  const label = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(new Date(d)).toLowerCase();
+  const keys = { sun: "sun", mon: "mon", tue: "tue", wed: "wed", thu: "thu", fri: "fri", sat: "sat" };
+  if (!keys[label]) throw new Error("Unable to resolve weekday for timezone " + timeZone + ".");
+  return keys[label];
+}

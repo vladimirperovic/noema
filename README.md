@@ -80,7 +80,7 @@ The name reflects the original use case, not a technical limitation. The module 
 
 ### Backup and snapshots
 
-Backup provides JSON export/import, full ZIP archive downloads, local snapshots, storage statistics, and snapshot restore. Application data and uploaded media live in the local `data/` directory, which is excluded from Git.
+Backup provides JSON export/import, archive downloads, local metadata snapshots, storage statistics, and snapshot restore. Metadata snapshots cover every structured module but intentionally exclude uploaded media; use the full ZIP archive for a complete media backup. Application data and uploaded media live in the local `data/` directory, which is excluded from Git.
 
 The full ZIP archive feature uses the system `zip` command. It is installed by the included Dockerfile; direct Node.js deployments need `zip` available on the host. JSON export and import do not require it.
 
@@ -107,7 +107,7 @@ Noema also includes:
 
 ## Screenshots
 
-Screenshots are generated from neutral demo data by `scripts/capture-screenshots.mjs`. They never use the contents of a personal `data/` directory.
+The public application is served in English. `public/noema-i18n.js` localizes interface chrome and date formatting while explicitly excluding task titles, notes, documents, links, and other user-created content. Screenshots are generated from neutral demo data by `scripts/capture-screenshots.mjs`; they never use a personal `data/` directory.
 
 | Page | Preview |
 |---|---|
@@ -151,6 +151,7 @@ No build step or npm dependency installation is required.
 | `UI_PASSWORD` | empty | Password protecting the browser UI |
 | `ENCRYPTION_KEY` | empty | Passphrase used to derive the local data-encryption key |
 | `NOEMA_TIMEZONE` | `UTC` | IANA timezone used for date boundaries |
+| `NOEMA_DATA_DIR` | `./data` | Persistent data, uploads, snapshots, tokens, and local encryption-key directory |
 | `NOEMA_CORS_ORIGIN` | `*` | Allowed browser origin(s) |
 | `NOEMA_HTTP_USER_AGENT` | generic Noema identifier | Operator contact sent to services that require an identifiable user agent |
 | `NOEMA_ANALYTICS_PROJECTS` | empty | JSON array defining optional analytics projects |

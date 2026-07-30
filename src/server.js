@@ -97,8 +97,8 @@ const MIME = {
 
 const SERVICE = { name: "noema", version: "0.1.0" };
 const CORS_ORIGIN = config.NOEMA_CORS_ORIGIN;
-const INSPIRATION_DIR = path.resolve(process.cwd(), "data", "inspirations");
-const BUILDINGSITE_DIR = path.resolve(process.cwd(), "data", "buildingsites");
+const INSPIRATION_DIR = path.resolve(config.DATA_DIR, "inspirations");
+const BUILDINGSITE_DIR = path.resolve(config.DATA_DIR, "buildingsites");
 const INSPIRATION_UPLOAD_LIMIT = 120 * 1024 * 1024;
 const IMAGE_TYPES = new Map([
   ["image/jpeg", "jpg"],
@@ -130,7 +130,7 @@ function cookieValue(req, name) {
 function isPublicGalleryPath(pathname) {
   return pathname === "/buildingsite" || pathname === "/buildingsite/" || pathname === "/buildingsite.html"
     || pathname === "/inspiration" || pathname === "/inspiration/" || pathname === "/inspiration.html"
-    || pathname === "/buildingsite.js" || pathname === "/noema-header-footer.js" || pathname === "/favicon.ico"
+    || pathname === "/buildingsite.js" || pathname === "/noema-header-footer.js" || pathname === "/noema-i18n.js" || pathname === "/favicon.ico"
     || pathname === "/api/buildingsites" || pathname === "/api/inspirations"
     || pathname.startsWith("/buildingsite-files/") || pathname.startsWith("/inspiration-files/");
 }
@@ -269,7 +269,7 @@ function setBaseHeaders(res, extra = {}) {
 
 /**
  * Rute koje OSTAJU javne i kad je UI lozinka uključena: health-check (Coolify),
- * mašinski endpoint-i (MCP/OpenAPI/alati sa svojim bearer tokenom) i OAuth flow.
+ * machine endpoints (MCP/OpenAPI/tools with their own bearer token), login assets, and the OAuth callback.
  */
 function isPublicRoute(p) {
   return (
@@ -278,7 +278,7 @@ function isPublicRoute(p) {
     p === "/mcp" ||
     p === "/login" ||
     p === "/logout" ||
-    p === "/auth/google" ||
+    p === "/noema-i18n.js" ||
     p === "/auth/google/callback" ||
     p.startsWith("/api/tools/")
   );
@@ -650,7 +650,7 @@ export function createServer() {
         setBaseHeaders(res);
         let backupDates = [];
         try {
-          const snapPath = path.resolve(process.cwd(), "data", "snapshots");
+          const snapPath = path.resolve(config.DATA_DIR, "snapshots");
           if (existsSync(snapPath)) {
             const files = await readdir(snapPath);
             backupDates = files
@@ -1197,7 +1197,7 @@ export function createServer() {
         const { name, data, type } = body.value;
         if (!name || !data) return json(res, 400, { ok: false, error: "name i data su obavezni." });
         try {
-          const uploadsDir = path.resolve(process.cwd(), "data", "uploads");
+          const uploadsDir = path.resolve(config.DATA_DIR, "uploads");
           await mkdir(uploadsDir, { recursive: true });
           const safeName = path.basename(name).replace(/[^a-zA-Z0-9._-]/g, "_");
           if (!safeName) {
@@ -1225,7 +1225,7 @@ export function createServer() {
       if (pathname.startsWith("/uploads/") && method === "GET") {
         const relName = decodeURIComponent(pathname.slice(9));
         const safeName = path.basename(relName).replace(/[^a-zA-Z0-9._-]/g, "_");
-        const uploadsDir = path.resolve(process.cwd(), "data", "uploads");
+        const uploadsDir = path.resolve(config.DATA_DIR, "uploads");
         const filePath = path.resolve(uploadsDir, safeName);
         if (!filePath.startsWith(uploadsDir + path.sep)) return json(res, 400, { ok: false, error: "Neispravna putanja." });
         try {
@@ -1327,7 +1327,7 @@ export function createServer() {
       // --- BACKUP ---
       if (pathname === "/api/backup/info" && method === "GET") {
         setBaseHeaders(res);
-        const dataDir = path.join(process.cwd(), "data");
+        const dataDir = config.DATA_DIR;
 
         const [
           todosSize,
@@ -1413,8 +1413,8 @@ export function createServer() {
         }
 
         try {
-          const dataDir = path.join(process.cwd(), "data");
-          const tmpZipPath = path.join(process.cwd(), "data", `noema_archive_${Date.now()}.zip`);
+          const dataDir = config.DATA_DIR;
+          const tmpZipPath = path.join(config.DATA_DIR, `noema_archive_${Date.now()}.zip`);
 
           const potentialItems = [
             "todos.json",
@@ -1499,12 +1499,16 @@ export function createServer() {
           const notes = listNotes();
           const documents = listDocuments();
           const links = listLinks();
+          const buildingSites = listBuildingSites();
+          const inspirations = listInspirations();
           const backup = {
-            version: 1,
+            version: 2,
+            scope: "metadata",
+            includesMedia: false,
             exportedAt: new Date().toISOString(),
-            data: { todos, notes, documents, links }
+            data: { todos, notes, documents, links, buildingSites, inspirations }
           };
-          const dataPath = path.join(process.cwd(), "data", "snapshots");
+          const dataPath = path.join(config.DATA_DIR, "snapshots");
           if (!existsSync(dataPath)) {
             await mkdir(dataPath, { recursive: true });
           }
@@ -1520,7 +1524,7 @@ export function createServer() {
       if (pathname === "/api/backup/snapshots" && method === "GET") {
         setBaseHeaders(res);
         try {
-          const dataPath = path.join(process.cwd(), "data", "snapshots");
+          const dataPath = path.join(config.DATA_DIR, "snapshots");
           if (!existsSync(dataPath)) {
             return json(res, 200, { ok: true, snapshots: [] });
           }
@@ -1552,7 +1556,7 @@ export function createServer() {
           if (!filename || typeof filename !== 'string') {
              return json(res, 400, { ok: false, error: "Invalid filename" });
           }
-          const snapshotsDir = path.resolve(process.cwd(), "data", "snapshots");
+          const snapshotsDir = path.resolve(config.DATA_DIR, "snapshots");
           const dataPath = path.resolve(snapshotsDir, filename);
           
           if (!dataPath.startsWith(snapshotsDir + path.sep)) {
@@ -1565,7 +1569,7 @@ export function createServer() {
           const content = await readFile(dataPath, "utf-8");
           const b = JSON.parse(content);
           
-          let restored = { todos: 0, notes: 0, documents: 0, links: 0 };
+          let restored = { todos: 0, notes: 0, documents: 0, links: 0, buildingSites: 0, inspirations: 0 };
           if (b.data && Array.isArray(b.data.todos)) {
             replaceTasks(b.data.todos);
             restored.todos = b.data.todos.length;
@@ -1581,6 +1585,14 @@ export function createServer() {
           if (b.data && Array.isArray(b.data.links)) {
             replaceLinks(b.data.links);
             restored.links = b.data.links.length;
+          }
+          if (b.data && Array.isArray(b.data.buildingSites)) {
+            replaceBuildingSites(b.data.buildingSites);
+            restored.buildingSites = b.data.buildingSites.length;
+          }
+          if (b.data && Array.isArray(b.data.inspirations)) {
+            replaceInspirations(b.data.inspirations);
+            restored.inspirations = b.data.inspirations.length;
           }
 
           return json(res, 200, { ok: true, restored });
@@ -1636,7 +1648,7 @@ export function createServer() {
       const accept = req.headers.accept || "";
       if (accept.includes("text/html")) {
         try {
-          const data = await readFile(path.join(PUBLIC_DIR, "404.html"));
+          const data = localizeHtmlDocument(await readFile(path.join(PUBLIC_DIR, "404.html")));
           res.writeHead(404, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
           res.end(data);
           return;
@@ -1720,6 +1732,18 @@ async function parseJson(req, limitBytes) {
 
 
 
+function localizeHtmlDocument(data) {
+  let html = Buffer.isBuffer(data) ? data.toString("utf8") : String(data);
+  html = html.replace(/<html\b([^>]*)>/i, (_match, attributes) => {
+    const clean = attributes.replace(/\s+lang=(["']).*?\1/i, "");
+    return `<html${clean} lang="en">`;
+  });
+  if (!html.includes('/noema-i18n.js')) {
+    html = html.replace(/<head\b[^>]*>/i, (head) => `${head}\n  <script src="/noema-i18n.js"></script>`);
+  }
+  return Buffer.from(html, "utf8");
+}
+
 /** Servira statičke fajlove iz public/. Vraca true ako je servirano. */
 async function serveStatic(req, res, pathname) {
   // Normalizuj putanju — spreči path traversal. Fajl po default = index.html.
@@ -1754,8 +1778,9 @@ async function serveStatic(req, res, pathname) {
   }
 
   try {
-    const data = await readFile(filePath);
+    let data = await readFile(filePath);
     const ext = path.extname(filePath).toLowerCase();
+    if (ext === ".html") data = localizeHtmlDocument(data);
     setBaseHeaders(res, { "Content-Type": MIME[ext] || "application/octet-stream" });
     res.writeHead(200, { "Cache-Control": "no-cache" });
     res.end(data);
