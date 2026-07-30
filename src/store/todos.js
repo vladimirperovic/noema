@@ -1,35 +1,11 @@
-import { todayISO, weekdayKey } from "../core/utils.js";
-
 import { randomUUID } from "node:crypto";
-import { mkdirSync, existsSync } from "node:fs";
-import path from "node:path";
-import { config } from "../config.js";
-import { readEncryptedJson, writeEncryptedJson } from "./crypto.js";
+import { todayISO, weekdayKey } from "../core/utils.js";
+import { createCollection } from "./collection.js";
 
-/**
- * JSON-file backed storage za taskove.
- *
- * In-memory mapa + automatski persist u `data/todos.json`. Za MVP je ovo
- * sasvim dovoljno (jedan korisnik, nema konkurentnih servera). Lako se menja
- * u SQLite/Postgres kasnije bez diranja tool sloja.
- *
- * "Day" model: svaki task pamti APSOLUTNI datum `scheduledFor` (YYYY-MM-DD).
- * Kolona (yesterday/today/tomorrow) se RAČUNA u letu u odnosu na današnji
- * datum — tako "sjutra" automatski postane "danas" kad prođe ponoć, a stari
- * neurađeni taskovi ostaju u "juče" (preostalo). API napolju i dalje govori
- * jezikom {yesterday, today, tomorrow} pa se MCP/OpenAPI ugovor ne menja.
- */
+const REPEAT_DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+const WEEKDAYS = new Set(["mon", "tue", "wed", "thu", "fri"]);
+let recurringTimer = null;
 
-const DATA_DIR = config.DATA_DIR;
-const DATA_FILE = path.join(DATA_DIR, "todos.json");
-
-/** @type {Map<string, object>} id -> raw task (scheduledFor, bez izvedenog day) */
-const tasks = new Map();
-let dirty = false;
-let persistTimer = null;
-
-
-/** Lokalni datum u YYYY-MM-DD (bez UTC offseta). */
 function toISODate(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -37,86 +13,72 @@ function toISODate(d) {
   return `${y}-${m}-${day}`;
 }
 
-/** @param {string} iso @param {number} n → iso pomeren za n dana */
-function addDays(iso, n) {
+function addDays(iso, amount) {
   const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + n);
-  return toISODate(dt);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() + amount);
+  return toISODate(date);
 }
 
-/**
- * Normalizuj vrijeme u "HH:MM" (24h) ili null ako nije validno.
- * Prihvata "9:5" → "09:05". Vrijeme je opciono — task bez njega je "celi dan".
- */
-function normTime(t) {
-  if (typeof t !== "string") return null;
-  const m = t.trim().match(/^(\d{1,2}):(\d{1,2})$/);
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h > 23 || min > 59) return null;
-  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+function normTime(value) {
+  if (typeof value !== "string") return null;
+  const match = value.trim().match(/^(\d{1,2}):(\d{1,2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
-/** Logički dan ("yesterday"|"today"|"tomorrow") → apsolutni datum. */
 function dayToDate(day, today = todayISO()) {
   if (day === "yesterday") return addDays(today, -1);
   if (day === "tomorrow") return addDays(today, 1);
   return today;
 }
 
-/**
- * Apsolutni datum → kolona u odnosu na danas. ISO datumi se porede leksički.
- *   < danas  → yesterday (sve preostalo/zakasnelo)
- *   = danas  → today
- *   > danas  → tomorrow (sve buduće)
- */
 function bucketFor(scheduledFor, today = todayISO()) {
   if (scheduledFor < today) return "yesterday";
   if (scheduledFor > today) return "tomorrow";
   return "today";
 }
 
-/** Vrati kopiju taska sa izvedenim `day` poljem (za UI/API). */
-function withDay(t, today = todayISO()) {
-  return { ...t, day: bucketFor(t.scheduledFor, today) };
+function withDay(task, today = todayISO()) {
+  return { ...task, day: bucketFor(task.scheduledFor, today) };
 }
 
-/** Učitaj postojeće podatke sa diska u memoriju. Poziva se jednom na startu. */
+function normalizeTask(raw) {
+  const task = { ...raw };
+  const now = Date.now();
+  if (!task.scheduledFor && typeof task.day === "string") task.scheduledFor = dayToDate(task.day);
+  if (!task.scheduledFor) task.scheduledFor = todayISO();
+  delete task.day;
+  task.title = String(task.title || "").trim();
+  task.time = task.time ? normTime(task.time) : null;
+  task.priority = ["low", "normal", "medium", "high"].includes(task.priority) ? task.priority : "normal";
+  task.done = Boolean(task.done);
+  task.repeat = REPEAT_DAYS.includes(task.repeat) || ["daily", "weekdays", "weekends"].includes(task.repeat) ? task.repeat : "";
+  task.subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+  task.order = Number.isFinite(task.order) ? task.order : (Number.isFinite(task.createdAt) ? task.createdAt : now);
+  task.createdAt = Number.isFinite(task.createdAt) ? task.createdAt : now;
+  task.updatedAt = Number.isFinite(task.updatedAt) ? task.updatedAt : task.createdAt;
+  return task;
+}
+
+const tasks = createCollection({
+  name: "todos",
+  legacyFile: "todos.json",
+  normalize: normalizeTask,
+  validate: (task) => Boolean(task && typeof task.id === "string" && task.id && typeof task.title === "string"),
+});
+
 export function loadStore() {
-  mkdirSync(DATA_DIR, { recursive: true });
-  tasks.clear();
-  const today = todayISO();
-  try {
-    if (existsSync(DATA_FILE)) {
-      const arr = readEncryptedJson(DATA_FILE, []);
-      if (Array.isArray(arr)) {
-        for (const t of arr) {
-          if (!t || typeof t.id !== "string") continue;
-          // Migracija sa starog formata: zamrznut `day` → apsolutni datum.
-          if (!t.scheduledFor && typeof t.day === "string") {
-            t.scheduledFor = dayToDate(t.day, today);
-          }
-          if (!t.scheduledFor) t.scheduledFor = today;
-          delete t.day; // izvedeno polje se ne čuva
-          tasks.set(t.id, t);
-        }
-      }
-    }
-  } catch (err) {
-    console.error("[noema] Ne mogu da pročitam", DATA_FILE, "— krećem prazno:", err.message);
-  }
-
-  // Ako je prazno, seeduj nekoliko demonstrativnih taskova da UI nije pusto.
-  if (tasks.size === 0) {
-    seedDemo();
-  }
-
-  // Generiši ponavljajuće taskove za danas.
+  const loaded = tasks.load();
+  if (loaded.length === 0) seedDemo();
   generateRecurring();
-  // Ponavljaj svakih sat vremena (da uhvati prelazak u novi dan).
-  setInterval(() => generateRecurring(), 3600_000).unref?.();
+  if (!recurringTimer) {
+    recurringTimer = setInterval(() => generateRecurring(), 3_600_000);
+    recurringTimer.unref?.();
+  }
 }
 
 function seedDemo() {
@@ -127,235 +89,133 @@ function seedDemo() {
     { title: "Read the MCP specification", day: "today", priority: "low", done: false },
     { title: "Prepare a demo for the client", day: "tomorrow", priority: "high", done: false },
   ];
-  for (const d of demo) addTask(d.title, d.day, d.priority, d.done);
-  flushNow();
+  for (const item of demo) addTask(item.title, item.day, item.priority, item.done);
 }
 
-/** Odmah zapiši na disk (sinhrono, jednostavno za MVP). */
-function flushNow() {
-  mkdirSync(DATA_DIR, { recursive: true });
-  const arr = [...tasks.values()].sort((a, b) => a.createdAt - b.createdAt);
-  writeEncryptedJson(DATA_FILE, arr);
-  dirty = false;
-}
-
-/** Debounced persist — skuplja brze uzastopne promene u jedan upis. */
-function schedulePersist() {
-  dirty = true;
-  if (persistTimer) return;
-  persistTimer = setTimeout(() => {
-    persistTimer = null;
-    if (dirty) flushNow();
-  }, 150);
-  persistTimer.unref?.();
-}
-
-const REPEAT_DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-
-/**
- * @param {string} title
- * @param {"yesterday"|"today"|"tomorrow"} day
- * @param {"low"|"normal"|"high"} [priority="normal"] ("medium" je prihvaćen legacy alias)
- * @param {boolean} [done=false]
- * @param {string|null} [time=null] "HH:MM" ili null za "celi dan"
- * @param {string} [repeat=""] ""=none, "daily", "weekdays", "weekends", "mon".."sun"
- */
 export function addTask(title, day, priority = "normal", done = false, time = null, repeat = "") {
-  const validDay = ["yesterday", "today", "tomorrow"].includes(day) ? day : "today";
-  const validPrio = ["low", "normal", "medium", "high"].includes(priority) ? priority : "normal";
-  const task = {
+  const now = Date.now();
+  const task = normalizeTask({
     id: randomUUID(),
-    title: title.trim(),
-    scheduledFor: dayToDate(validDay),
-    time: normTime(time),
-    priority: validPrio,
-    done: !!done,
-    repeat: REPEAT_DAYS.includes(repeat) || repeat === "daily" || repeat === "weekdays" || repeat === "weekends" ? repeat : "",
+    title: String(title).trim(),
+    scheduledFor: dayToDate(["yesterday", "today", "tomorrow"].includes(day) ? day : "today"),
+    time,
+    priority,
+    done,
+    repeat,
     subtasks: [],
-    order: Date.now(), // za custom drag & drop sortiranje
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-  tasks.set(task.id, task);
-  schedulePersist();
-  return withDay(task);
+    order: now,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return withDay(tasks.set(task));
 }
 
-/** @param {string} id */
 export function getTask(id) {
-  const t = tasks.get(id);
-  return t ? withDay(t) : undefined;
+  const task = tasks.get(id);
+  return task ? withDay(task) : undefined;
 }
 
-/** @param {string} id @param {object} patch */
 export function updateTask(id, patch) {
-  const t = tasks.get(id);
-  if (!t) return null;
-  const next = { ...t };
-  if (typeof patch.title === "string" && patch.title.trim()) {
-    next.title = patch.title.trim();
-  }
-  if (["yesterday", "today", "tomorrow"].includes(patch.day)) {
-    next.scheduledFor = dayToDate(patch.day);
-  }
-  if (["low", "normal", "medium", "high"].includes(patch.priority)) {
-    next.priority = patch.priority;
-  }
+  const current = tasks.get(id);
+  if (!current) return null;
+  const next = { ...current };
+  if (typeof patch.title === "string" && patch.title.trim()) next.title = patch.title.trim();
+  if (["yesterday", "today", "tomorrow"].includes(patch.day)) next.scheduledFor = dayToDate(patch.day);
+  if (["low", "normal", "medium", "high"].includes(patch.priority)) next.priority = patch.priority;
   if (typeof patch.done === "boolean") {
     next.done = patch.done;
-    if (patch.done && Array.isArray(next.subtasks)) {
-      next.subtasks = next.subtasks.map(st => ({ ...st, done: true }));
-    }
+    if (patch.done) next.subtasks = next.subtasks.map((subtask) => ({ ...subtask, done: true }));
   }
-  if ("time" in patch) {
-    next.time = patch.time === null || patch.time === "" ? null : normTime(patch.time);
-  }
-  if ("repeat" in patch) {
-    const r = patch.repeat;
-    next.repeat = r === null || r === "" ? "" : r;
-  }
-  if (typeof patch.order === "number") {
-    next.order = patch.order;
-  }
-  if (Array.isArray(patch.subtasks)) {
-    next.subtasks = patch.subtasks;
-  }
+  if (Object.hasOwn(patch, "time")) next.time = patch.time === null || patch.time === "" ? null : normTime(patch.time);
+  if (Object.hasOwn(patch, "repeat")) next.repeat = patch.repeat === null ? "" : patch.repeat;
+  if (typeof patch.order === "number") next.order = patch.order;
+  if (Array.isArray(patch.subtasks)) next.subtasks = patch.subtasks;
   next.updatedAt = Date.now();
-  tasks.set(id, next);
-  schedulePersist();
-  return withDay(next);
+  return withDay(tasks.set(normalizeTask(next)));
 }
 
-/** @param {string} id */
 export function removeTask(id) {
-  const existed = tasks.delete(id);
-  if (existed) schedulePersist();
-  return existed;
+  return tasks.remove(id);
 }
 
-/**
- * Generiše ponavljajuće taskove za danas.
- * Prolazi kroz sve taskove sa postavljenim `repeat` i kreira instancu za danas
- * ako već ne postoji task sa istim naslovom za današnji datum.
- */
 export function generateRecurring(now = Date.now()) {
   const today = todayISO(now);
   const dayName = weekdayKey(now);
   let created = 0;
+  const all = tasks.list();
 
-  for (const t of [...tasks.values()]) {
-    if (!t.repeat) continue;
+  for (const template of all) {
+    if (!template.repeat) continue;
+    const matches = template.repeat === "daily"
+      || (template.repeat === "weekdays" && WEEKDAYS.has(dayName))
+      || (template.repeat === "weekends" && !WEEKDAYS.has(dayName))
+      || template.repeat === dayName;
+    if (!matches) continue;
+    if (all.some((item) => item.scheduledFor === today && item.title === template.title)) continue;
 
-    // Da li se ponavljanje poklapa sa danas?
-    const match =
-      t.repeat === "daily" ||
-      (t.repeat === "weekdays" && dow >= 1 && dow <= 5) ||
-      (t.repeat === "weekends" && (dow === 0 || dow === 6)) ||
-      t.repeat === dayName;
-
-    if (!match) continue;
-
-    // Već postoji task sa istim naslovom za danas? (Uključuje i sam šablon —
-    // ako je šablon kreiran za danas, on JE današnja instanca, ne dupliramo je.)
-    const exists = [...tasks.values()].some(
-      (x) => x.scheduledFor === today && x.title === t.title
-    );
-    if (exists) continue;
-
-    // Kreiraj novu instancu
-    const task = {
+    const timestamp = Date.now();
+    tasks.set(normalizeTask({
       id: randomUUID(),
-      title: t.title,
+      title: template.title,
       scheduledFor: today,
-      time: t.time,
-      priority: t.priority,
+      time: template.time,
+      priority: template.priority,
       done: false,
-      repeat: t.repeat,
-      subtasks: Array.isArray(t.subtasks) ? t.subtasks.map(st => ({ ...st, done: false })) : [],
-      order: Date.now(),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    tasks.set(task.id, task);
+      repeat: template.repeat,
+      subtasks: template.subtasks.map((subtask) => ({ ...subtask, done: false })),
+      order: timestamp,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }));
     created++;
   }
-
-  if (created) schedulePersist();
   return created;
 }
 
-/**
- * Vraća taskove (sa izvedenim `day`), opciono filtrirane po danu.
- * @param {("yesterday"|"today"|"tomorrow")[]} [days]
- * @param {{ includeDone?: boolean }} [opts]
- */
-export function listTasks(days, opts = {}) {
-  const includeDone = opts.includeDone !== false;
+export function listTasks(days, options = {}) {
+  const includeDone = options.includeDone !== false;
   const today = todayISO();
-  let arr = [...tasks.values()].map((t) => withDay(t, today));
-  if (days && days.length) {
-    const set = new Set(days);
-    arr = arr.filter((t) => set.has(t.day));
+  let result = tasks.list().map((task) => withDay(task, today));
+  if (days?.length) {
+    const allowed = new Set(days);
+    result = result.filter((task) => allowed.has(task.day));
   }
-  if (!includeDone) arr = arr.filter((t) => !t.done);
-  // Sort: po prioritetu (high>normal>low), neurađeni prvo, pa po createdAt.
-  const prioRank = { high: 0, normal: 1, medium: 1, low: 2 };
-  arr.sort((a, b) => {
+  if (!includeDone) result = result.filter((task) => !task.done);
+  const priority = { high: 0, normal: 1, medium: 1, low: 2 };
+  return result.sort((a, b) => {
     if (a.done !== b.done) return a.done ? 1 : -1;
-    if (a.priority !== b.priority) return prioRank[a.priority] - prioRank[b.priority];
+    if (a.priority !== b.priority) return priority[a.priority] - priority[b.priority];
     if (a.time && b.time) return a.time.localeCompare(b.time);
-    if (a.time && !b.time) return -1;
-    if (!a.time && b.time) return 1;
-    // Ako imaju definisan order, koristi njega, u suprotnom createdAt
-    const orderA = typeof a.order === "number" ? a.order : a.createdAt;
-    const orderB = typeof b.order === "number" ? b.order : b.createdAt;
-    return orderA - orderB;
+    if (a.time) return -1;
+    if (b.time) return 1;
+    return (a.order ?? a.createdAt) - (b.order ?? b.createdAt);
   });
-  return arr;
 }
 
-/** Kratak sažetak za LLM (brojevi po danu + neurađeni). */
 export function summary() {
-  const today = todayISO();
-  const all = [...tasks.values()].map((t) => withDay(t, today));
-  const count = (day) => all.filter((t) => t.day === day);
-  const open = (day) => count(day).filter((t) => !t.done);
+  const all = listTasks();
+  const group = (day) => all.filter((task) => task.day === day);
+  const open = (day) => group(day).filter((task) => !task.done);
   return {
-    today: { total: count("today").length, open: open("today").length },
-    yesterday: { total: count("yesterday").length, open: open("yesterday").length },
-    tomorrow: { total: count("tomorrow").length, open: open("tomorrow").length },
+    today: { total: group("today").length, open: open("today").length },
+    yesterday: { total: group("yesterday").length, open: open("yesterday").length },
+    tomorrow: { total: group("tomorrow").length, open: open("tomorrow").length },
     openTitles: {
-      yesterday: open("yesterday").map((t) => t.title),
-      today: open("today").map((t) => t.title),
-      tomorrow: open("tomorrow").map((t) => t.title),
+      yesterday: open("yesterday").map((task) => task.title),
+      today: open("today").map((task) => task.title),
+      tomorrow: open("tomorrow").map((task) => task.title),
     },
   };
 }
 
-/** Sinhroni flush na graceful shutdown. */
-export function closeStore() {
-  if (persistTimer) {
-    clearTimeout(persistTimer);
-    persistTimer = null;
-  }
-  if (dirty) flushNow();
+export function replaceTasks(values) {
+  tasks.replace(values);
 }
 
-/**
- * Zamijeni sve taskove (za backup restore).
- * @param {Array} newTasks
- */
-export function replaceTasks(newTasks) {
-  tasks.clear();
-  if (!Array.isArray(newTasks)) return;
-  for (const t of newTasks) {
-    if (!t || typeof t.id !== "string") continue;
-    if (!t.scheduledFor && typeof t.day === "string") {
-      t.scheduledFor = dayToDate(t.day, todayISO());
-    }
-    if (!t.scheduledFor) t.scheduledFor = todayISO();
-    delete t.day;
-    tasks.set(t.id, t);
+export function closeStore() {
+  if (recurringTimer) {
+    clearInterval(recurringTimer);
+    recurringTimer = null;
   }
-  flushNow();
+  tasks.close();
 }
