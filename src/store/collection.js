@@ -14,6 +14,11 @@ import {
 } from "./database.js";
 
 const MIRROR_DELAY_MS = 150;
+const mirrorFlushers = new Set();
+
+export function flushCollectionMirrors() {
+  for (const flush of mirrorFlushers) flush();
+}
 
 export function createCollection({ name, legacyFile, normalize = (value) => value, validate = (value) => Boolean(value?.id) }) {
   const legacyPath = path.join(config.DATA_DIR, legacyFile);
@@ -42,6 +47,8 @@ export function createCollection({ name, legacyFile, normalize = (value) => valu
     writeEncryptedJson(legacyPath, records);
     mirrorDirty = false;
   }
+
+  mirrorFlushers.add(flushMirror);
 
   function scheduleMirror() {
     mirrorDirty = true;
