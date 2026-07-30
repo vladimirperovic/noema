@@ -7,12 +7,9 @@ import { closeLinks } from "./store/links.js";
 import { closeInspirations } from "./store/inspirations.js";
 import { closeBuildingSites } from "./store/buildingsites.js";
 import { closeSystem } from "./store/system.js";
+import { closeDatabase } from "./store/database.js";
 import { initCrypto } from "./store/crypto.js";
 
-/**
- * Ulazna tačka procesa. Sastavlja server i pokreće ga. Graceful shutdown
- * osigurava da se pending write-ovi u data/ završe pre izlaska.
- */
 function main() {
   initCrypto(config.ENCRYPTION_KEY);
   const server = createServer();
@@ -27,7 +24,10 @@ function main() {
     console.log(`[noema] MCP endpoint:  ${config.PUBLIC_BASE_URL}/mcp`);
   });
 
+  let shuttingDown = false;
   const shutdown = (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     console.log(`[noema] primljen ${signal}, gasim server...`);
     closeStore();
     closeNotes();
@@ -36,6 +36,7 @@ function main() {
     closeInspirations();
     closeBuildingSites();
     closeSystem();
+    closeDatabase();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(1), 10_000).unref();
   };
