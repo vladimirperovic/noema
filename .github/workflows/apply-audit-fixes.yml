@@ -26,6 +26,37 @@ jobs:
           ref: agent/fix-audit-findings
           fetch-depth: 0
 
+      - name: Repair nested template literals
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/apply-audit-fixes.mjs')
+          s = p.read_text()
+          replacements = {
+              'path: `${url.pathname}${url.search}`,': 'path: url.pathname + url.search,',
+              'reject(new Error(`Response exceeds the ${maxBytes}-byte limit.`));': 'reject(new Error("Response exceeds the " + maxBytes + "-byte limit."));',
+              'response.destroy(new Error(`Response exceeds the ${maxBytes}-byte limit.`));': 'response.destroy(new Error("Response exceeds the " + maxBytes + "-byte limit."));',
+              'throw new Error(`Remote server returned HTTP ${response.status}.`);': 'throw new Error("Remote server returned HTTP " + response.status + ".");',
+              'throw new Error(`Unable to resolve weekday for timezone ${timeZone}.`);': 'throw new Error("Unable to resolve weekday for timezone " + timeZone + ".");',
+              'throw new Error(`Server exited with ${child.exitCode}`);': 'throw new Error("Server exited with " + child.exitCode);',
+              'const base = `http://127.0.0.1:${port}`;': 'const base = "http://127.0.0.1:" + port;',
+              'await waitFor(`${base}/healthz`, child);': 'await waitFor(base + "/healthz", child);',
+              'fetch(`${base}/auth/google`,': 'fetch(base + "/auth/google",',
+              'fetch(`${base}/auth/google/callback?error=access_denied`,': 'fetch(base + "/auth/google/callback?error=access_denied",',
+              'fetch(`${base}/noema-i18n.js`)': 'fetch(base + "/noema-i18n.js")',
+              'fetch(`${base}/`,': 'fetch(base + "/",',
+              'fetch(`${base}/api/backup/snapshot`,': 'fetch(base + "/api/backup/snapshot",',
+              'fetch(`${base}/api/backup/restore-snapshot`,': 'fetch(base + "/api/backup/restore-snapshot",',
+              'Authorization: `Bearer ${token}`': 'Authorization: "Bearer " + token',
+          }
+          for old, new in replacements.items():
+              if old not in s:
+                  raise SystemExit(f'missing migration fragment: {old}')
+              s = s.replace(old, new)
+          p.write_text(s)
+          PY
+
       - name: Apply reviewed fixes
         run: node scripts/apply-audit-fixes.mjs
 
