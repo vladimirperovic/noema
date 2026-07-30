@@ -5,32 +5,45 @@ import { isIP } from "node:net";
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
+function normalizeHostname(raw) {
+  return String(raw || "")
+    .trim()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "")
+    .toLowerCase();
+}
+
 function blockedIpv4(address) {
   const parts = address.split(".").map(Number);
   if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return true;
-  const [a, b] = parts;
+  const [a, b, c] = parts;
   return a === 0 || a === 10 || a === 127 || a >= 224
     || (a === 100 && b >= 64 && b <= 127)
     || (a === 169 && b === 254)
     || (a === 172 && b >= 16 && b <= 31)
-    || (a === 192 && (b === 0 || b === 168))
-    || (a === 198 && (b === 18 || b === 19));
+    || (a === 192 && b === 0 && c === 0)
+    || (a === 192 && b === 0 && c === 2)
+    || (a === 192 && b === 88 && c === 99)
+    || (a === 192 && b === 168)
+    || (a === 198 && (b === 18 || b === 19))
+    || (a === 198 && b === 51 && c === 100)
+    || (a === 203 && b === 0 && c === 113);
 }
 
 function blockedIpv6(raw) {
-  const address = raw.toLowerCase().split("%")[0];
+  const address = normalizeHostname(raw).split("%")[0];
   if (address === "::" || address === "::1") return true;
-  if (address.startsWith("::ffff:")) {
-    const mapped = address.slice("::ffff:".length);
-    if (isIP(mapped) === 4) return blockedIpv4(mapped);
-  }
+  // Block IPv4-mapped IPv6 completely. This avoids alternate encodings of
+  // loopback, link-local, and RFC1918 addresses such as ::ffff:7f00:1.
+  if (address.startsWith("::ffff:")) return true;
   return address.startsWith("fc") || address.startsWith("fd")
     || /^fe[89ab]/.test(address)
     || address.startsWith("ff")
     || address.startsWith("2001:db8:");
 }
 
-export function isPublicIp(address) {
+export function isPublicIp(rawAddress) {
+  const address = normalizeHostname(rawAddress);
   const family = isIP(address);
   if (family === 4) return !blockedIpv4(address);
   if (family === 6) return !blockedIpv6(address);
@@ -46,7 +59,7 @@ export function validatePublicHttpUrl(raw) {
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Only http:// and https:// URLs are allowed.");
   if (url.username || url.password) throw new Error("URLs containing credentials are not allowed.");
-  const hostname = url.hostname.replace(/\.$/, "").toLowerCase();
+  const hostname = normalizeHostname(url.hostname);
   if (!hostname || hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local") || hostname.endsWith(".internal") || hostname.endsWith(".lan")) {
     throw new Error("Local and private network addresses are not allowed.");
   }
@@ -54,7 +67,8 @@ export function validatePublicHttpUrl(raw) {
   return url;
 }
 
-async function resolvePublicAddress(hostname) {
+async function resolvePublicAddress(rawHostname) {
+  const hostname = normalizeHostname(rawHostname);
   if (isIP(hostname)) return { address: hostname, family: isIP(hostname) };
   const records = await lookup(hostname, { all: true, verbatim: true });
   if (!records.length || records.some((record) => !isPublicIp(record.address))) {
@@ -66,14 +80,15 @@ async function resolvePublicAddress(hostname) {
 function requestText(url, target, { timeoutMs, maxBytes, headers }) {
   return new Promise((resolve, reject) => {
     const transport = url.protocol === "https:" ? https : http;
+    const hostname = normalizeHostname(url.hostname);
     const request = transport.request({
       protocol: url.protocol,
-      hostname: url.hostname,
+      hostname,
       port: url.port || undefined,
       path: url.pathname + url.search,
       method: "GET",
       headers,
-      servername: url.hostname,
+      servername: isIP(hostname) ? undefined : hostname,
       lookup(_hostname, options, callback) {
         if (options?.all) callback(null, [{ address: target.address, family: target.family }]);
         else callback(null, target.address, target.family);
