@@ -1,0 +1,41 @@
+name: Apply final review fixes
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]' && github.head_ref == 'agent/fix-audit-findings'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/fix-audit-findings
+          fetch-depth: 0
+
+      - name: Apply corrections
+        run: python3 scripts/apply-final-review-fixes.py
+
+      - name: Validate changed files
+        run: |
+          node --check public/noema-i18n.js
+          node --check src/server.js
+          node --check src/core/outbound.js
+          node --test test/outbound.test.js test/server-audit-fixes.test.js test/utils-timezone.test.js
+
+      - name: Commit corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Address final audit review"
+          git push origin HEAD:agent/fix-audit-findings
