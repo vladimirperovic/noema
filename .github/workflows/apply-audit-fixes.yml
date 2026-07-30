@@ -1,0 +1,46 @@
+name: Apply audit fixes
+
+on:
+  push:
+    branches: [agent/fix-audit-findings]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: noema-apply-audit-fixes
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/fix-audit-findings
+          fetch-depth: 0
+
+      - name: Apply reviewed fixes
+        run: node scripts/apply-audit-fixes.mjs
+
+      - name: Validate generated JavaScript
+        run: |
+          node --check src/server.js
+          node --check src/core/outbound.js
+          node --check src/store/links.js
+          node --check src/store/todos.js
+          node --check public/noema-i18n.js
+
+      - name: Commit generated changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix application audit findings"
+          git push origin HEAD:agent/fix-audit-findings
