@@ -20,6 +20,18 @@ jobs:
           ref: agent/fix-audit-findings
           fetch-depth: 0
 
+      - name: Leave CI workflow for owner commit
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/unify-data-dir.py')
+          text = p.read_text()
+          start = text.index('ci = ROOT / ".github" / "workflows" / "ci.yml"')
+          end = text.index('env_example = ROOT / ".env.example"')
+          p.write_text(text[:start] + text[end:])
+          PY
+
       - name: Apply data directory migration
         run: python3 scripts/unify-data-dir.py
 
