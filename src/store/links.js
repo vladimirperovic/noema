@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { config } from "../config.js";
 import { readEncryptedJson, writeEncryptedJson } from "./crypto.js";
 import { safeFetchText } from "../core/outbound.js";
 
@@ -13,8 +13,7 @@ import { safeFetchText } from "../core/outbound.js";
  * (og:image), domen i labelu (slobodan tekst — grupa/kategorija).
  */
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.resolve(__dirname, "../../data");
+const DATA_DIR = config.DATA_DIR;
 const DATA_FILE = path.join(DATA_DIR, "links.json");
 
 const links = new Map();

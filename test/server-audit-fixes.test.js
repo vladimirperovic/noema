@@ -59,6 +59,7 @@ test("OAuth initiation is protected, English UI assets are public, and snapshots
       PUBLIC_BASE_URL: base,
       NODE_ENV: "test",
       NOEMA_TIMEZONE: "UTC",
+      NOEMA_DATA_DIR: path.join(cwd, "data"),
       NOEMA_CORS_ORIGIN: base,
       NOEMA_API_TOKEN: token,
       UI_PASSWORD: "test-password",

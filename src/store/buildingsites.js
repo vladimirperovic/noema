@@ -1,11 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { config } from "../config.js";
 import { readEncryptedJson, writeEncryptedJson } from "./crypto.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.resolve(__dirname, "../../data");
+const DATA_DIR = config.DATA_DIR;
 const DATA_FILE = path.join(DATA_DIR, "buildingsites.json");
 
 const buildingSites = new Map();

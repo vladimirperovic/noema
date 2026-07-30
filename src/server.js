@@ -97,8 +97,8 @@ const MIME = {
 
 const SERVICE = { name: "noema", version: "0.1.0" };
 const CORS_ORIGIN = config.NOEMA_CORS_ORIGIN;
-const INSPIRATION_DIR = path.resolve(process.cwd(), "data", "inspirations");
-const BUILDINGSITE_DIR = path.resolve(process.cwd(), "data", "buildingsites");
+const INSPIRATION_DIR = path.resolve(config.DATA_DIR, "inspirations");
+const BUILDINGSITE_DIR = path.resolve(config.DATA_DIR, "buildingsites");
 const INSPIRATION_UPLOAD_LIMIT = 120 * 1024 * 1024;
 const IMAGE_TYPES = new Map([
   ["image/jpeg", "jpg"],
@@ -650,7 +650,7 @@ export function createServer() {
         setBaseHeaders(res);
         let backupDates = [];
         try {
-          const snapPath = path.resolve(process.cwd(), "data", "snapshots");
+          const snapPath = path.resolve(config.DATA_DIR, "snapshots");
           if (existsSync(snapPath)) {
             const files = await readdir(snapPath);
             backupDates = files
@@ -1197,7 +1197,7 @@ export function createServer() {
         const { name, data, type } = body.value;
         if (!name || !data) return json(res, 400, { ok: false, error: "name i data su obavezni." });
         try {
-          const uploadsDir = path.resolve(process.cwd(), "data", "uploads");
+          const uploadsDir = path.resolve(config.DATA_DIR, "uploads");
           await mkdir(uploadsDir, { recursive: true });
           const safeName = path.basename(name).replace(/[^a-zA-Z0-9._-]/g, "_");
           if (!safeName) {
@@ -1225,7 +1225,7 @@ export function createServer() {
       if (pathname.startsWith("/uploads/") && method === "GET") {
         const relName = decodeURIComponent(pathname.slice(9));
         const safeName = path.basename(relName).replace(/[^a-zA-Z0-9._-]/g, "_");
-        const uploadsDir = path.resolve(process.cwd(), "data", "uploads");
+        const uploadsDir = path.resolve(config.DATA_DIR, "uploads");
         const filePath = path.resolve(uploadsDir, safeName);
         if (!filePath.startsWith(uploadsDir + path.sep)) return json(res, 400, { ok: false, error: "Neispravna putanja." });
         try {
@@ -1327,7 +1327,7 @@ export function createServer() {
       // --- BACKUP ---
       if (pathname === "/api/backup/info" && method === "GET") {
         setBaseHeaders(res);
-        const dataDir = path.join(process.cwd(), "data");
+        const dataDir = config.DATA_DIR;
 
         const [
           todosSize,
@@ -1413,8 +1413,8 @@ export function createServer() {
         }
 
         try {
-          const dataDir = path.join(process.cwd(), "data");
-          const tmpZipPath = path.join(process.cwd(), "data", `noema_archive_${Date.now()}.zip`);
+          const dataDir = config.DATA_DIR;
+          const tmpZipPath = path.join(config.DATA_DIR, `noema_archive_${Date.now()}.zip`);
 
           const potentialItems = [
             "todos.json",
@@ -1508,7 +1508,7 @@ export function createServer() {
             exportedAt: new Date().toISOString(),
             data: { todos, notes, documents, links, buildingSites, inspirations }
           };
-          const dataPath = path.join(process.cwd(), "data", "snapshots");
+          const dataPath = path.join(config.DATA_DIR, "snapshots");
           if (!existsSync(dataPath)) {
             await mkdir(dataPath, { recursive: true });
           }
@@ -1524,7 +1524,7 @@ export function createServer() {
       if (pathname === "/api/backup/snapshots" && method === "GET") {
         setBaseHeaders(res);
         try {
-          const dataPath = path.join(process.cwd(), "data", "snapshots");
+          const dataPath = path.join(config.DATA_DIR, "snapshots");
           if (!existsSync(dataPath)) {
             return json(res, 200, { ok: true, snapshots: [] });
           }
@@ -1556,7 +1556,7 @@ export function createServer() {
           if (!filename || typeof filename !== 'string') {
              return json(res, 400, { ok: false, error: "Invalid filename" });
           }
-          const snapshotsDir = path.resolve(process.cwd(), "data", "snapshots");
+          const snapshotsDir = path.resolve(config.DATA_DIR, "snapshots");
           const dataPath = path.resolve(snapshotsDir, filename);
           
           if (!dataPath.startsWith(snapshotsDir + path.sep)) {

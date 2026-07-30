@@ -151,6 +151,7 @@ No build step or npm dependency installation is required.
 | `UI_PASSWORD` | empty | Password protecting the browser UI |
 | `ENCRYPTION_KEY` | empty | Passphrase used to derive the local data-encryption key |
 | `NOEMA_TIMEZONE` | `UTC` | IANA timezone used for date boundaries |
+| `NOEMA_DATA_DIR` | `./data` | Persistent data, uploads, snapshots, tokens, and local encryption-key directory |
 | `NOEMA_CORS_ORIGIN` | `*` | Allowed browser origin(s) |
 | `NOEMA_HTTP_USER_AGENT` | generic Noema identifier | Operator contact sent to services that require an identifiable user agent |
 | `NOEMA_ANALYTICS_PROJECTS` | empty | JSON array defining optional analytics projects |

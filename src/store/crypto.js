@@ -1,10 +1,9 @@
 import crypto from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { config } from "../config.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.resolve(__dirname, "../../data");
+const DATA_DIR = config.DATA_DIR;
 const KEY_FILE = path.join(DATA_DIR, "master.key");
 
 let ENCRYPTION_KEY = Buffer.alloc(0);
