@@ -341,7 +341,7 @@
     .sort((a, b) => b[0].length - a[0].length)
     .map(([source, target]) => ({
       target,
-      pattern: new RegExp(`(?<![\p{L}\p{N}])${source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\p{L}\p{N}])`, "gu"),
+      pattern: new RegExp(`(?<![\\p{L}\\p{N}])${source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`, "gu"),
     }));
 
   const USER_CONTENT_SELECTOR = [
@@ -378,7 +378,9 @@
   function translateElement(element) {
     if (!(element instanceof Element)) return;
     if (!isUserContent(element)) {
-      for (const attribute of ["placeholder", "title", "aria-label", "alt"]) {
+      const attributes = ["placeholder", "title", "aria-label", "alt"];
+      if (element.matches('input[type="button"], input[type="submit"], input[type="reset"], button[value]')) attributes.push("value");
+      for (const attribute of attributes) {
         if (!element.hasAttribute(attribute)) continue;
         const current = element.getAttribute(attribute);
         const translated = translate(current);

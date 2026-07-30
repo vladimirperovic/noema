@@ -1648,7 +1648,7 @@ export function createServer() {
       const accept = req.headers.accept || "";
       if (accept.includes("text/html")) {
         try {
-          const data = await readFile(path.join(PUBLIC_DIR, "404.html"));
+          const data = localizeHtmlDocument(await readFile(path.join(PUBLIC_DIR, "404.html")));
           res.writeHead(404, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
           res.end(data);
           return;
@@ -1732,6 +1732,18 @@ async function parseJson(req, limitBytes) {
 
 
 
+function localizeHtmlDocument(data) {
+  let html = Buffer.isBuffer(data) ? data.toString("utf8") : String(data);
+  html = html.replace(/<html\b([^>]*)>/i, (_match, attributes) => {
+    const clean = attributes.replace(/\s+lang=(["']).*?\1/i, "");
+    return `<html${clean} lang="en">`;
+  });
+  if (!html.includes('/noema-i18n.js')) {
+    html = html.replace(/<head\b[^>]*>/i, (head) => `${head}\n  <script src="/noema-i18n.js"></script>`);
+  }
+  return Buffer.from(html, "utf8");
+}
+
 /** Servira statičke fajlove iz public/. Vraca true ako je servirano. */
 async function serveStatic(req, res, pathname) {
   // Normalizuj putanju — spreči path traversal. Fajl po default = index.html.
@@ -1768,17 +1780,7 @@ async function serveStatic(req, res, pathname) {
   try {
     let data = await readFile(filePath);
     const ext = path.extname(filePath).toLowerCase();
-    if (ext === ".html") {
-      let html = data.toString("utf8");
-      html = html.replace(/<html\b([^>]*)>/i, (_match, attributes) => {
-        const clean = attributes.replace(/\s+lang=(["\']).*?\1/i, "");
-        return `<html${clean} lang="en">`;
-      });
-      if (!html.includes('/noema-i18n.js')) {
-        html = html.replace(/<head\b[^>]*>/i, (head) => `${head}\n  <script src="/noema-i18n.js"></script>`);
-      }
-      data = Buffer.from(html, "utf8");
-    }
+    if (ext === ".html") data = localizeHtmlDocument(data);
     setBaseHeaders(res, { "Content-Type": MIME[ext] || "application/octet-stream" });
     res.writeHead(200, { "Cache-Control": "no-cache" });
     res.end(data);
