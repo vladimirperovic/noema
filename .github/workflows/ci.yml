@@ -37,9 +37,13 @@ jobs:
           export PUBLIC_BASE_URL=http://127.0.0.1:3999
           export NOEMA_TIMEZONE=UTC
           export ENCRYPTION_KEY=ci-only-encryption-key
-          node src/index.js > /tmp/noema-ci.log 2>&1 &
+          smoke_dir="$(mktemp -d)"
+          (
+            cd "$smoke_dir"
+            exec node "$GITHUB_WORKSPACE/src/index.js"
+          ) > /tmp/noema-ci.log 2>&1 &
           server_pid=$!
-          trap 'kill "$server_pid" 2>/dev/null || true; rm -rf data' EXIT
+          trap 'kill "$server_pid" 2>/dev/null || true; rm -rf "$smoke_dir"' EXIT
 
           for attempt in {1..40}; do
             if node -e "const r=await fetch('http://127.0.0.1:3999/healthz'); if(!r.ok) process.exit(1)" 2>/dev/null; then
