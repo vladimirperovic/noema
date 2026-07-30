@@ -38,6 +38,7 @@ jobs:
           export NOEMA_TIMEZONE=UTC
           export ENCRYPTION_KEY=ci-only-encryption-key
           smoke_dir="$(mktemp -d)"
+          export NOEMA_DATA_DIR="$smoke_dir/data"
           (
             cd "$smoke_dir"
             exec node "$GITHUB_WORKSPACE/src/index.js"
