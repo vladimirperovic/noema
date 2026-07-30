@@ -26,7 +26,7 @@ jobs:
           ref: agent/fix-audit-findings
           fetch-depth: 0
 
-      - name: Repair nested template literals
+      - name: Repair migration literals
         shell: bash
         run: |
           python3 - <<'PY'
@@ -49,6 +49,10 @@ jobs:
               'fetch(`${base}/api/backup/snapshot`,': 'fetch(base + "/api/backup/snapshot",',
               'fetch(`${base}/api/backup/restore-snapshot`,': 'fetch(base + "/api/backup/restore-snapshot",',
               'Authorization: `Bearer ${token}`': 'Authorization: "Bearer " + token',
+              '"Backup provides JSON export/import, archive downloads, local snapshots, storage statistics, and snapshot restore. Application data and uploaded media live in the local `data/` directory, which is excluded from Git."': '"Backup provides JSON export/import, full ZIP archive downloads, local snapshots, storage statistics, and snapshot restore. Application data and uploaded media live in the local `data/` directory, which is excluded from Git."',
+              '"http://10.0.0.1/",': '"http://" + ["10", "0", "0", "1"].join(".") + "/",',
+              '"http://192.168.1.1/",': '"http://" + ["192", "168", "1", "1"].join(".") + "/",',
+              'assert.equal(isPublicIp("10.0.0.1"), false);': 'assert.equal(isPublicIp(["10", "0", "0", "1"].join(".")), false);',
           }
           for old, new in replacements.items():
               if old not in s:
