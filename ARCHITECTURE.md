@@ -1,6 +1,6 @@
 # Architecture
 
-Noema is a single-process, single-user reference application built with the Node.js standard library. It intentionally avoids a framework and runtime dependencies so the complete request path remains easy to inspect and modify.
+Noema is a single-process, single-user reference application built with the Node.js standard library. It intentionally avoids a framework and npm runtime dependencies so the complete request path remains easy to inspect and modify.
 
 ## Design goals
 
@@ -15,7 +15,7 @@ Noema is a single-process, single-user reference application built with the Node
 
 ### Entry point
 
-`src/index.js` starts the HTTP server and coordinates graceful shutdown.
+`src/index.js` starts the HTTP server and coordinates graceful shutdown. Collection compatibility mirrors are flushed before the SQLite connection is checkpointed and closed.
 
 ### Configuration
 
@@ -35,13 +35,24 @@ Noema is a single-process, single-user reference application built with the Node
 - OAuth callbacks;
 - MCP and tool routing.
 
-A larger fork should split these responsibilities into focused route modules.
+A larger fork should split these responsibilities into focused route modules. That decomposition is intentionally separate from the storage migration so persistence changes can be validated without simultaneously rewriting the complete request router.
 
-### Stores
+### Structured storage
 
-`src/store/` contains in-memory maps backed by encrypted JSON files and local media directories.
+`src/store/database.js` owns one local SQLite connection and the shared schema. SQLite uses WAL mode, a busy timeout, strict tables, explicit transactions for collection replacement, and indexes for collection timestamps.
 
-The stores expose functions such as list, add, update, remove, load, replace, and close. This boundary is the best place to substitute SQLite, PostgreSQL, or another persistence layer.
+`src/store/collection.js` provides the reusable collection boundary used by tasks, notes, documents, links, inspirations, and building sites. It is responsible for:
+
+- validating and normalizing records;
+- importing legacy encrypted JSON once;
+- reading and writing encrypted SQLite payloads;
+- maintaining encrypted JSON compatibility mirrors;
+- replacing complete collections during restore;
+- flushing mirrors during graceful shutdown.
+
+Individual modules keep their existing domain-facing functions such as list, add, update, remove, load, replace, and close. REST, MCP, OpenAPI, and browser clients therefore do not need to know which persistence engine is used.
+
+Uploaded files and image derivatives remain in local media directories instead of SQLite.
 
 ### Tool registry
 
@@ -50,6 +61,8 @@ The stores expose functions such as list, add, update, remove, load, replace, an
 ### Browser application
 
 `public/` contains static HTML, CSS, and JavaScript. Pages fetch the same REST resources used by integrations.
+
+The home page still contains a large amount of page-specific CSS and JavaScript in `public/index.html`. A future refactor should extract the time picker, task card, board controller, styles, and feedback components without changing the current API or visual behavior.
 
 ### Optional services
 
@@ -67,9 +80,17 @@ The task is therefore hidden from the attention view, not deleted from storage.
 
 ## Data directory
 
-All user-generated state is kept under `data/`, including encrypted JSON stores, snapshots, uploaded files, inspiration media, and building-site media.
+All user-generated state is kept under `data/`, including:
+
+- `noema.sqlite` and its temporary WAL files;
+- encrypted JSON compatibility mirrors;
+- `master.key`;
+- snapshots and OAuth tokens;
+- uploaded files, inspiration media, and building-site media.
 
 `data/` must never be committed. A deployment must back up both its data and the key material required to decrypt it.
+
+See [SQLITE_MIGRATION.md](SQLITE_MIGRATION.md) for automatic import and rollback behavior.
 
 ## Authentication boundaries
 
@@ -82,16 +103,18 @@ Some endpoints intentionally remain public, including health checks, OpenAPI met
 
 ## Encryption
 
-JSON stores use AES-256-GCM. `ENCRYPTION_KEY` is used to derive a key; when it is absent, Noema creates local key material for convenience.
+Each structured record is serialized and protected with AES-256-GCM before the payload is written to SQLite. Collection names, record identifiers, and timestamps remain SQLite metadata so records can be located and ordered without decrypting the complete database.
+
+Compatibility JSON mirrors use the same encryption key. `ENCRYPTION_KEY` is used to derive a key; when it is absent, Noema creates local key material for convenience.
 
 For a real deployment, explicitly set and securely back up `ENCRYPTION_KEY`. Encryption at rest does not replace operating-system permissions, HTTPS, authentication, or secure backups.
 
 ## Scaling limits
 
-The included architecture is appropriate for a personal instance and educational fork. It does not provide:
+The included architecture is appropriate for a personal instance and educational fork. SQLite adds transactional writes inside one process, but Noema still does not provide:
 
 - multi-user authorization;
-- concurrent transactional writes;
+- multiple application processes writing the same deployment state;
 - horizontal scaling;
 - collaborative editing;
 - distributed locks;
@@ -105,11 +128,12 @@ Add these deliberately rather than assuming the current implementation already p
 
 When adding a module:
 
-1. define the data model and store boundary;
-2. add REST routes;
-3. create browser UI only after the API is stable;
-4. register MCP/OpenAPI tools when machine access is useful;
-5. add neutral demo data and tests;
-6. document privacy, retention, and backup behavior.
+1. define the data model and normalization rules;
+2. create or reuse a collection boundary;
+3. add REST routes;
+4. create browser UI only after the API is stable;
+5. register MCP/OpenAPI tools when machine access is useful;
+6. add neutral demo data and tests;
+7. document privacy, retention, migration, and backup behavior.
 
 Avoid embedding personal domains, property IDs, coordinates, email addresses, or credentials in source code. Use configuration and examples instead.
