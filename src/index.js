@@ -1,6 +1,7 @@
 import { config } from "./config.js";
 import { createServer } from "./server.js";
 import { installFileLibrary } from "./file-library.js";
+import { installGalleryDownloads } from "./gallery-downloads.js";
 import { installSecurityGateway } from "./security-gateway.js";
 import { closeStore } from "./store/todos.js";
 import { closeNotes } from "./store/notes.js";
@@ -17,7 +18,11 @@ import { initCrypto } from "./store/crypto.js";
 
 function main() {
   initCrypto(config.ENCRYPTION_KEY);
-  const server = installSecurityGateway(installFileLibrary(createServer()));
+  const server = installSecurityGateway(
+    installGalleryDownloads(
+      installFileLibrary(createServer()),
+    ),
+  );
 
   server.listen(config.PORT, config.HOST, () => {
     console.log(`[noema] listening on http://${config.HOST}:${config.PORT} (env=${config.NODE_ENV}, auth=${config.authEnabled ? "on" : "off"})`);
