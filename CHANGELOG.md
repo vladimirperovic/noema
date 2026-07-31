@@ -1,53 +1,61 @@
 # Changelog
 
-All notable public changes to Noema will be documented here.
+All notable public changes are documented here.
 
-The format is based on Keep a Changelog, and releases should follow Semantic Versioning when the public API and data model become stable.
-
-## [Unreleased]
+## [0.3.0] — 2026-07-31
 
 ### Added
 
-- Encrypted SQLite storage for tasks, notes, documents, links, inspirations, and building sites.
-- Automatic one-time import from existing encrypted JSON stores.
-- Shared collection and database layers with transactional collection replacement.
-- SQLite migration, encryption, backup, and rollback documentation.
-- Regression tests for import, restart persistence, encrypted row payloads, and JSON compatibility mirrors.
-- Public open-source documentation and contribution policies.
-- Customization and architecture guides.
-- Neutral screenshot generation for every browser page.
-- Environment-based analytics project configuration.
-- Public-release audit workflow and tracked-file inventory.
+- Private Files library with Notes-style list/detail interface.
+- Files upload, rename, description, open, download, replace, deep-link, task conversion, and deletion.
+- Encrypted SQLite Files metadata and randomized atomic binary storage with a 120 MB limit.
+- Source-linked tasks for Notes, Documents, Links, Files, AI Projects, Building Sites, and Inspiration.
+- Read-only linked-task titles, source badges, and deep-link navigation.
+- Stable deterministic recurring-task occurrence IDs and migration of older recurring records.
+- One canonical responsive menu, active-page state, shared theme switcher, persistent font controls, and working WIDTH mode.
+- Server-side revocable browser sessions with idle and absolute expiry.
+- Expiring, revocable, scope-limited, optional album-limited public gallery links.
+- Trusted-proxy client IP handling, security headers, HSTS, and expanded request/login rate limits.
+- Encrypted Google Calendar refresh-token storage and session-bound OAuth state.
+- Portable metadata backup/restore including Files metadata.
+- Password-encrypted `.noema` disaster-recovery archives with SHA-256 manifest verification and offline restore.
+- CLI backup and restore commands.
+- Files, session, share, production-configuration, and existing encrypted-SQLite tests.
+- Docker build-time test suite and strict production startup smoke test.
+- Footer build commit indicator.
 
 ### Changed
 
-- Raised the direct runtime requirement to Node.js 22.16.0 and moved the Docker image to Node.js 24.
-- Replaced duplicated in-memory-map and debounced-JSON persistence code with one reusable collection abstraction.
-- Kept encrypted JSON files as continuously updated rollback and archive-backup mirrors.
-- Made graceful shutdown idempotent and added an explicit SQLite checkpoint and close step.
-- Repositioned Noema as a reference application intended for further modification.
-- Documented the rolling yesterday/today/tomorrow task model and archive retention.
-- Replaced personal deployment defaults with neutral examples.
-- Changed the default timezone to UTC for portable public distribution.
-
-### Fixed
-
-- Fixed weekday and weekend recurring tasks referencing a removed `dow` variable.
-- Fixed mobile task-time dialog centering against the dynamic viewport and device safe area.
+- Production now fails closed without UI authentication, API authentication, HTTPS public URL, and exact CORS origin unless the explicit development-only override is enabled.
+- Package version updated to 0.3.0.
+- Backup UI distinguishes full encrypted archives from portable metadata JSON.
+- Service-worker cache updated for Files and source-task controllers.
+- Calendar plaintext token files are migrated to encrypted storage and removed.
+- All public documentation and `.env.example` updated for the 0.3 architecture and security model.
 
 ### Security
 
-- Kept structured record payloads protected with AES-256-GCM before they are stored in SQLite.
-- Removed hard-coded personal domains and analytics property IDs from the public code path.
-- Added explicit external-service User-Agent configuration.
-- Added checks for tracked runtime data, common secret formats, and forbidden personal configuration.
+- Opaque session and share tokens are stored only as hashes inside encrypted collections.
+- Basic authentication headers are stripped before internal request delegation.
+- Forwarded client IPs are trusted only from configured proxy addresses.
+- Filesystem operations normalize paths and use atomic replacement/rollback.
+- Full archives use scrypt-derived AES-256-GCM encryption with a separate backup password.
 
-## [0.1.0] - 2026-07-29
+### Migration notes
 
-### Added
+- Set the new required production environment variables before upgrading.
+- Preserve the complete data directory.
+- Configure `NOEMA_BACKUP_PASSWORD` to enable full archive downloads.
+- Existing plaintext `google-token.json` is migrated automatically.
+- Clear an old service-worker cache or hard-refresh after deployment if the menu does not update.
 
-- Initial public reference release preparation.
-- Three-day task board, archive, notes, documents, links, AI projects, inspiration library, building-site photo journal, backup, stats, MCP, OpenAPI, optional Google Calendar, authentication, and encrypted local storage.
+## [0.2.0] — 2026-07
 
-[Unreleased]: https://github.com/vladimirperovic/noema/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/vladimirperovic/noema/releases/tag/v0.1.0
+- Moved primary metadata storage to encrypted SQLite records.
+- Added encrypted legacy JSON import and rollback mirrors.
+- Added generic public examples and documentation for self-hosting, privacy, customization, and deployment.
+- Added optional Stats/SEO configuration and tests.
+
+## [0.1.0]
+
+- Initial public reference release of the task board, notes, documents, links, galleries, Calendar, MCP, and OpenAPI workspace.
