@@ -166,6 +166,21 @@ async function handleApi(req, res, url) {
   return false;
 }
 
+async function serveSharedUiScript(res) {
+  const [base, galleryDownloads] = await Promise.all([
+    readFile(path.join(PUBLIC_DIR, "noema-header-footer.js")),
+    readFile(path.join(PUBLIC_DIR, "gallery-downloads.js")),
+  ]);
+  const payload = Buffer.concat([base, Buffer.from("\n"), galleryDownloads, Buffer.from("\n")]);
+  res.writeHead(200, {
+    "Content-Type": "text/javascript; charset=utf-8",
+    "Content-Length": payload.length,
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+  });
+  res.end(payload);
+}
+
 export function installFileLibrary(server) {
   loadFiles();
   const original = server.listeners("request")[0];
@@ -174,6 +189,10 @@ export function installFileLibrary(server) {
   server.on("request", async (req, res) => {
     try {
       const url = new URL(req.url, config.PUBLIC_BASE_URL);
+      if (url.pathname === "/noema-header-footer.js" && req.method === "GET") {
+        await serveSharedUiScript(res);
+        return;
+      }
       if (["/files", "/files/", "/files.html"].includes(url.pathname) && req.method === "GET") {
         if (!authorized(req)) {
           redirect(res, `/login?next=${encodeURIComponent(url.pathname)}`);
