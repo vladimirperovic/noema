@@ -2,6 +2,19 @@
 
 All notable public changes are documented here.
 
+## Unreleased
+
+### Added
+
+- One-click ZIP downloads containing the numbered original files from an open Inspiration or Building Site album.
+- A compact monochrome lightbox control for downloading the currently displayed original image.
+- Album-download support for authenticated users and valid scope-limited public gallery links.
+
+### Security
+
+- Shared gallery links can download only albums allowed by their scope and optional album ID.
+- ZIP creation uses temporary isolated staging directories, sanitized archive names, and automatic cleanup after streaming.
+
 ## [0.3.0] — 2026-07-31
 
 ### Added
