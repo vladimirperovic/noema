@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { config } from "../config.js";
 import { buildAuthUrl, handleOAuthCallback, isCalendarConfigured } from "../store/calendar.js";
-import { createSession, revokeSession, verifySession } from "../store/sessions.js";
+import { createSession, revokeSession, sessionBinding, verifySession } from "../store/sessions.js";
 import { clearLoginFailure, json, loginStatus, readJson, recordLoginFailure, redirect, safeEqual, secureCookieSuffix } from "./http.js";
 
 export const SESSION_COOKIE = "noema_session";
@@ -51,12 +51,14 @@ export async function handleAuthRoute(req, res, url, ip, rawSessionToken, uiSess
   if (pathname === "/auth/google" && req.method === "GET") {
     if (config.uiAuthEnabled && !uiSession) { redirect(res, `/login?next=${encodeURIComponent(req.url)}`); return true; }
     if (!isCalendarConfigured()) { json(res, 400, { ok: false, error: "Calendar is not configured." }); return true; }
-    redirect(res, buildAuthUrl());
+    const binding = config.uiAuthEnabled ? sessionBinding(rawSessionToken) : "insecure-development-session";
+    redirect(res, buildAuthUrl(binding));
     return true;
   }
   if (pathname === "/auth/google/callback" && req.method === "GET") {
     if (config.uiAuthEnabled && !uiSession) { json(res, 401, { ok: false, error: "The OAuth callback requires an active administrator session." }); return true; }
-    const result = await handleOAuthCallback(url.searchParams.get("code"), url.searchParams.get("state"));
+    const binding = config.uiAuthEnabled ? sessionBinding(rawSessionToken) : "insecure-development-session";
+    const result = await handleOAuthCallback(url.searchParams.get("code"), url.searchParams.get("state"), binding);
     redirect(res, result.ok ? "/?calendar=connected" : `/?calendar=error&reason=${encodeURIComponent(result.error || "unknown")}`);
     return true;
   }
