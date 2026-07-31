@@ -16,6 +16,16 @@ export function shareContext(req, url) {
 export function shareAllows(share, pathname) {
   if (!share) return false;
   if (["/noema-header-footer.js", "/noema-i18n.js", "/build-version.json", "/favicon.ico", "/favicon.svg"].includes(pathname)) return true;
+
+  const downloadMatch = pathname.match(/^\/api\/(buildingsites|inspirations)\/([^/]+)\/download$/);
+  if (downloadMatch) {
+    const routeScope = downloadMatch[1] === "buildingsites" ? "buildingsite" : "inspiration";
+    let albumId = "";
+    try { albumId = decodeURIComponent(downloadMatch[2]); } catch { return false; }
+    if (share.scope === "galleries") return true;
+    return share.scope === routeScope && (!share.albumId || share.albumId === albumId);
+  }
+
   if (share.scope === "galleries") {
     return ["/buildingsite", "/buildingsite/", "/buildingsite.html", "/inspiration", "/inspiration/", "/inspiration.html", "/buildingsite.js"].includes(pathname)
       || pathname === "/api/buildingsites" || pathname === "/api/inspirations"
