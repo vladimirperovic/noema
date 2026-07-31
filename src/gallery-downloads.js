@@ -63,17 +63,17 @@ function albumCollection(scope) {
   return scope === "inspiration" ? listInspirations() : listBuildingSites();
 }
 
-function albumStorageRoot(scope) {
-  return path.resolve(config.DATA_DIR, scope === "inspiration" ? "inspirations" : "buildingsites");
+function albumStorageRoot(scope, dataDir = config.DATA_DIR) {
+  return path.resolve(dataDir, scope === "inspiration" ? "inspirations" : "buildingsites");
 }
 
-async function createAlbumArchive(scope, album) {
+export async function createAlbumArchive(scope, album, dataDir = config.DATA_DIR) {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "noema-album-"));
   const staging = path.join(tempRoot, "album");
   const archivePath = path.join(tempRoot, "album.zip");
   await mkdir(staging, { recursive: true });
 
-  const storageRoot = albumStorageRoot(scope);
+  const storageRoot = albumStorageRoot(scope, dataDir);
   const originalsRoot = path.resolve(storageRoot, String(album.id), "originals");
   if (!originalsRoot.startsWith(`${storageRoot}${path.sep}`)) {
     await rm(tempRoot, { recursive: true, force: true });
