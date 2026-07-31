@@ -1,16 +1,16 @@
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { config } from "../config.js";
 import { backupDataSize, createEncryptedBackup } from "../store/backup.js";
 import { readEncryptedJson, writeEncryptedJson } from "../store/crypto.js";
 import { exportPortableState, restorePortableState } from "./backup-state.js";
-import { json, readJson } from "./http.js";
+import { isBearerAuthorized, json, readJson } from "./http.js";
 
 const snapshotsDir = () => path.join(config.DATA_DIR, "snapshots");
 
-function requireAdmin(res, uiSession) {
-  if (!config.uiAuthEnabled || uiSession) return false;
-  json(res, 401, { ok: false, error: "An administrator session is required." });
+function requireAdmin(req, res, uiSession) {
+  if (!config.uiAuthEnabled || uiSession || isBearerAuthorized(req)) return false;
+  json(res, 401, { ok: false, error: "An administrator session or API bearer token is required." });
   return true;
 }
 
@@ -22,7 +22,7 @@ function counts() {
 export async function handleBackupRoute(req, res, url, uiSession) {
   const pathname = url.pathname;
   if (!pathname.startsWith("/api/backup/")) return false;
-  if (requireAdmin(res, uiSession)) return true;
+  if (requireAdmin(req, res, uiSession)) return true;
 
   if (pathname === "/api/backup/info" && req.method === "GET") {
     json(res, 200, { ok: true, ...counts(), sizes: { total: backupDataSize() }, encryptedArchiveConfigured: Boolean(config.NOEMA_BACKUP_PASSWORD) });
@@ -76,7 +76,9 @@ export async function handleBackupRoute(req, res, url, uiSession) {
       if (!/^snapshot_\d+\.(enc|json)$/.test(filename)) throw Object.assign(new Error("Invalid snapshot filename."), { status: 400 });
       const file = path.join(snapshotsDir(), filename);
       if (!existsSync(file)) throw Object.assign(new Error("Snapshot not found."), { status: 404 });
-      const snapshot = filename.endsWith(".enc") ? readEncryptedJson(file, null, { throwOnError: true }) : JSON.parse(await import("node:fs/promises").then(({ readFile }) => readFile(file, "utf8")));
+      const snapshot = filename.endsWith(".enc")
+        ? readEncryptedJson(file, null, { throwOnError: true })
+        : JSON.parse(await import("node:fs/promises").then(({ readFile }) => readFile(file, "utf8")));
       json(res, 200, { ok: true, restored: restorePortableState(snapshot) });
     } catch (error) {
       json(res, error.status || 500, { ok: false, error: error.message });
