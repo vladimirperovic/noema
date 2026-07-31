@@ -1,139 +1,91 @@
 # Customizing Noema
 
-Noema is intended to be forked and reshaped. The current interface is one person's working system, published as a reference implementation rather than a universal product.
+Noema is intentionally built from plain HTML, CSS, and JavaScript. Most visual and product changes can be made without a build system.
 
-## Start with the workflow, not the labels
+## Canonical navigation
 
-Before changing code, decide what the active screen should help you notice. Noema currently uses a rolling three-day window:
+The shared menu, theme controls, footer, font scaling, active-page color, and WIDTH behavior live in:
 
-- yesterday;
-- today;
-- tomorrow.
-
-Tasks older than yesterday are omitted from the active board but remain in Archive. This is the central design choice, not a technical requirement.
-
-Possible alternatives include:
-
-- seven calendar days;
-- now, next, later;
-- inbox, active, waiting;
-- project phases;
-- rooms or buildings;
-- clients or team members;
-- urgent, scheduled, someday.
-
-The date model lives primarily in `src/store/todos.js`, while the active-window filtering is applied by the `/api/todos` route in `src/server.js`.
-
-## Module-by-module ideas
-
-### Task board
-
-Change the task fields, grouping, recurrence rules, priorities, or retention window. A fork could add owners, projects, durations, dependencies, reminders, attachments, or external issue IDs.
-
-### Archive
-
-Archive can remain a historical calendar or become a searchable event log, audit trail, completed-work report, timesheet, activity feed, or export center.
-
-### Notes
-
-The Notes module can become:
-
-- checklists;
-- meeting notes;
-- inspection lists;
-- shopping lists;
-- standard operating procedures;
-- snag or punch lists;
-- client requests.
-
-### Documents
-
-The Documents module can hold briefs, reports, specifications, decisions, contracts, research, recipes, manuals, or project records. Replace the editor or storage layer if you need Markdown, collaboration, versioning, object storage, or full-text search.
-
-### Links
-
-Links can be adapted into a reading list, research library, supplier directory, product catalog, property shortlist, press archive, client references, or bookmarks for a team.
-
-### AI Projects
-
-AI Projects demonstrates a second collection built on the Links storage model. Rename it to any domain-specific collection or remove it from navigation.
-
-### Inspiration
-
-Inspiration is a generic image-library pattern. It can store architecture, materials, furniture, fashion, art, food, travel, products, photography references, mood boards, or visual research.
-
-Useful extensions include ratings, dominant colors, source attribution, copyright status, similarity search, and project assignment.
-
-### Building Sites
-
-Building Sites combines a location, metadata, tags, images, image annotations, and a documentation link. It is suitable for many use cases beyond construction:
-
-- property inspections;
-- renovation progress;
-- maintenance records;
-- field-service visits;
-- warehouses and equipment;
-- events and travel diaries;
-- deliveries and installations;
-- defects and quality-control evidence;
-- landscape, agriculture, or environmental observations.
-
-Rename the route, navigation label, store, and API resource to match the new domain. The current implementation is a reusable gallery-and-location pattern.
-
-### Backup
-
-The included backup flow is local and single-user oriented. A production fork may add scheduled off-site copies, retention policies, encrypted remote storage, integrity checks, key escrow, and restore drills.
-
-### Stats
-
-The Stats page is an example external-data dashboard. Define projects through `NOEMA_ANALYTICS_PROJECTS` or replace the service with metrics from your own domain.
-
-Potential replacements include sales, budgets, fitness, home automation, server health, project delivery, inventory, or support metrics.
-
-## Branding and navigation
-
-The browser UI is in `public/`. Search for visible labels such as `Noema`, `Inspiration`, and `Building Sites`, then update navigation, headings, empty states, help content, and page titles consistently.
-
-Do not change only the menu label while leaving API names and documentation misleading. Prefer a complete domain rename when publishing a specialized fork.
-
-## Storage
-
-Noema uses encrypted JSON files and local media directories under `data/`. This is understandable and portable for a personal application, but it is not designed for concurrent multi-user writes.
-
-Consider SQLite or PostgreSQL when adding:
-
-- multiple users;
-- concurrent editing;
-- permissions;
-- large datasets;
-- advanced search;
-- audit requirements;
-- transactional workflows.
-
-Keep the store API stable so UI and tool layers do not need to know which database is used.
-
-## Integrations
-
-All external credentials belong in environment variables. Never place real domains, analytics property IDs, OAuth secrets, service-account keys, tokens, user names, addresses, or private URLs in committed source code.
-
-The public analytics configuration uses a JSON environment variable. Example:
-
-```env
-NOEMA_ANALYTICS_PROJECTS=[{"id":"example","name":"example.com","url":"https://example.com","ga4PropertyId":"123456789","gscSites":["sc-domain:example.com"],"brandTerms":["example"],"color":"#64748b","badge":"EX"}]
+```text
+public/noema-header-footer.js
 ```
 
-## Security checklist before deployment
+Edit the `pages` array to add, remove, rename, or reorder private modules. Each entry contains a route, label, and outline SVG icon. Keep private hostnames and installation-specific tools out of the public repository; configure them in a private fork or a local extension.
 
-- Set a strong `UI_PASSWORD`.
-- Set independent `NOEMA_API_TOKEN` and `ENCRYPTION_KEY` values.
-- Use HTTPS through a trusted reverse proxy.
-- Restrict CORS to the real origin.
-- Back up the encryption key separately from encrypted data.
-- Review public routes and gallery-sharing behavior.
-- Remove modules and integrations you do not use.
-- Run the test suite and a secret scan.
-- Read `SECURITY.md`.
+The script removes legacy duplicate menu controls and renders one canonical instance on every page. Public gallery mode intentionally renders only Building Site and Inspiration links.
 
-## Keep your fork maintainable
+## Active state and menu rhythm
 
-Document intentional differences from upstream. Prefer small modules, configuration over hard-coded values, neutral demo data, and tests for every changed behavior. A fork that clearly states its domain assumptions is more useful than a generic interface with hidden personal rules.
+The active route uses the reddish accent `#d97757`. The NOEMA home label remains gold. Library links use one compact flex-column gap and explicitly reset inherited margins so old page-level menu CSS cannot spread them apart.
+
+## Theme, font size, and WIDTH
+
+Browser preferences are stored under:
+
+- `noema-theme-manual`
+- `noema-page-width`
+- `noema-font-scale`
+
+WIDTH sets `data-width="wide"` on the root element. Shared CSS expands supported page containers to 92% of the viewport. New page layouts should use one of the existing container classes (`.wrap`, `.board-inner`, `.grid`, `.panel`, `.library-tools`) or add their selector to the wide-mode rule.
+
+## Styling tokens
+
+Pages use a common family of variables:
+
+```css
+--paper
+--paper-2
+--paper-3
+--ink
+--ink-2
+--ink-3
+--ink-4
+--ink-line
+--ink-line-2
+--beacon
+--beacon-2
+--beacon-soft
+--signal
+--ember
+--azure
+--font-display
+--font-sans
+--font-mono
+--maxw
+--gut
+```
+
+Preserve these names when adding a page so the shared controls and both themes work without special cases.
+
+## Adding a module
+
+1. Add its HTML/JS under `public/`.
+2. Add API/storage code under `src/`.
+3. Add the clean route to `src/server.js` when it is not served by a gateway.
+4. Add the page to the shared menu and service-worker asset list.
+5. Add syntax and behavior tests.
+6. Update README, Product, Architecture, Privacy, Security, Support, Deployment, and Changelog when relevant.
+
+## Files module
+
+Files is split between:
+
+- `public/files.html` — interface
+- `src/file-library.js` — authenticated routes
+- `src/store/files.js` — encrypted metadata and binary storage
+
+Change `MAX_FILE_BYTES` only after also adjusting the request limit in `src/file-library.js`, reverse-proxy upload limits, documentation, and tests. Binary names must remain randomized and path-normalized.
+
+## Source-linked tasks
+
+`public/source-task-buttons.js` discovers supported records and adds Task actions. `public/source-task-navigation.js` protects linked-task navigation and note deep links. Source types must also be accepted by `src/store/todos.js`.
+
+A source-linked task should remain a reference: do not allow a normal task-title edit to silently detach it from its source.
+
+## Internationalization
+
+Existing interface localization is handled by `public/noema-i18n.js`. New stable user-facing strings should be added there when the page participates in automatic localization. Security and API error messages should remain clear and avoid exposing internal paths or secrets.
+
+## Branding and examples
+
+Use neutral example domains, projects, locations, and analytics IDs in public code. Real domains, property IDs, account emails, proxy addresses, and private network URLs belong in `.env` or a private fork.
