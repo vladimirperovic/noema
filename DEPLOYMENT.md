@@ -39,19 +39,15 @@ volumes:
   noema-data:
 ```
 
-Terminate TLS at a reverse proxy and forward to the loopback or private Docker address.
+Terminate TLS at a reverse proxy and forward to the loopback or private container address.
 
 ## Reverse proxies
 
-Noema ignores `X-Forwarded-For` unless the immediate peer IP is listed in `NOEMA_TRUSTED_PROXY_IPS`. This prevents clients from selecting their own rate-limit identity.
+Noema ignores `X-Forwarded-For` unless the immediate peer address is listed in `NOEMA_TRUSTED_PROXY_IPS`. This prevents clients from selecting their own rate-limit identity.
 
-Example:
+Discover the actual source address seen by Noema from container networking or proxy logs, then place only controlled reverse-proxy addresses in the comma-separated setting. Do not add client subnets or broad networks.
 
-```dotenv
-NOEMA_TRUSTED_PROXY_IPS=172.18.0.1,127.0.0.1
-```
-
-Only add addresses that are controlled reverse proxies. Preserve the original `Host` and `X-Forwarded-Proto` headers and configure the proxy upload/body limit above the largest file you intend to allow. Noema currently permits 120 MB file content, encoded inside a larger JSON request.
+Preserve the original `Host` and `X-Forwarded-Proto` headers and configure the proxy upload/body limit above the largest file you intend to allow. Noema currently permits 120 MB file content, encoded inside a larger JSON request.
 
 ## Session and share lifetime
 
