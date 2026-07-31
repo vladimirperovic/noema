@@ -1,23 +1,19 @@
 /* NOEMA — canonical shared navigation, theme controls and footer. */
 (() => {
   "use strict";
-
   const ACTIVE_COLOR = "#d97757";
   const params = new URLSearchParams(location.search);
-
-  function normalizePath(value = location.pathname) {
-    let pathname = String(value || "/").replace(/\.html$/i, "").replace(/\/+$/, "") || "/";
-    if (pathname === "/index") return "/";
-    if (pathname === "/archive") return "/arhiva";
-    return pathname;
-  }
-
-  const currentPath = normalizePath();
-  const publicGalleryMode = params.has("gallery") && ["/buildingsite", "/inspiration"].includes(currentPath);
+  const normalize = (value = location.pathname) => {
+    let path = String(value || "/").replace(/\.html$/i, "").replace(/\/+$/, "") || "/";
+    if (path === "/index") path = "/";
+    if (path === "/archive") path = "/arhiva";
+    return path;
+  };
+  const current = normalize();
+  const publicGallery = params.has("gallery") && ["/buildingsite", "/inspiration"].includes(current);
   const galleryToken = params.get("gallery") || "";
   const galleryHref = (path) => `${path}?gallery=${encodeURIComponent(galleryToken)}`;
-
-  const ICONS = {
+  const icons = {
     archive:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>',
     notes:'<svg viewBox="0 0 24 24"><path d="M5 3h9l5 5v13H5V3z"/><path d="M14 3v5h5M8 13h8M8 17h5"/></svg>',
     documents:'<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg>',
@@ -28,97 +24,55 @@
     inspiration:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-5 3 3 2-2 6 5"/></svg>',
     stats:'<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20V7M2 20h20"/></svg>'
   };
-
-  const PAGES = [
-    ["/arhiva", "Archive", ICONS.archive],
-    ["/notes", "Notes", ICONS.notes],
-    ["/documents", "Documents", ICONS.documents],
-    ["/links", "Links", ICONS.links],
-    ["/files", "Files", ICONS.files],
-    ["/ai-projects", "AI Projects", ICONS.ai],
-    ["/buildingsite", "Building Sites", ICONS.building],
-    ["/inspiration", "Inspiration", ICONS.inspiration],
-    ["/stats", "Stats", ICONS.stats],
+  const pages = [
+    ["/arhiva","Archive",icons.archive],["/notes","Notes",icons.notes],["/documents","Documents",icons.documents],
+    ["/links","Links",icons.links],["/files","Files",icons.files],["/ai-projects","AI Projects",icons.ai],
+    ["/buildingsite","Building Sites",icons.building],["/inspiration","Inspiration",icons.inspiration],["/stats","Stats",icons.stats]
   ];
+  const active = (path) => normalize(path) === current ? " is-active" : "";
+  const menuMarkup = () => publicGallery
+    ? `<button class="menu-close" id="closeMobile" aria-label="Close menu">×</button><div class="menu-panel"><a class="menu-home" href="/">NOEMA</a><div class="menu-library"><a class="menu-item${active("/buildingsite")}" href="${galleryHref("/buildingsite")}">${icons.building}Building Site</a><a class="menu-item${active("/inspiration")}" href="${galleryHref("/inspiration")}">${icons.inspiration}Inspiration</a></div></div>`
+    : `<button class="menu-close" id="closeMobile" aria-label="Close menu">×</button><div class="menu-panel"><a class="menu-home" href="/">NOEMA</a><div class="menu-library">${pages.map(([href,label,icon])=>`<a class="menu-item${active(href)}" href="${href}">${icon}${label}</a>`).join("")}</div><a class="menu-foot${active("/backup")}" href="/backup">BACKUP</a></div>`;
 
-  function active(path) { return normalizePath(path) === currentPath ? " is-active" : ""; }
-  function privateMenu() {
-    return `<button class="menu-close" id="closeMobile" aria-label="Close menu">×</button><div class="menu-panel"><a class="menu-home" href="/">NOEMA</a><div class="menu-library">${PAGES.map(([href,label,icon])=>`<a class="menu-item${active(href)}" href="${href}">${icon}${label}</a>`).join("")}</div><a class="menu-foot${active("/backup")}" href="/backup">BACKUP</a></div>`;
-  }
-  function publicMenu() {
-    return `<button class="menu-close" id="closeMobile" aria-label="Close menu">×</button><div class="menu-panel"><a class="menu-home" href="/">NOEMA</a><div class="menu-library"><a class="menu-item${active("/buildingsite")}" href="${galleryHref("/buildingsite")}">${ICONS.building}Building Site</a><a class="menu-item${active("/inspiration")}" href="${galleryHref("/inspiration")}">${ICONS.inspiration}Inspiration</a></div></div>`;
-  }
-
-  function installStyles() {
+  function styles() {
     let style = document.getElementById("noema-common-styles");
     if (!style) { style=document.createElement("style"); style.id="noema-common-styles"; document.head.appendChild(style); }
     style.textContent = `
-      html[data-width="wide"]{--maxw:92vw!important}
-      html,body,#shell,#shell-inner{width:100%!important;max-width:100%!important}
-      html[data-width="wide"] .wrap,html[data-width="wide"] .board-inner,html[data-width="wide"] .footer,html[data-width="wide"] .grid,html[data-width="wide"] .panel,html[data-width="wide"] .library-tools,html[data-width="wide"] main{width:92%!important;max-width:92vw!important;margin-left:auto!important;margin-right:auto!important}
-      .topbar>.theme-button,.top>.theme{display:none!important}
-      .burger,.theme-fab{position:fixed;right:1rem;z-index:1001;width:46px;height:46px;border:1px solid var(--ink-line-2,var(--line-2,rgba(26,26,31,.2)));border-radius:12px;background:var(--paper-3,var(--card,#fff));color:var(--ink-4,var(--muted,#706c66));box-shadow:0 4px 18px -8px rgba(0,0,0,.3);cursor:pointer}
-      .burger{top:1rem;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:6px;padding:11px 9px}.burger span{display:block;width:24px;height:2px;border-radius:2px;background:var(--ink,#f4efe6)}.burger span:last-child{width:16px}.theme-fab{top:calc(1rem + 56px);font:1.15rem/1 var(--font-mono,monospace)}.burger:hover,.theme-fab:hover{border-color:var(--beacon,#e8b07d);color:var(--beacon,#e8b07d)}
+      html[data-width="wide"]{--maxw:92vw!important}html,body,#shell,#shell-inner{width:100%!important;max-width:100%!important}html[data-width="wide"] .wrap,html[data-width="wide"] .board-inner,html[data-width="wide"] .footer,html[data-width="wide"] .grid,html[data-width="wide"] .panel,html[data-width="wide"] .library-tools,html[data-width="wide"] main{width:92%!important;max-width:92vw!important;margin-left:auto!important;margin-right:auto!important}.topbar>.theme-button,.top>.theme{display:none!important}
+      .burger,.theme-fab{position:fixed;right:1rem;z-index:1001;width:46px;height:46px;border:1px solid var(--ink-line-2,var(--line-2,rgba(26,26,31,.2)));border-radius:12px;background:var(--paper-3,var(--card,#fff));color:var(--ink-4,var(--muted,#706c66));box-shadow:0 4px 18px -8px rgba(0,0,0,.3);cursor:pointer}.burger{top:1rem;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:6px;padding:11px 9px}.burger span{display:block;width:24px;height:2px;border-radius:2px;background:var(--ink,#f4efe6)}.burger span:last-child{width:16px}.theme-fab{top:calc(1rem + 56px);font:1.15rem/1 var(--font-mono,monospace)}.burger:hover,.theme-fab:hover{border-color:var(--beacon,#e8b07d);color:var(--beacon,#e8b07d)}
       #shell{position:relative;z-index:2;min-height:100vh;background:var(--paper,#0a0a0c);transform-origin:center;transition:transform .78s cubic-bezier(.15,.2,.1,1),border-radius .78s,box-shadow .78s}body.menu-fixed{overflow:hidden}body.menu-fixed #shell{position:fixed;inset:0;height:100dvh;overflow:hidden;border-radius:18px}body.menu-pushed #shell{transform:perspective(1400px) translateX(-50vw) rotateY(11deg) scale(.84);box-shadow:0 0 90px rgba(0,0,0,.55),0 30px 60px rgba(0,0,0,.4)}.shell-scrim{position:absolute;inset:0;z-index:50000;background:rgba(14,14,16,.3);opacity:0;visibility:hidden;cursor:pointer;transition:.78s}body.menu-pushed .shell-scrim{opacity:1;visibility:visible}
       .menu-overlay{position:fixed;inset:0;z-index:1;overflow-y:auto;background:#0e0e10;color:#f5f1ea;text-align:right}.menu-panel{box-sizing:border-box;display:flex;min-height:100%;width:100%;flex-direction:column;align-items:flex-end;justify-content:center;padding:clamp(64px,9vh,96px) clamp(24px,7vw,48px) 36px}.menu-close{position:fixed;top:22px;right:22px;z-index:3;border:0;background:none;color:#f5f1ea;font:300 34px/1 sans-serif;cursor:pointer;opacity:0;transform:translateX(20px) rotate(-90deg);transition:.7s}.menu-overlay.is-open .menu-close{opacity:.65;transform:none}.menu-home{margin-bottom:clamp(18px,3.2vh,28px);color:#d7b584!important;text-decoration:none;font:300 clamp(17px,3vw,20px)/1 var(--font-display,'Fraunces',serif)}.menu-library{display:flex;flex-direction:column;align-items:flex-end;gap:clamp(3px,1vh,8px)}.menu-item{display:inline-flex;align-items:center;gap:.58em;margin:0!important;padding:0 0 4px;border-bottom:1px solid rgba(215,181,132,.3);color:#d7b584;text-decoration:none;font:300 clamp(15px,2.5vw,17px)/1.16 var(--font-display,'Fraunces',serif);opacity:0;transform:translateX(38px);transition:opacity .7s,transform .7s,color .2s}.menu-item svg{width:.88em;height:.88em;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.menu-overlay.is-open .menu-item{opacity:1;transform:none}.menu-item:hover{color:#ecc998}.menu-item.is-active{color:${ACTIVE_COLOR}!important;border-bottom-color:rgba(217,119,87,.72);background:rgba(217,119,87,.07)}.menu-foot{margin-top:clamp(20px,4vh,34px);color:#6f6a62;text-decoration:none;font:600 12px/1 var(--font-mono,monospace);letter-spacing:.24em}.menu-foot.is-active{color:${ACTIVE_COLOR}}
-      .footer{display:flex;max-width:var(--maxw,1400px);margin:0 auto;padding:1.75rem var(--gut,2rem) 3rem;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;border-top:1px solid var(--ink-line,rgba(244,239,230,.08));color:var(--ink-4,#9b958a);font:.72rem/1.5 var(--font-mono,monospace)}.footer-left,.footer-controls{display:inline-flex;align-items:center;gap:.5rem;flex-wrap:wrap}.footer em{color:var(--beacon,#e8b07d);font-family:var(--font-display,'Fraunces',serif)}.footer a{color:inherit;text-decoration:none}.footer b{color:var(--beacon-2,#d4a574)}.footer-theme{display:inline-grid;min-width:34px;height:34px;padding:0 8px;place-items:center;border:1px solid var(--ink-line,rgba(244,239,230,.08));border-radius:8px;background:none;color:var(--ink-4,#9b958a);cursor:pointer;font:600 .75rem/1 var(--font-mono,monospace)}.footer-theme:hover,.footer-theme.active{color:var(--beacon,#e8b07d);border-color:var(--beacon,#e8b07d);background:var(--beacon-soft,rgba(232,176,125,.1))}
-      @media(max-height:790px),(max-width:520px){.menu-panel{justify-content:flex-start;padding-top:64px}.menu-library{gap:3px}.menu-foot{margin-top:20px}}@media(max-width:520px){.footer-controls{width:100%}}
+      .footer{display:flex;max-width:var(--maxw,1400px);margin:0 auto;padding:1.75rem var(--gut,2rem) 3rem;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;border-top:1px solid var(--ink-line,rgba(244,239,230,.08));color:var(--ink-4,#9b958a);font:.72rem/1.5 var(--font-mono,monospace)}.footer-left,.footer-controls{display:inline-flex;align-items:center;gap:.5rem;flex-wrap:wrap}.footer em{color:var(--beacon,#e8b07d);font-family:var(--font-display,'Fraunces',serif)}.footer a{color:inherit;text-decoration:none}.footer b{color:var(--beacon-2,#d4a574)}.footer-theme{display:inline-grid;min-width:34px;height:34px;padding:0 8px;place-items:center;border:1px solid var(--ink-line,rgba(244,239,230,.08));border-radius:8px;background:none;color:var(--ink-4,#9b958a);cursor:pointer;font:600 .75rem/1 var(--font-mono,monospace)}.footer-theme:hover,.footer-theme.active{color:var(--beacon,#e8b07d);border-color:var(--beacon,#e8b07d);background:var(--beacon-soft,rgba(232,176,125,.1))}@media(max-height:790px),(max-width:520px){.menu-panel{justify-content:flex-start;padding-top:64px}.menu-library{gap:3px}.menu-foot{margin-top:20px}}@media(max-width:520px){.footer-controls{width:100%}}
     `;
   }
 
-  function one(id, tag="div") {
-    const found=[...document.querySelectorAll(`[id="${id}"]`)];
-    let element=found.shift(); found.forEach(node=>node.remove());
-    if (!element) { element=document.createElement(tag); element.id=id; }
-    return element;
-  }
-
-  function ensureStructure() {
-    const menu=one("mobileMenu");
-    document.querySelectorAll(".menu-overlay").forEach(node=>{if(node!==menu)node.remove()});
-    menu.className="menu-overlay"; menu.setAttribute("role","dialog"); menu.innerHTML=publicGalleryMode?publicMenu():privateMenu();
-
-    let burger=one("mobileBurger","button"); burger=burger.cloneNode(false); burger.id="mobileBurger"; burger.className="burger"; burger.type="button"; burger.innerHTML="<span></span><span></span><span></span>"; burger.setAttribute("aria-label","Open menu");
-    let theme=one("topTheme","button"); theme=theme.cloneNode(false); theme.id="topTheme"; theme.className="theme-fab"; theme.type="button"; theme.innerHTML='<span class="theme-icon">☾</span>'; theme.setAttribute("aria-label","Change theme");
-
-    let shell=one("shell"); let inner=one("shell-inner");
-    if (!shell.isConnected) {
-      shell.id="shell"; inner.id="shell-inner";
-      [...document.body.childNodes].filter(node=>node!==menu).forEach(node=>inner.appendChild(node));
-      shell.appendChild(inner); document.body.appendChild(shell);
-    } else if (!inner.isConnected) { inner.id="shell-inner"; [...shell.childNodes].forEach(node=>inner.appendChild(node)); shell.appendChild(inner); }
+  const removeAll = (selector) => document.querySelectorAll(selector).forEach((node) => node.remove());
+  function structure() {
+    removeAll("#mobileBurger,#topTheme");
+    let menu = document.getElementById("mobileMenu");
+    document.querySelectorAll(".menu-overlay").forEach((node) => { if (node !== menu) node.remove(); });
+    if (!menu) { menu=document.createElement("div"); menu.id="mobileMenu"; }
+    menu.className="menu-overlay"; menu.innerHTML=menuMarkup(); menu.setAttribute("role","dialog");
+    const burger=document.createElement("button"); burger.id="mobileBurger"; burger.className="burger"; burger.type="button"; burger.setAttribute("aria-label","Open menu"); burger.innerHTML="<span></span><span></span><span></span>";
+    const theme=document.createElement("button"); theme.id="topTheme"; theme.className="theme-fab"; theme.type="button"; theme.setAttribute("aria-label","Change theme"); theme.innerHTML='<span class="theme-icon">☾</span>';
+    let shell=document.getElementById("shell"), inner=document.getElementById("shell-inner");
+    if (!shell) { shell=document.createElement("div"); shell.id="shell"; inner=document.createElement("div"); inner.id="shell-inner"; [...document.body.childNodes].filter((node)=>node!==menu).forEach((node)=>inner.appendChild(node)); shell.appendChild(inner); document.body.appendChild(shell); }
+    else if (!inner) { inner=document.createElement("div"); inner.id="shell-inner"; [...shell.childNodes].forEach((node)=>inner.appendChild(node)); shell.appendChild(inner); }
     inner.prepend(theme); inner.prepend(burger);
-    let scrim=shell.querySelector(".shell-scrim"); if(!scrim){scrim=document.createElement("div");scrim.className="shell-scrim";shell.appendChild(scrim)}
-    document.body.appendChild(menu);
-    return {menu,burger,theme,shell,inner,scrim};
+    let scrim=shell.querySelector(".shell-scrim"); shell.querySelectorAll(".shell-scrim").forEach((node,index)=>{if(index)node.remove()}); if(!scrim){scrim=document.createElement("div");scrim.className="shell-scrim";shell.appendChild(scrim)}
+    document.body.appendChild(menu); return {menu,burger,theme,shell,inner,scrim};
   }
-
-  function storage(key,fallback="") { try{return localStorage.getItem(key)??fallback}catch{return fallback} }
-  function save(key,value){try{localStorage.setItem(key,String(value))}catch{}}
-  function autoTheme(){const h=new Date().getHours();return h>=19||h<7?"dark":"light"}
-  function applyTheme(value,manual=false){const theme=value==="dark"?"dark":"light";document.documentElement.dataset.theme=theme;save("noema-theme",theme);if(manual)save("noema-theme-manual",theme);document.querySelectorAll(".theme-icon").forEach(node=>node.textContent=theme==="dark"?"☀":"☾")}
-  function applyWidth(wide){if(wide)document.documentElement.setAttribute("data-width","wide");else document.documentElement.removeAttribute("data-width");save("noema-page-width",wide?"wide":"normal");document.querySelectorAll("#pageWidth").forEach(button=>button.classList.toggle("active",wide))}
-  function applyScale(value){const scale=Math.max(.7,Math.min(2.5,Number(value)||1));document.documentElement.style.fontSize=`${16*scale}px`;document.body.style.fontSize=`${16*scale}px`;const label=document.getElementById("fontReset");if(label)label.textContent=`${Math.round(scale*100)}%`;save("noema-font-scale",scale);return scale}
-
-  function footerMarkup(){return publicGalleryMode?'<span class="footer-left">Noema · shared gallery</span><span class="footer-controls"><button class="footer-theme" id="footerTheme"><span class="theme-icon">☾</span></button></span>':`<span class="footer-left">Noema · <em>thought at your fingertips</em><span>|</span><span id="sysStats">CPU: <b>—</b> · RAM: <b>—</b> · Disk: <b>—</b></span><span>|</span><a href="/help">help</a><span id="buildVersion"></span><span>|</span><a href="/logout">logout</a></span><span class="footer-controls"><button class="footer-theme" id="pageWidth">WIDTH</button><button class="footer-theme" id="fontDec">A−</button><button class="footer-theme" id="fontReset">100%</button><button class="footer-theme" id="fontInc">A+</button><span>|</span><button class="footer-theme" id="footerTheme"><span class="theme-icon">☾</span></button></span>`}
-  function ensureFooter(inner){const all=[...document.querySelectorAll("footer.footer")];let footer=all.shift();all.forEach(node=>node.remove());if(!footer){footer=document.createElement("footer");footer.className="footer";inner.appendChild(footer)}footer.innerHTML=footerMarkup()}
-
-  async function loadFooterData(){
-    if(publicGalleryMode)return;
-    const stats=document.getElementById("sysStats");
-    try{const data=await fetch("/api/system").then(response=>response.ok?response.json():Promise.reject());if(stats)stats.innerHTML=`CPU: <b>${data.cpu?.percent??"—"}%</b> · RAM: <b>${data.mem?.percent??"—"}%</b> · Disk: <b>${data.disk?.percent??"—"}%</b>`}catch{if(stats)stats.textContent="system unavailable"}
-    try{const data=await fetch("/build-version.json",{cache:"no-store"}).then(response=>response.json());const commit=String(data.commit||"");if(commit&&commit!=="unknown"){const element=document.getElementById("buildVersion");element.textContent=`| ${commit.slice(0,7)}`;element.title=commit}}catch{}
-  }
-
-  function bind({menu,burger,theme,shell,inner,scrim}){
-    let savedScroll=0,timer=null;
-    const close=()=>{menu.classList.remove("is-open");document.body.classList.remove("menu-pushed");if(timer)clearTimeout(timer);timer=setTimeout(()=>{document.body.classList.remove("menu-fixed");inner.style.transform="";scrollTo(0,savedScroll)},800)};
-    burger.addEventListener("click",()=>{savedScroll=scrollY;inner.style.transform=`translateY(${-savedScroll}px)`;document.body.classList.add("menu-fixed");requestAnimationFrame(()=>{document.body.classList.add("menu-pushed");menu.classList.add("is-open")})});scrim.addEventListener("click",close);menu.addEventListener("click",event=>{if(event.target.closest("#closeMobile")){close();return}const link=event.target.closest("a");if(!link||event.metaKey||event.ctrlKey)return;event.preventDefault();const href=link.href;close();setTimeout(()=>location.href=href,520)});addEventListener("keydown",event=>{if(event.key==="Escape")close()});
-    const manual=storage("noema-theme-manual");applyTheme(manual==="dark"||manual==="light"?manual:autoTheme());const toggle=()=>applyTheme(document.documentElement.dataset.theme==="dark"?"light":"dark",true);theme.addEventListener("click",toggle);document.getElementById("footerTheme")?.addEventListener("click",toggle);
-    applyWidth(storage("noema-page-width")==="wide");document.getElementById("pageWidth")?.addEventListener("click",()=>applyWidth(document.documentElement.getAttribute("data-width")!=="wide"));let scale=applyScale(storage("noema-font-scale","1"));document.getElementById("fontDec")?.addEventListener("click",()=>scale=applyScale(scale-.1));document.getElementById("fontInc")?.addEventListener("click",()=>scale=applyScale(scale+.1));document.getElementById("fontReset")?.addEventListener("click",()=>scale=applyScale(1));
-  }
-
-  function loadSourceTaskControllers(){if(publicGalleryMode)return;for(const src of ["/source-task-buttons.js","/source-task-navigation.js"]){if(document.querySelector(`script[src="${src}"]`))continue;const script=document.createElement("script");script.src=src;script.defer=true;document.head.appendChild(script)}}
-  function setup(){installStyles();const structure=ensureStructure();ensureFooter(structure.inner);bind(structure);loadFooterData();if(!publicGalleryMode)setInterval(loadFooterData,5000);loadSourceTaskControllers()}
+  const get=(key,fallback="")=>{try{return localStorage.getItem(key)??fallback}catch{return fallback}};
+  const set=(key,value)=>{try{localStorage.setItem(key,String(value))}catch{}};
+  const autoTheme=()=>{const hour=new Date().getHours();return hour>=19||hour<7?"dark":"light"};
+  function applyTheme(value,manual=false){const theme=value==="dark"?"dark":"light";document.documentElement.dataset.theme=theme;set("noema-theme",theme);if(manual)set("noema-theme-manual",theme);document.querySelectorAll(".theme-icon").forEach((node)=>node.textContent=theme==="dark"?"☀":"☾")}
+  function applyWidth(wide){if(wide)document.documentElement.setAttribute("data-width","wide");else document.documentElement.removeAttribute("data-width");set("noema-page-width",wide?"wide":"normal");document.querySelectorAll("#pageWidth").forEach((button)=>button.classList.toggle("active",wide))}
+  function applyScale(value){const scale=Math.max(.7,Math.min(2.5,Number(value)||1));document.documentElement.style.fontSize=`${16*scale}px`;document.body.style.fontSize=`${16*scale}px`;const reset=document.getElementById("fontReset");if(reset)reset.textContent=`${Math.round(scale*100)}%`;set("noema-font-scale",scale);return scale}
+  const footerMarkup=()=>publicGallery?'<span class="footer-left">Noema · shared gallery</span><span class="footer-controls"><button class="footer-theme" id="footerTheme"><span class="theme-icon">☾</span></button></span>':`<span class="footer-left">Noema · <em>thought at your fingertips</em><span>|</span><span id="sysStats">CPU: <b>—</b> · RAM: <b>—</b> · Disk: <b>—</b></span><span>|</span><a href="/help">help</a><span id="buildVersion"></span><span>|</span><a href="/logout">logout</a></span><span class="footer-controls"><button class="footer-theme" id="pageWidth">WIDTH</button><button class="footer-theme" id="fontDec">A−</button><button class="footer-theme" id="fontReset">100%</button><button class="footer-theme" id="fontInc">A+</button><span>|</span><button class="footer-theme" id="footerTheme"><span class="theme-icon">☾</span></button></span>`;
+  function footer(inner){const items=[...document.querySelectorAll("footer.footer")];let element=items.shift();items.forEach((node)=>node.remove());if(!element){element=document.createElement("footer");element.className="footer";inner.appendChild(element)}element.innerHTML=footerMarkup()}
+  async function footerData(){if(publicGallery)return;const stats=document.getElementById("sysStats");try{const data=await fetch("/api/system").then((r)=>r.ok?r.json():Promise.reject());if(stats)stats.innerHTML=`CPU: <b>${data.cpu?.percent??"—"}%</b> · RAM: <b>${data.mem?.percent??"—"}%</b> · Disk: <b>${data.disk?.percent??"—"}%</b>`}catch{if(stats)stats.textContent="system unavailable"}try{const data=await fetch("/build-version.json",{cache:"no-store"}).then((r)=>r.json());const commit=String(data.commit||"");if(commit&&commit!=="unknown"){const node=document.getElementById("buildVersion");node.textContent=`| ${commit.slice(0,7)}`;node.title=commit}}catch{}}
+  function bind({menu,burger,theme,shell,inner,scrim}){let y=0,timer=null;const close=()=>{menu.classList.remove("is-open");document.body.classList.remove("menu-pushed");clearTimeout(timer);timer=setTimeout(()=>{document.body.classList.remove("menu-fixed");inner.style.transform="";scrollTo(0,y)},800)};burger.addEventListener("click",()=>{y=scrollY;inner.style.transform=`translateY(${-y}px)`;document.body.classList.add("menu-fixed");requestAnimationFrame(()=>{document.body.classList.add("menu-pushed");menu.classList.add("is-open")})});scrim.addEventListener("click",close);menu.addEventListener("click",(event)=>{if(event.target.closest("#closeMobile")){close();return}const link=event.target.closest("a");if(!link||event.metaKey||event.ctrlKey)return;event.preventDefault();const href=link.href;close();setTimeout(()=>location.href=href,520)});addEventListener("keydown",(event)=>{if(event.key==="Escape")close()});const manual=get("noema-theme-manual");applyTheme(["dark","light"].includes(manual)?manual:autoTheme());const toggle=()=>applyTheme(document.documentElement.dataset.theme==="dark"?"light":"dark",true);theme.addEventListener("click",toggle);document.getElementById("footerTheme")?.addEventListener("click",toggle);applyWidth(get("noema-page-width")==="wide");document.getElementById("pageWidth")?.addEventListener("click",()=>applyWidth(document.documentElement.getAttribute("data-width")!=="wide"));let scale=applyScale(get("noema-font-scale","1"));document.getElementById("fontDec")?.addEventListener("click",()=>scale=applyScale(scale-.1));document.getElementById("fontInc")?.addEventListener("click",()=>scale=applyScale(scale+.1));document.getElementById("fontReset")?.addEventListener("click",()=>scale=applyScale(1))}
+  function loadControllers(){if(publicGallery)return;const scripts=["/source-task-buttons.js","/source-task-navigation.js"];if(current==="/backup")scripts.push("/backup-enhancements.js");for(const src of scripts){if(document.querySelector(`script[src="${src}"]`))continue;const script=document.createElement("script");script.src=src;script.defer=true;document.head.appendChild(script)}}
+  function setup(){styles();const parts=structure();footer(parts.inner);bind(parts);footerData();if(!publicGallery)setInterval(footerData,5000);loadControllers()}
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",setup,{once:true});else setup();
 })();
