@@ -21,14 +21,14 @@
         display:inline-flex; align-items:center; justify-content:center; gap:.55rem;
         min-width:130px; min-height:42px; padding:.65rem 1rem;
         border:1px solid #4a7a5e; border-radius:10px;
-        color:#fff; background:#4a7a5e; font-weight:650; white-space:nowrap;
-        transition:transform .18s ease, opacity .18s ease, background .18s ease;
+        color:#4a7a5e; background:transparent; font-weight:650; white-space:nowrap;
+        transition:transform .18s ease, opacity .18s ease, color .18s ease, border-color .18s ease;
       }
-      .album-download-button:hover { background:#3f684f; border-color:#3f684f; transform:translateY(-2px); }
+      .album-download-button:hover { color:#3f684f; background:transparent; border-color:#3f684f; transform:translateY(-2px); }
       .album-download-button:active { transform:scale(.98); }
       .album-download-button svg { width:16px; height:16px; flex:0 0 auto; }
-      html[data-theme="dark"] .album-download-button { color:#0a0a0c; background:#8ab4a1; border-color:#8ab4a1; }
-      html[data-theme="dark"] .album-download-button:hover { background:#9bc3b1; border-color:#9bc3b1; }
+      html[data-theme="dark"] .album-download-button { color:#8ab4a1; background:transparent; border-color:#8ab4a1; }
+      html[data-theme="dark"] .album-download-button:hover { color:#9bc3b1; background:transparent; border-color:#9bc3b1; }
       .noema-viewer-download svg { width:17px; height:17px; display:block; margin:auto; }
       .noema-viewer-download.is-busy { opacity:.55; cursor:wait; }
       @media (max-width:760px) {
