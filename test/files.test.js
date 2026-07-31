@@ -37,7 +37,7 @@ test("Files metadata and binary content survive CRUD operations", async () => {
       assert.equal(files.readFileContent(created.id).data.toString(), "pdf-data");
       assert.throws(() => files.addFile({ name: "empty.txt", data: "" }), /base64/);
       assert.equal(files.removeFile(created.id), true);
-      assert.equal(files.getFile(created.id), undefined);
+      assert.equal(files.getFile(created.id), null);
       files.closeFiles();
       const { closeDatabase } = await import(${JSON.stringify(moduleUrl("../src/store/database.js"))});
       closeDatabase();
