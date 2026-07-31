@@ -2,8 +2,9 @@ import { config } from "./config.js";
 import { loadSessions, verifySession } from "./store/sessions.js";
 import { loadGalleryShares } from "./store/share-tokens.js";
 import { handleAuthRoute, legacySessionToken, SESSION_COOKIE } from "./security/auth-routes.js";
+import { handleBackupRoute } from "./security/backup-routes.js";
 import { filterSharedList, handleShareAdmin, setShareCookie, shareAllows, shareContext, SHARE_COOKIE } from "./security/share-routes.js";
-import { applyClientIp, clientIp, cookieValue, enforceApiRate, isBearerAuthorized, json, redirect, replaceCookieHeader, setSecurityHeaders } from "./security/http.js";
+import { applyClientIp, clientIp, cookieValue, enforceApiRate, json, redirect, replaceCookieHeader, setSecurityHeaders } from "./security/http.js";
 
 export function installSecurityGateway(server) {
   loadSessions();
@@ -38,6 +39,7 @@ export function installSecurityGateway(server) {
 
     if (await handleAuthRoute(req, res, url, ip, rawSessionToken, uiSession)) return;
     if (await handleShareAdmin(req, res, url, uiSession)) return;
+    if (await handleBackupRoute(req, res, url, uiSession)) return;
     if (shareAllowed && pathname === "/api/buildingsites" && share.share.scope === "buildingsite" && filterSharedList(res, share.share)) return;
     if (shareAllowed && pathname === "/api/inspirations" && share.share.scope === "inspiration" && filterSharedList(res, share.share)) return;
 
