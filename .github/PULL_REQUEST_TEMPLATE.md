@@ -1,34 +1,48 @@
 ## Summary
 
-Describe what changed and why.
+Describe the user-visible change and why it belongs in Noema.
 
-## Type of change
+## Scope
 
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Refactor
-- [ ] Documentation
-- [ ] Security or privacy improvement
-- [ ] Breaking change
+- [ ] UI / accessibility
+- [ ] Tasks / recurrence / source links
+- [ ] Notes / documents / links / files
+- [ ] Galleries / sharing
+- [ ] Authentication / security / privacy
+- [ ] SQLite / migration / backup
+- [ ] MCP / OpenAPI / external integration
+- [ ] Documentation only
 
-## Validation
+## Security and privacy
 
-- [ ] `npm run check` passes.
-- [ ] I tested the affected browser pages or API routes.
-- [ ] I added or updated tests where appropriate.
-- [ ] I updated documentation and screenshots for visible changes.
+Explain changes to authentication, authorization, cookies, tokens, uploads, filesystem paths, outbound requests, encryption, logs, shares, backups, or external services. Write `None` only after reviewing these areas.
 
-## Public-repository safety
+## Storage and migration
 
-- [ ] No `.env`, `data/`, uploads, backups, or key files are included.
-- [ ] No credentials, private URLs, internal hosts, property IDs, addresses, coordinates, or personal data are included.
-- [ ] Demo data and screenshots are neutral.
-- [ ] I described authentication, storage, migration, backup, and privacy implications.
+Describe new collections, fields, directories, environment variables, migration behavior, backup impact, and rollback considerations.
 
-## Screenshots
+## Verification
 
-Add before/after images for user-interface changes. Generate them only from a clean checkout with neutral demo data.
+- [ ] `npm run check`
+- [ ] `docker build -t noema-test .`
+- [ ] Light and dark themes checked
+- [ ] Mobile layout checked
+- [ ] Canonical menu and WIDTH control checked
+- [ ] Login/logout checked when authentication changed
+- [ ] Backup/restore impact checked when storage changed
 
-## Breaking changes or migration
+Additional test evidence:
 
-Describe any required configuration or data migration. Write `None` when not applicable.
+## Documentation
+
+- [ ] README updated when user behavior changed
+- [ ] `.env.example` updated when configuration changed
+- [ ] Product, Architecture, Deployment, Privacy, Security, Support, SQLite Migration, Customization, and Contributing reviewed
+- [ ] CHANGELOG updated
+
+## Repository hygiene
+
+- [ ] No credentials, private URLs, account IDs, personal files, production screenshots, or private network addresses were committed
+- [ ] Examples are generic and safe for a public repository
+- [ ] New browser pages load the canonical shared header/footer
+- [ ] New modules include syntax and behavior tests
