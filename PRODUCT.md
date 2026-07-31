@@ -1,57 +1,71 @@
 # Product
 
-## Register
+## Purpose
 
-Product reference and customization guide.
+Noema is a calm, private workspace for people who want one self-hosted place for daily work, reference material, files, project galleries, and AI-accessible tools without adopting a large framework or external database service.
 
-## Intended users
+The central mental model remains **yesterday, today, and tomorrow**. Other modules support the work around those tasks rather than competing with the board.
 
-Noema is primarily a single-user, self-hosted workspace for tasks, notes, documents, saved links, research collections, and visual project records.
+## Product principles
 
-The public repository is intended for developers and technically comfortable users who want a working foundation they can adapt to a specific profession, workflow, or personal system. It is not presented as a universal multi-user SaaS product or a finished solution for every deployment.
+1. **Local ownership** — persistent data stays in the operator-controlled data directory.
+2. **Useful by default** — one process, one SQLite database, no dependency installation at runtime.
+3. **Progressive depth** — the task board is simple; notes, documents, files, galleries, and integrations are available when needed.
+4. **Stable visual language** — warm editorial typography, restrained color, light/dark themes, and one canonical navigation system.
+5. **Secure production defaults** — production refuses incomplete authentication, HTTPS, or CORS configuration.
+6. **Portable interfaces** — browser UI, REST, OpenAPI, and MCP expose the same workspace.
 
-A customized installation may also expose selected read-only Inspiration or Building Sites collections to collaborators or guests. Anyone adding broader sharing, accounts, or client access should design an explicit authorization model for that use case.
+## Core modules
 
-## Product purpose
+### Tasks
 
-Noema reduces the active task horizon to three meaningful positions: **yesterday, today, and tomorrow**.
+Tasks belong to yesterday, today, tomorrow, or the archive. They support priority, time, completion, subtasks, ordering, and recurring schedules. Recurring occurrences use deterministic IDs so restarts and repeated generation do not duplicate them.
 
-- **Yesterday** shows unfinished or recently completed work that still deserves attention.
-- **Today** is the immediate working surface.
-- **Tomorrow** is the near-term commitment space.
-- Older tasks leave the active board but remain available in **Archive**.
+### Source-linked tasks
 
-The surrounding modules provide examples of how one compact self-hosted application can combine structured tasks with notes, documents, saved resources, image collections, location-based records, backups, analytics, and machine integrations.
+A note, document, saved link, file, inspiration collection, building-site collection, or AI project can be added as a task. The task title is then treated as a read-only reference and links back to the source record. One source record maps to at most one active linked task.
 
-Each module is intentionally replaceable. Building Sites can become field inspections, property records, maintenance logs, event documentation, travel journals, inventory locations, or any other photo-based collection. Inspiration, AI Projects, Links, Documents, and Notes can likewise be renamed or reshaped for a different domain.
+### Notes and documents
 
-## Product character
+Notes are lightweight text records. Documents support richer content, formatting, checklists, labels, and uploaded references. Both participate in encrypted SQLite storage and portable metadata backups.
 
-Calm, precise, focused, and content-first. The interface should feel like a dependable working tool rather than a decorative portfolio or a crowded administration panel.
+### Links and AI Projects
 
-## Anti-references
+Links collect URLs and fetched metadata. AI Projects use the same underlying link collection with a separate workspace and presentation.
 
-Noema should not become:
+### Files
 
-- a noisy social feed;
-- a generic dashboard filled with unrelated metrics;
-- a multi-tenant product without proper authorization;
-- a system that hides important actions behind decorative interactions;
-- an application that silently sends private workspace data to external services.
+Files is a private library with a list/detail layout matching the Notes family of screens. Users can upload, describe, rename, open, download, replace, deep-link, convert to a task, and delete a file. Metadata is encrypted in SQLite; binary data is stored with randomized names below `NOEMA_DATA_DIR/files`. The current limit is 120 MB per file.
 
-## Design principles
+### Building Sites and Inspiration
 
-1. The three-day task horizon remains immediately understandable.
-2. Archive preserves history without overwhelming the active board.
-3. Privacy boundaries are explicit rather than assumed.
-4. Content has priority over controls and decoration.
-5. Familiar actions and consistent components reduce daily friction.
-6. Public or shared views expose only content intentionally selected for guests.
-7. Modules remain separable and easy to repurpose.
-8. External integrations remain optional and configuration-driven.
+These modules store image collections and project/reference metadata. Public gallery links are random, hashed at rest, scope-limited, expiring, and revocable. An optional share can be limited to one album.
 
-## Accessibility and inclusion
+### Calendar, Stats, MCP, and OpenAPI
 
-The target is WCAG AA contrast for text and controls, complete keyboard navigation, visible focus states, semantic structure, and support for `prefers-reduced-motion`.
+Google Calendar is optional and read-only. Its refresh token is encrypted. Stats is optional and configured entirely through environment variables. MCP and OpenAPI allow authenticated machine clients to use supported Noema tools.
 
-Important functions must not depend only on color, pointer hover, or precise mouse interaction.
+## Navigation and accessibility
+
+Every private page receives the same generated menu, theme switcher, footer controls, and active-page state. WIDTH switches between the page’s designed maximum width and a 92% viewport layout. Theme, width, and font scale persist locally in the browser.
+
+Public gallery mode deliberately exposes only the gallery navigation and theme control.
+
+## Authentication model
+
+Browser login creates an opaque random session token. Only its SHA-256 hash is stored in the encrypted collection. Sessions have idle and absolute expiration and are revoked on logout or password change. API clients use a separate bearer token.
+
+Production requires a UI password, API token, HTTPS public URL, and exact CORS origin unless the operator explicitly enables the development-only insecure override.
+
+## Backup model
+
+Noema offers two different products:
+
+- **Portable metadata JSON** for inspecting or moving record data. It excludes binary content.
+- **Encrypted `.noema` disaster-recovery archive** for restoring the complete installation, including SQLite, encryption material, binary files, galleries, and compatibility mirrors.
+
+The distinction is intentional and visible in the Backup UI and documentation.
+
+## Non-goals
+
+Noema is not a multi-tenant SaaS, team permission system, public CMS, general-purpose cloud drive, or end-to-end encrypted collaboration platform. Operators are responsible for host security, TLS termination, off-site backup retention, and access to the deployment environment.

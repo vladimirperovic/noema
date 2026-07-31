@@ -1,87 +1,74 @@
 # Privacy and data flows
 
-Noema is self-hosted software. The repository author does not operate a central Noema service and does not receive data from installations created by other users.
-
-The person or organization running a Noema deployment is responsible for its privacy policy, access controls, legal basis, retention rules, backups, and any disclosures required in its jurisdiction.
+Noema is self-hosted. The operator chooses the server, domain, reverse proxy, storage, backups, and optional external integrations. The project does not run a hosted Noema service and does not receive installation data by default.
 
 ## Data stored locally
 
-Depending on the modules used, Noema may store:
+Depending on enabled modules, Noema stores:
 
-- tasks, subtasks, dates, priorities, and completion state;
-- notes and checklist content;
-- rich-text documents and uploaded files;
-- saved URLs, titles, descriptions, images, labels, and extracted article text;
-- AI-project collection items;
-- Inspiration collections and uploaded images;
-- Building Sites entries, addresses, coordinates, tags, image notes, and hotspots;
-- backup snapshots and storage metadata;
-- optional OAuth refresh tokens and locally generated encryption material.
+- task titles, dates, priorities, completion, recurrence, subtasks, and source references;
+- notes and document content;
+- saved links and fetched metadata;
+- Files names, descriptions, types, sizes, and binary content;
+- Building Sites and Inspiration metadata, images, thumbnails, locations, tags, and hotspots;
+- optional analytics project configuration from environment variables;
+- hashed UI sessions and hashed gallery-share tokens;
+- encrypted Google Calendar refresh token;
+- encrypted metadata snapshots and optional full encrypted backup archives.
 
-Runtime data is stored under `data/`, which is excluded from Git. JSON stores are encrypted at rest by the application, but uploaded media and operational access still require appropriate host, volume, and backup protection.
+Metadata records are encrypted before storage in SQLite. Compatibility JSON mirrors, sessions, shares, and the Calendar token are encrypted at rest. Binary files are stored in installation-controlled directories; file names on disk are randomized where the Files module manages them.
 
-## Optional external requests
+## Browser storage
 
-Some features send information to third-party services when enabled or used:
+The UI may keep non-secret preferences and mappings in browser storage, including:
 
-### Google Calendar
+- manual theme choice;
+- page-width choice;
+- font scale;
+- source-task link mapping used to reconcile older linked tasks.
 
-The optional Calendar integration uses Google's OAuth and Calendar APIs with a read-only scope. Calendar identifiers, OAuth credentials, and refresh tokens are controlled by the deployment owner.
+Authentication uses an HttpOnly session cookie. Gallery sharing uses an HttpOnly share cookie after a valid share URL is opened. Browser scripts cannot read these cookies.
 
-### Analytics, Search Console, and PageSpeed
+## External requests
 
-The optional Stats module can request data from Google Analytics 4, Search Console, and PageSpeed. Projects are defined through `NOEMA_ANALYTICS_PROJECTS`; the public repository contains no personal property IDs.
+Noema may contact external services only when their feature is used or configured:
 
-### Link metadata and article reading
+- Google OAuth and Google Calendar API for read-only calendar events;
+- Google Analytics Data API, Search Console, and PageSpeed when Stats is configured;
+- OpenStreetMap/Nominatim and map tile providers for location features;
+- target websites when link metadata or readable article text is requested;
+- remote image/media URLs supplied by users.
 
-When a URL is saved or opened through applicable link tools, the Noema server may request that remote URL to retrieve metadata or article text. The remote website can observe the deployment server's IP address and request headers.
+External services receive the normal request metadata associated with HTTP access, such as the installation IP address, configured user agent, requested URL, and any service-specific credentials. Review each provider’s privacy policy before enabling an integration.
 
-### Reverse geocoding
+## Calendar credentials
 
-When reverse geocoding is used, coordinates are sent to the configured external geocoding service. The current implementation uses OpenStreetMap Nominatim. Do not submit sensitive locations without understanding the service's policies and usage requirements.
+OAuth client credentials usually come from environment variables. A refresh token obtained through the browser flow is encrypted in `google-token.enc`. OAuth state is short-lived and bound to the administrator session that initiated the flow.
 
-### MCP, OpenAPI, Siri, and AI clients
+## Public gallery links
 
-MCP, OpenAPI, REST tools, Shortcuts, and AI clients can receive or modify Noema data according to the tools and credentials provided to them. Treat every connected client as a party with potential access to the data exposed by those tools.
+Gallery links contain a high-entropy random token. Only its SHA-256 hash is stored. A link has an expiration time, can be revoked, and may be restricted to Building Sites, Inspiration, or one album.
 
-## Authentication is not multi-user authorization
+Anyone who possesses an unexpired link can access its allowed public gallery data. Treat the URL as a bearer secret and revoke it when no longer needed.
 
-Noema is designed primarily as a single-user reference application. `UI_PASSWORD` and `NOEMA_API_TOKEN` provide access gates, but they are not a complete multi-user identity, role, or permission system.
+## Files
 
-A fork intended for teams, clients, tenants, regulated data, or public registration should implement a proper authorization model and audit trail.
+Files is a private authenticated module. File metadata is included in portable metadata backups, but binary content is not. Full `.noema` archives include both metadata and binary content.
 
-## Logs and infrastructure
+Operators should avoid uploading material they are not authorized to store. Noema does not provide client-side or end-to-end encryption; the running server can decrypt data for authenticated users.
 
-Noema itself does not provide a hosted telemetry service. However, the host, reverse proxy, container platform, DNS provider, CDN, monitoring tools, and backup system may log requests, IP addresses, domains, error messages, or operational metadata.
+## Logs
 
-Review and configure those systems separately.
+Application logs report startup, migration, configuration, and operational errors. They should not intentionally include passwords, bearer tokens, session values, share tokens, encryption keys, or file content. Reverse proxies and hosting platforms may maintain their own access logs.
 
-## Backups and deletion
+## Deletion and retention
 
-Deleting an item from the active interface may not immediately remove every copy from:
+Deleting a record removes it from the active encrypted collection and refreshes its mirror. Files deletion also removes the managed binary. Backups and snapshots are separate copies and must be expired or destroyed according to the operator’s retention policy.
 
-- Archive views;
-- local snapshots;
-- downloaded backups;
-- platform volume snapshots;
-- off-site backups;
-- infrastructure logs.
+## Backups
 
-Deployment owners should define retention and deletion procedures appropriate for their use case.
+Portable JSON contains readable metadata and should be protected like the original records. Full `.noema` archives are encrypted with a separate backup password but should still be stored with access controls and tested retention rules. Losing both the backup password and encryption material makes recovery impossible.
 
-## Public screenshots and demo data
+## Operator responsibilities
 
-Repository screenshots are generated in a clean checkout with neutral synthetic content. The screenshot script refuses to run when an existing `data/` directory contains files, reducing the risk of publishing a user's private workspace.
-
-## Before production use
-
-Review:
-
-1. which modules and integrations are enabled;
-2. what data each integration sends externally;
-3. who can reach the web UI and machine endpoints;
-4. how secrets and encryption keys are stored;
-5. how long backups and logs are retained;
-6. whether the deployment needs a formal privacy notice, consent flow, data-processing agreement, or deletion procedure.
-
-See [SECURITY.md](SECURITY.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
+Operators are responsible for legal basis, consent, retention, TLS, host security, reverse-proxy logs, access control, third-party integrations, and secure disposal of backups and storage media.

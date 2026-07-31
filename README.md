@@ -1,247 +1,116 @@
 # Noema
 
-> νοήματος — *that which is held in mind.*
+Noema is a zero-dependency, self-hosted personal workspace built with Node.js, the built-in SQLite module, plain HTML, CSS, and JavaScript. It keeps tasks, notes, documents, links, files, project galleries, calendar events, MCP tools, and OpenAPI routes in one private interface.
 
-**Noema is a small, self-hosted personal workspace built around one deliberate constraint: only yesterday, today, and tomorrow matter on the active task board.**
+## What is included in 0.3
 
-> [!IMPORTANT]
-> **Noema is published as a reference application and a starting point for customization.** It is not intended to be installed and used unchanged as a universal productivity product. Fork it, rename the modules, remove what you do not need, change the data model, and adapt the interface to your own work and habits.
+- Yesterday / today / tomorrow task board with priorities, time, subtasks, archive, drag and drop, and stable recurring tasks.
+- Notes, documents, links, AI projects, Building Sites, Inspiration, Stats, and a private **Files** library.
+- Files metadata stored in encrypted SQLite records and binary content stored below `NOEMA_DATA_DIR/files`; maximum file size is 120 MB.
+- Source-linked tasks: records from Notes, Documents, Links, Files, galleries, and AI Projects can become read-only tasks that deep-link back to their source.
+- One canonical responsive menu, active-page highlighting, light/dark mode, font scaling, and a persistent WIDTH control.
+- Google Calendar read-only integration with an encrypted refresh token and session-bound OAuth state.
+- MCP and OpenAPI endpoints for machine clients.
+- Server-side revocable browser sessions, trusted-proxy handling, security headers, login/API rate limits, and expiring gallery-share links.
+- Encrypted SQLite storage, encrypted compatibility mirrors, encrypted metadata snapshots, and password-encrypted `.noema` disaster-recovery archives.
+- Docker image syntax tests, storage tests, and a strict production startup smoke test.
 
-Noema is written in vanilla Node.js, stores structured records in a local encrypted SQLite database, and exposes the same data to its web interface, MCP clients, OpenAPI-compatible agents, Siri Shortcuts, and other tools.
+## Requirements
 
-## The three-day idea
+- Node.js 22.16 or newer, or Docker.
+- Persistent storage for `NOEMA_DATA_DIR`.
+- HTTPS for production.
+- `zip` and `unzip` for full encrypted backup/restore outside the provided Docker image.
 
-Most task managers accumulate an increasingly large backlog. Noema deliberately keeps the active surface small:
-
-- **Yesterday** shows what was scheduled one day ago.
-- **Today** is the current working list.
-- **Tomorrow** is the immediate next step.
-- A task older than yesterday **disappears from the three-column board**, but it is **not deleted**. It remains available in **Archive**, together with its original date and completion state.
-
-This makes the main screen a short-term attention window rather than a permanent database. Archive keeps the full history without allowing old tasks to dominate the daily interface.
-
-![Noema task board](docs/screenshots/home.png)
-
-## What is included
-
-### Task board
-
-The home page is the core of Noema. Tasks are grouped into yesterday, today, and tomorrow, with priority, optional time, subtasks, drag-and-drop ordering, completion state, and recurring schedules.
-
-The current implementation is intentionally opinionated. A fork can easily change the window to seven days, projects, contexts, people, rooms, construction phases, or any other grouping.
-
-### Archive
-
-Archive is the long-term memory of the application. Tasks that leave the three-day board remain here instead of being destroyed. The calendar also surfaces dates containing notes, documents, saved links, and snapshots.
-
-### Notes
-
-Notes are lightweight checklist-style records for information that is more structured than a task but does not need a full document. They support titles, body content, labels, pinning, archiving, and checklist items.
-
-Possible adaptations include meeting notes, shopping lists, punch lists, inspection lists, recipes, recurring procedures, or quick client briefs.
-
-### Documents
-
-Documents are longer rich-text records with labels and file uploads. They are useful for specifications, project briefs, decisions, instructions, reports, contracts, research, or any content that should live beside the daily workflow.
-
-The document module is deliberately simple and can be replaced with Markdown, a different database-backed editor, object storage, collaborative editing, or an external document service.
-
-### Links
-
-Links is a personal link inbox. A URL can be saved with its title, description, preview image, label, archive state, and searchable metadata. Noema can collect links through the browser bookmarklet, iOS/macOS Shortcuts, REST, MCP, or OpenAPI tools.
-
-This module can become a reading list, research library, product catalog, client references, supplier directory, property shortlist, or any other URL-based collection.
-
-### AI Projects
-
-AI Projects is a separate link collection for prompts, conversations, experiments, tools, repositories, and ongoing AI work. It demonstrates how one storage module can expose multiple purpose-specific collections.
-
-A fork can rename it to Research, Clients, Cases, Opportunities, Resources, or remove it entirely.
-
-### Inspiration
-
-Inspiration is an image-first reference library with multi-image collections, thumbnails, labels, address/source fields, filtering, search, and a selectable cover image.
-
-It was designed for architectural and design references, but the same module can store materials, furniture, art, fashion, recipes, products, travel ideas, visual research, mood boards, or any other image collection.
-
-### Building Sites
-
-Building Sites is a location-aware photo journal. Each entry can contain a title, location, address, coordinates, documentation link, label, hashtags, multiple images, image notes, and hotspots.
-
-The name reflects the original use case, not a technical limitation. The module can be repurposed for:
-
-- renovation or maintenance progress;
-- field inspections and site visits;
-- properties and real-estate listings;
-- warehouses, equipment, or inventory locations;
-- events and travel journals;
-- deliveries, installations, defects, or service records;
-- any collection that combines a place, photos, tags, and chronological observations.
-
-### Storage, backup, and snapshots
-
-Structured records are stored in `data/noema.sqlite`. Record payloads remain protected with AES-256-GCM before they are written to SQLite. Existing encrypted JSON files are imported automatically on first start and continue to be updated as rollback and backup mirrors.
-
-Backup provides JSON export/import, archive downloads, local metadata snapshots, storage statistics, and snapshot restore. Metadata snapshots cover every structured module but intentionally exclude uploaded media; use the full ZIP archive for a complete media backup. Application data and uploaded media live in the local `data/` directory, which is excluded from Git.
-
-The full ZIP archive feature uses the system `zip` command. It is installed by the included Dockerfile; direct Node.js deployments need `zip` available on the host. JSON export and import do not require it.
-
-Read [SQLITE_MIGRATION.md](SQLITE_MIGRATION.md) before upgrading an existing installation. It documents automatic import, encryption, backup behavior, and rollback to an older commit.
-
-This implementation is suitable for a single-user self-hosted application. Production forks should define their own retention, off-site backup, encryption-key recovery, and disaster-recovery policies.
-
-### Stats and SEO dashboard
-
-Stats is an optional example dashboard for Google Analytics 4, Search Console, and PageSpeed data. The public version uses environment-based project configuration and contains no personal domains or property IDs.
-
-It can be removed or adapted for sales, health, finance, home automation, server monitoring, project KPIs, or any other metrics.
-
-### Help, authentication, and integrations
-
-Noema also includes:
-
-- a built-in Help page;
-- optional password protection for the web UI;
-- bearer-token protection for machine tools;
-- encrypted SQLite record payloads and encrypted JSON compatibility mirrors;
-- optional read-only Google Calendar integration;
-- an MCP endpoint for compatible AI clients;
-- an auto-generated OpenAPI 3.1 document;
-- health and system-status endpoints.
-
-## Screenshots
-
-The public application is served in English. `public/noema-i18n.js` localizes interface chrome and date formatting while explicitly excluding task titles, notes, documents, links, and other user-created content. Screenshots are generated from neutral demo data by `scripts/capture-screenshots.mjs`; they never use a personal `data/` directory.
-
-| Page | Preview |
-|---|---|
-| Task board | ![Task board](docs/screenshots/home.png) |
-| Archive | ![Archive](docs/screenshots/archive.png) |
-| Notes | ![Notes](docs/screenshots/notes.png) |
-| Documents | ![Documents](docs/screenshots/documents.png) |
-| Links | ![Links](docs/screenshots/links.png) |
-| AI Projects | ![AI Projects](docs/screenshots/ai-projects.png) |
-| Inspiration | ![Inspiration](docs/screenshots/inspiration.png) |
-| Building Sites | ![Building Sites](docs/screenshots/building-sites.png) |
-| Backup | ![Backup](docs/screenshots/backup.png) |
-| Stats | ![Stats](docs/screenshots/stats.png) |
-| Help | ![Help](docs/screenshots/help.png) |
-| Login | ![Login](docs/screenshots/login.png) |
-| Not found | ![404](docs/screenshots/404.png) |
-
-## Quick start
-
-Requirements: **Node.js 22.16.0 or newer**. The included Docker image uses Node.js 24. The optional full ZIP archive-backup feature also needs the system `zip` command; the Docker image already provides it.
+## Quick local start
 
 ```bash
-git clone https://github.com/vladimirperovic/noema.git
-cd noema
 cp .env.example .env
-node src/index.js
+# Set ENCRYPTION_KEY. For an isolated local test you may also set:
+# ALLOW_INSECURE_NO_AUTH=true
+npm run check
+npm start
 ```
 
 Open `http://localhost:3000`.
 
-No build step or npm dependency installation is required.
+## Production configuration
 
-## Configuration
+Production fails closed unless authentication and HTTPS are configured. At minimum set:
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `PORT` | `3000` | HTTP port |
-| `HOST` | `0.0.0.0` | Bind address |
-| `PUBLIC_BASE_URL` | `http://localhost:3000` | Public URL used by OpenAPI and OAuth |
-| `NOEMA_API_TOKEN` | empty | Bearer token for MCP, OpenAPI tools, and machine access |
-| `UI_PASSWORD` | empty | Password protecting the browser UI |
-| `ENCRYPTION_KEY` | empty | Passphrase used to derive the local data-encryption key |
-| `NOEMA_TIMEZONE` | `UTC` | IANA timezone used for date boundaries |
-| `NOEMA_DATA_DIR` | `./data` | SQLite, JSON mirrors, uploads, snapshots, tokens, and local encryption-key directory |
-| `NOEMA_CORS_ORIGIN` | `*` | Allowed browser origin(s) |
-| `NOEMA_HTTP_USER_AGENT` | generic Noema identifier | Operator contact sent to services that require an identifiable user agent |
-| `NOEMA_ANALYTICS_PROJECTS` | empty | JSON array defining optional analytics projects |
-| `GOOGLE_CLIENT_ID` | empty | Optional Google Calendar OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | empty | Optional Google Calendar OAuth client secret |
-| `GOOGLE_CALENDAR_ID` | `primary` | Calendar to read |
-| `GOOGLE_REFRESH_TOKEN` | empty | Optional manually supplied refresh token |
-| `GA4_CLIENT_EMAIL` | empty | Optional Google service-account email |
-| `GA4_PRIVATE_KEY` | empty | Optional Google service-account private key |
-| `PAGESPEED_API_KEY` | empty | Optional PageSpeed API key |
-
-See `.env.example` for explanations and examples.
-
-## MCP and OpenAPI
-
-- MCP endpoint: `POST /mcp`
-- OpenAPI document: `GET /openapi.json`
-- Tool REST bridge: `POST /api/tools/<tool-name>`
-
-Example MCP configuration:
-
-```json
-{
-  "mcpServers": {
-    "noema": {
-      "url": "http://localhost:3000/mcp"
-    }
-  }
-}
+```dotenv
+NODE_ENV=production
+PUBLIC_BASE_URL=https://noema.example.com
+NOEMA_CORS_ORIGIN=https://noema.example.com
+UI_PASSWORD=replace-with-a-strong-password
+NOEMA_API_TOKEN=replace-with-a-long-random-token
+ENCRYPTION_KEY=replace-with-a-long-random-encryption-secret
+NOEMA_BACKUP_PASSWORD=replace-with-a-separate-long-backup-password
 ```
 
-## Project structure
+Do not use `ALLOW_INSECURE_NO_AUTH=true` for an Internet-facing deployment. See [DEPLOYMENT.md](DEPLOYMENT.md) and [SECURITY.md](SECURITY.md).
 
-```text
-src/
-  config.js              environment parsing and validation
-  core/                  auth, MCP, OpenAPI, validation, shared utilities
-  modules/               registered tools
-  services/              optional external services and analytics
-  store/                 shared encrypted SQLite collections and media stores
-  server.js              HTTP, REST, static files, uploads, backup
-public/                   browser interface
-scripts/                  maintenance and screenshot tooling
-test/                     Node.js tests
-docs/                     architecture, customization, and screenshots
-data/                     SQLite, encrypted mirrors, uploads, and keys; never committed
-```
-
-## Customize before deployment
-
-At minimum, review:
-
-1. module names and navigation;
-2. the three-day task behavior;
-3. authentication and reverse-proxy settings;
-4. backup and encryption-key recovery;
-5. external integrations;
-6. demo content and screenshots;
-7. privacy, retention, and access requirements for your deployment.
-
-Read [CUSTOMIZATION.md](CUSTOMIZATION.md), [DEPLOYMENT.md](DEPLOYMENT.md), [PRIVACY.md](PRIVACY.md), and [SECURITY.md](SECURITY.md) before exposing a fork to the internet.
-
-## Development
+## Docker
 
 ```bash
-npm run check
+docker build -t noema .
+docker run --rm -p 3000:3000 \
+  -v noema-data:/app/data \
+  --env-file .env \
+  noema
 ```
 
-The check command validates the main JavaScript files and runs the complete test suite, including SQLite import, encryption, persistence, and rollback-mirror coverage.
+The image runs the complete test suite during build and then performs a strict production smoke test before it can be published.
+
+## Data and backups
+
+Primary metadata lives in `NOEMA_DATA_DIR/noema.sqlite`; record payloads are encrypted before entering SQLite. Binary assets stay in dedicated directories such as `files/`, `uploads/`, `buildingsites/`, and `inspirations/`.
+
+Create a full encrypted archive:
+
+```bash
+npm run backup -- ./noema-backup.noema
+```
+
+Restore while Noema is stopped:
+
+```bash
+npm run restore -- ./noema-backup.noema /path/to/restored-data
+```
+
+A full `.noema` archive includes SQLite, encrypted mirrors, the installation master key, uploaded files, galleries, and other persistent data. Metadata JSON exports are portable but intentionally do not include binary contents. See [SQLITE_MIGRATION.md](SQLITE_MIGRATION.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## Main routes
+
+| Route | Purpose |
+|---|---|
+| `/` | Task board and calendar |
+| `/notes` | Notes |
+| `/documents` | Documents and checklists |
+| `/links` | Saved links |
+| `/files` | Private file library |
+| `/ai-projects` | AI project catalog |
+| `/buildingsite` | Project/site galleries |
+| `/inspiration` | Reference galleries |
+| `/stats` | Optional analytics dashboard |
+| `/backup` | Metadata snapshots and backup downloads |
+| `/openapi.json` | OpenAPI description |
+| `/mcp` | MCP Streamable HTTP endpoint |
+| `/healthz` | Health check |
 
 ## Documentation
 
-- [Product definition](PRODUCT.md)
-- [Customization guide](CUSTOMIZATION.md)
-- [Deployment guide](DEPLOYMENT.md)
-- [SQLite migration and rollback](SQLITE_MIGRATION.md)
-- [Privacy and data flows](PRIVACY.md)
-- [Architecture](ARCHITECTURE.md)
-- [Contributing](CONTRIBUTING.md)
-- [Security policy](SECURITY.md)
-- [Support](SUPPORT.md)
-- [Changelog](CHANGELOG.md)
-- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [PRODUCT.md](PRODUCT.md) — product scope and behavior
+- [ARCHITECTURE.md](ARCHITECTURE.md) — runtime and storage architecture
+- [CUSTOMIZATION.md](CUSTOMIZATION.md) — menu, UI, labels, and module customization
+- [DEPLOYMENT.md](DEPLOYMENT.md) — Docker, reverse proxies, environment, and backups
+- [SQLITE_MIGRATION.md](SQLITE_MIGRATION.md) — storage format and migration
+- [PRIVACY.md](PRIVACY.md) — data flows and external services
+- [SECURITY.md](SECURITY.md) — security model and vulnerability reporting
+- [CONTRIBUTING.md](CONTRIBUTING.md) — development workflow
+- [SUPPORT.md](SUPPORT.md) — troubleshooting
+- [CHANGELOG.md](CHANGELOG.md) — release history
 
 ## License
 
-MIT © Vladimir Perović. See [LICENSE](LICENSE).
-
-The software is provided **as is**, without warranty. The repository is a customizable reference implementation, not a hosted service or supported commercial product.
+MIT. See [LICENSE](LICENSE).

@@ -1,119 +1,124 @@
 # Deployment
 
-Noema is a single-process Node.js application with no runtime **Node.js package** dependencies. It can run directly with Node.js or from the included Dockerfile.
+## Supported runtime
 
-Noema is a reference application. Review the code, authentication model, storage model, integrations, and backup policy before exposing a customized fork to the internet.
+Noema requires Node.js 22.16 or newer because it uses the built-in `node:sqlite` module. The provided Docker image uses Node 24 Alpine and includes `curl`, `zip`, and `unzip`.
 
-## Requirements
+Persistent state must be mounted at `NOEMA_DATA_DIR` (`/app/data` in the Docker image).
 
-- Node.js 20 or newer, or Docker
-- a persistent writable directory for `data/`
-- the system `zip` command when running directly with Node.js and using full ZIP archive downloads; JSON export does not require it
-- HTTPS through a reverse proxy for internet-facing deployments
-- strong values for `UI_PASSWORD`, `NOEMA_API_TOKEN`, and `ENCRYPTION_KEY`
+## Required production settings
 
-The included Dockerfile installs `zip`, so the full archive-backup feature works in the container image without additional setup.
+Noema 0.3 fails closed in production. Unless the explicit development escape hatch is enabled, startup requires:
 
-## Run with Node.js
-
-```bash
-git clone https://github.com/vladimirperovic/noema.git
-cd noema
-cp .env.example .env
-node src/index.js
+```dotenv
+NODE_ENV=production
+PUBLIC_BASE_URL=https://noema.example.com
+NOEMA_CORS_ORIGIN=https://noema.example.com
+UI_PASSWORD=a-strong-browser-password
+NOEMA_API_TOKEN=a-long-random-machine-token
+ENCRYPTION_KEY=a-long-random-storage-secret
+NOEMA_BACKUP_PASSWORD=a-different-long-backup-password
 ```
 
-The default address is `http://localhost:3000`.
+`PUBLIC_BASE_URL` must use HTTPS and CORS must be an exact origin. `ALLOW_INSECURE_NO_AUTH=true` is only for isolated development and should never be used on an Internet-facing host.
 
-For a service manager such as systemd, run `node src/index.js` from the repository root and provide the same environment variables described in `.env.example`.
+## Docker Compose example
 
-## Run with Docker
+```yaml
+services:
+  noema:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - noema-data:/app/data
 
-Build the image:
-
-```bash
-docker build -t noema:local .
+volumes:
+  noema-data:
 ```
 
-Run it with a persistent data volume:
+Terminate TLS at a reverse proxy and forward to the loopback or private container address.
 
-```bash
-docker run -d \
-  --name noema \
-  --restart unless-stopped \
-  -p 3000:3000 \
-  -v noema-data:/app/data \
-  --env-file .env \
-  noema:local
+## Reverse proxies
+
+Noema ignores `X-Forwarded-For` unless the immediate peer address is listed in `NOEMA_TRUSTED_PROXY_IPS`. This prevents clients from selecting their own rate-limit identity.
+
+Discover the actual source address seen by Noema from container networking or proxy logs, then place only controlled reverse-proxy addresses in the comma-separated setting. Do not add client subnets or broad networks.
+
+Preserve the original `Host` and `X-Forwarded-Proto` headers and configure the proxy upload/body limit above the largest file you intend to allow. Noema currently permits 120 MB file content, encoded inside a larger JSON request.
+
+## Session and share lifetime
+
+```dotenv
+SESSION_IDLE_HOURS=24
+SESSION_ABSOLUTE_HOURS=168
+GALLERY_SHARE_TTL_DAYS=30
 ```
 
-The volume mounted at `/app/data` contains encrypted JSON stores, uploaded documents, image collections, snapshots, and generated local keys. Do not deploy the container without persistent storage.
+Browser sessions are revocable and expire on both idle and absolute timers. Gallery links are random, hashed at rest, expiring, revocable, and may be scoped to one module or album.
 
-## Coolify and similar platforms
+## Docker build verification
 
-Use the repository's Dockerfile and configure:
+The Dockerfile performs two independent checks:
 
-- exposed/internal port: `3000`;
-- health check: `/healthz`;
-- persistent storage: a volume mounted at `/app/data`;
-- public URL: the final HTTPS address in `PUBLIC_BASE_URL`;
-- all secrets through the platform's environment-variable interface.
+1. `npm run check` under `NODE_ENV=test`, including syntax and storage tests.
+2. A strict production process startup and `/healthz` request using complete security settings.
 
-Do not store production secrets in `.env` inside the repository.
+A failed test or startup prevents the image from being built.
 
-When changing repositories or deployment sources, preserve the existing `/app/data` volume and encryption settings. A new empty volume creates a separate Noema installation.
+## Data directory
 
-## Reverse proxy and HTTPS
+Typical contents include:
 
-For an internet-facing deployment:
+```text
+noema.sqlite
+noema-master.key
+*.json                 encrypted compatibility mirrors
+files/                 private Files binary data
+uploads/               document uploads
+buildingsites/         Building Sites media
+inspirations/          Inspiration media
+google-token.enc       encrypted Calendar refresh token
+snapshots/             encrypted metadata snapshots
+```
 
-1. terminate TLS at a trusted reverse proxy;
-2. forward requests to Noema on its internal port;
-3. set `PUBLIC_BASE_URL` to the exact external HTTPS URL;
-4. restrict `NOEMA_CORS_ORIGIN` to the expected browser origin;
-5. enable `UI_PASSWORD` and `NOEMA_API_TOKEN`;
-6. keep MCP and OpenAPI access limited to clients you trust.
+Do not copy only `noema.sqlite` and assume a complete recovery. Encrypted records depend on the installation key and binary modules depend on their directories.
 
-Noema should not be exposed directly on an unencrypted public HTTP port.
+## Backups
 
-## Required security values
+### Full disaster recovery
 
-Generate separate high-entropy values for:
+Create a password-encrypted archive:
 
-- `UI_PASSWORD` — protects browser access;
-- `NOEMA_API_TOKEN` — protects machine tools and integrations;
-- `ENCRYPTION_KEY` — derives the encryption key for local JSON data.
+```bash
+npm run backup -- /secure/path/noema-backup.noema
+```
 
-Store the encryption key in a password manager and in a protected recovery record. Losing it can make encrypted application data unrecoverable.
+The command checkpoints SQLite, flushes encrypted mirrors, includes the entire persistent data directory, creates SHA-256 checksums, and encrypts the resulting package with AES-256-GCM using a key derived from `NOEMA_BACKUP_PASSWORD`.
 
-## Persistent data and permissions
+Restore while Noema is stopped:
 
-The application process must be able to create and modify `/app/data`. The included Dockerfile runs as the non-root `node` user and prepares that directory accordingly.
+```bash
+npm run restore -- /secure/path/noema-backup.noema /path/to/noema-data
+```
 
-Back up the entire data volume, not only individual JSON files. Uploaded media and local keys may live in subdirectories.
+The restore verifies the manifest and keeps the previous target directory beside the restored data for rollback. Test restores periodically and keep at least one off-site copy.
 
-## Updates
+### Portable metadata
 
-Before updating:
+The Backup page can export a readable JSON snapshot of record metadata. It includes Files metadata but not file binaries, gallery images, document uploads, the SQLite database, or the installation key. Use it for inspection or record migration, not complete disaster recovery.
 
-1. create an application backup;
-2. take a platform or volume snapshot;
-3. record the current image or commit SHA;
-4. deploy the new version;
-5. verify `/healthz`, login, task access, uploads, and restore visibility.
+## Upgrades
 
-Keep a rollback path to the previous image or commit.
+1. Create and verify a full encrypted backup.
+2. Pull the new source or image.
+3. Run `npm run check` when building outside Docker.
+4. Replace the container while preserving the data volume.
+5. Confirm `/healthz`, login, Files, galleries, Calendar, and backup download.
+6. Keep the previous image and pre-upgrade backup until validation is complete.
 
-## Verification checklist
+## Health monitoring
 
-After deployment, verify:
-
-- `/healthz` returns a successful response;
-- the UI requires authentication when configured;
-- task dates use the expected timezone;
-- the `data/` volume remains populated after a redeploy;
-- uploads and image collections persist;
-- both JSON export and full ZIP archive backup work in a test environment;
-- optional Calendar, analytics, MCP, and OpenAPI integrations only expose intended data.
-
-See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), and [CUSTOMIZATION.md](CUSTOMIZATION.md) before production use.
+`GET /healthz` is unauthenticated and intended for container/orchestrator health checks. It does not expose record data. The footer build badge reads `/build-version.json` when the source commit is injected at image build time.
