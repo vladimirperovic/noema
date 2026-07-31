@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,10 +24,7 @@ function freePort() {
 async function waitFor(url, child, logs) {
   for (let attempt = 0; attempt < 80; attempt++) {
     if (child.exitCode !== null) throw new Error("Server exited with " + child.exitCode + ":\n" + logs());
-    try {
-      const response = await fetch(url);
-      if (response.ok) return;
-    } catch {}
+    try { const response = await fetch(url); if (response.ok) return; } catch {}
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error("Server did not become healthy:\n" + logs());
@@ -36,14 +33,11 @@ async function waitFor(url, child, logs) {
 async function stopChild(child) {
   if (child.exitCode !== null) return;
   child.kill("SIGTERM");
-  await Promise.race([
-    new Promise((resolve) => child.once("exit", resolve)),
-    new Promise((resolve) => setTimeout(resolve, 3000)),
-  ]);
+  await Promise.race([new Promise((resolve) => child.once("exit", resolve)), new Promise((resolve) => setTimeout(resolve, 3000))]);
   if (child.exitCode === null) child.kill("SIGKILL");
 }
 
-test("OAuth initiation is protected, English UI assets are public, and snapshots cover all metadata modules", async () => {
+test("OAuth is protected, UI assets are public, and encrypted backups cover all metadata modules", async () => {
   const cwd = await mkdtemp(path.join(tmpdir(), "noema-audit-"));
   const port = await freePort();
   const base = "http://127.0.0.1:" + port;
@@ -64,6 +58,7 @@ test("OAuth initiation is protected, English UI assets are public, and snapshots
       NOEMA_API_TOKEN: token,
       UI_PASSWORD: "test-password",
       ENCRYPTION_KEY: "test-encryption-key",
+      NOEMA_BACKUP_PASSWORD: "test-backup-password",
       GOOGLE_CLIENT_ID: "test-client",
       GOOGLE_CLIENT_SECRET: "test-secret",
     },
@@ -95,42 +90,43 @@ test("OAuth initiation is protected, English UI assets are public, and snapshots
     assert.match(html, /<html[^>]*lang="en"/i);
     assert.match(html, /<script src="\/noema-i18n\.js"><\/script>/);
 
-    const missing = await fetch(base + "/this-page-does-not-exist", {
-      headers: { ...auth, Accept: "text/html" },
-    });
+    const missing = await fetch(base + "/this-page-does-not-exist", { headers: { ...auth, Accept: "text/html" } });
     assert.equal(missing.status, 404);
     const missingHtml = await missing.text();
     assert.match(missingHtml, /<html[^>]*lang="en"/i);
     assert.match(missingHtml, /<script src="\/noema-i18n\.js"><\/script>/);
 
     const authHeaders = { ...auth, "Content-Type": "application/json" };
-    const snapshotResponse = await fetch(base + "/api/backup/snapshot", {
-      method: "POST",
-      headers: authHeaders,
-      body: "{}",
-    });
+    const snapshotResponse = await fetch(base + "/api/backup/snapshot", { method: "POST", headers: authHeaders, body: "{}" });
     assert.equal(snapshotResponse.status, 200);
     const { filename } = await snapshotResponse.json();
+    assert.match(filename, /^snapshot_\d+\.enc$/);
     const snapshotPath = path.join(cwd, "data", "snapshots", filename);
-    const snapshot = JSON.parse(await readFile(snapshotPath, "utf8"));
-    assert.equal(snapshot.scope, "metadata");
-    assert.equal(snapshot.includesMedia, false);
-    assert.ok(Array.isArray(snapshot.data.buildingSites));
-    assert.ok(Array.isArray(snapshot.data.inspirations));
+    const encrypted = await readFile(snapshotPath);
+    assert.ok(encrypted.length > 32);
+    assert.ok(!encrypted.toString("utf8").includes("buildingSites"));
 
-    snapshot.data.buildingSites = [{ id: "site-1", title: "Test site", images: [], createdAt: 1, updatedAt: 1 }];
-    snapshot.data.inspirations = [{ id: "inspiration-1", title: "Test inspiration", images: [], createdAt: 1, updatedAt: 1 }];
-    await writeFile(snapshotPath, JSON.stringify(snapshot), "utf8");
+    const download = await fetch(base + "/api/backup/download-json", { headers: auth });
+    assert.equal(download.status, 200);
+    const portable = await download.json();
+    assert.equal(portable.scope, "metadata");
+    assert.equal(portable.includesMedia, false);
+    assert.ok(Array.isArray(portable.data.files));
+    assert.ok(Array.isArray(portable.data.buildingSites));
+    assert.ok(Array.isArray(portable.data.inspirations));
 
-    const restore = await fetch(base + "/api/backup/restore-snapshot", {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({ filename }),
-    });
-    assert.equal(restore.status, 200);
-    const restored = (await restore.json()).restored;
+    portable.data.buildingSites = [{ id: "site-1", title: "Test site", images: [], createdAt: 1, updatedAt: 1 }];
+    portable.data.inspirations = [{ id: "inspiration-1", title: "Test inspiration", images: [], createdAt: 1, updatedAt: 1 }];
+    portable.data.files = [];
+    const upload = await fetch(base + "/api/backup/upload", { method: "POST", headers: authHeaders, body: JSON.stringify(portable) });
+    assert.equal(upload.status, 200);
+    const restored = (await upload.json()).restored;
+    assert.equal(restored.files, 0);
     assert.equal(restored.buildingSites, 1);
     assert.equal(restored.inspirations, 1);
+
+    const restoreSnapshot = await fetch(base + "/api/backup/restore-snapshot", { method: "POST", headers: authHeaders, body: JSON.stringify({ filename }) });
+    assert.equal(restoreSnapshot.status, 200);
   } finally {
     await stopChild(child);
     await rm(cwd, { recursive: true, force: true });
