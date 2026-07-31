@@ -56,6 +56,11 @@ export async function handleAuthRoute(req, res, url, ip, rawSessionToken, uiSess
     return true;
   }
   if (pathname === "/auth/google/callback" && req.method === "GET") {
+    const oauthError = url.searchParams.get("error");
+    if (oauthError) {
+      redirect(res, oauthError === "access_denied" ? "/?calendar=denied" : `/?calendar=error&reason=${encodeURIComponent(oauthError)}`);
+      return true;
+    }
     if (config.uiAuthEnabled && !uiSession) { json(res, 401, { ok: false, error: "The OAuth callback requires an active administrator session." }); return true; }
     const binding = config.uiAuthEnabled ? sessionBinding(rawSessionToken) : "insecure-development-session";
     const result = await handleOAuthCallback(url.searchParams.get("code"), url.searchParams.get("state"), binding);
