@@ -114,3 +114,9 @@ A full `.noema` archive includes SQLite, encrypted mirrors, the installation mas
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Roadmap: Noema Web/PWA + client-side E2EE
+
+Planned next security layer: keep Noema usable as the same Web/PWA on iPhone and desktop while moving sensitive Notes and Files to client-side end-to-end encryption. The browser encrypts before upload and decrypts after download; the server should store ciphertext only and should never receive the plaintext master encryption key.
+
+See [E2EE_ROADMAP.md](E2EE_ROADMAP.md) for the proposed key model, multi-device enrollment, file streaming, migration strategy, search implications, and threat-model limitations of browser-delivered JavaScript.
