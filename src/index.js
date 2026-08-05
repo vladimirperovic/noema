@@ -17,7 +17,7 @@ import { closeDatabase } from "./store/database.js";
 import { initCrypto } from "./store/crypto.js";
 
 function main() {
-  initCrypto(config.ENCRYPTION_KEY);
+  initCrypto({ masterPassword: config.UI_PASSWORD, legacyPassword: config.ENCRYPTION_KEY });
   const server = installSecurityGateway(
     installGalleryDownloads(
       installFileLibrary(createServer()),
