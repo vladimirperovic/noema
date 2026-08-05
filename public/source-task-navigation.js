@@ -3,6 +3,42 @@
 
   const pathname = location.pathname.replace(/\.html$/, "").replace(/\/$/, "") || "/";
 
+  function pinFloatingControls() {
+    const burger = document.getElementById("mobileBurger");
+    const theme = document.getElementById("topTheme");
+    if (!burger && !theme) return;
+
+    let style = document.getElementById("noema-fixed-controls-style");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "noema-fixed-controls-style";
+      style.textContent = `
+        body > #mobileBurger,
+        body > #topTheme {
+          position: fixed !important;
+          right: 1rem !important;
+          margin: 0 !important;
+          transform: none !important;
+          z-index: 10001 !important;
+        }
+        body > #mobileBurger { top: calc(1rem + env(safe-area-inset-top, 0px)) !important; }
+        body > #topTheme { top: calc(1rem + env(safe-area-inset-top, 0px) + 56px) !important; }
+        body.menu-pushed > #mobileBurger,
+        body.menu-pushed > #topTheme {
+          opacity: 0;
+          pointer-events: none;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    if (burger && burger.parentElement !== document.body) document.body.appendChild(burger);
+    if (theme && theme.parentElement !== document.body) document.body.appendChild(theme);
+  }
+
+  pinFloatingControls();
+  addEventListener("pageshow", pinFloatingControls);
+
   function navigate(event) {
     const title = event.target.closest?.(".task.noema-source-linked .task-title");
     const href = title?.closest(".task.noema-source-linked")?.dataset.noemaSourceHref;
