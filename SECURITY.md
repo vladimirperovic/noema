@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Security fixes are provided for the latest release on the default branch. Operators should keep their deployment, Node.js runtime, base image, reverse proxy, and host operating system updated.
+Security fixes are provided for the latest release on the default branch. Operators should keep their deployment, Node.js runtime, base image, reverse proxy, Chromium package, and host operating system updated.
 
 ## Reporting a vulnerability
 
@@ -68,6 +68,16 @@ The Files module:
 
 Other upload modules should follow the same invariants. Reverse-proxy limits should not be substantially larger than application limits without a reason.
 
+## Links thumbnail generation
+
+Links screenshots are optional and are generated locally with headless Chromium. Noema does not send saved URLs to a third-party screenshot API.
+
+Before Chromium is launched, the saved URL is passed through the centralized public-URL validation and DNS/IP checks. Localhost, RFC1918/private, link-local, credential-bearing, unsupported-scheme, and redirect targets that resolve into blocked networks are rejected.
+
+Generated PNGs live under `NOEMA_DATA_DIR/link-thumbnails` and are exposed only through authenticated UI routes. They are part of the persistent data set and therefore part of full disaster-recovery archives.
+
+Chromium is still a complex network-facing parser. Keep the container/base image updated, do not disable the existing URL preflight, and avoid granting the Noema process broader filesystem or host privileges than it needs. A compromised target page must not be treated as trusted application code.
+
 ## Gallery shares
 
 Share tokens are generated from 32 random bytes and stored only as SHA-256 hashes. They expire, can be revoked, and may be limited by module and album. A share URL is a bearer secret: anyone who has it can access the permitted gallery until expiry or revocation.
@@ -82,9 +92,11 @@ Google OAuth state is random, short-lived, and bound to the administrator sessio
 
 Features that fetch user-supplied URLs must use the centralized outbound URL controls and reject unsafe schemes, credentials in URLs, loopback/private destinations where prohibited, and redirect chains that cross into blocked networks.
 
+This rule applies to link metadata, Reader Mode fetches, remote media helpers, and the preflight performed before local Links screenshot generation.
+
 ## Backups
 
-Portable JSON backups are readable and must be protected. Full `.noema` archives include all persistent data and encryption material, then encrypt the package with a separate backup password. The archive format uses a manifest with SHA-256 checksums and AES-256-GCM authentication.
+Portable JSON backups are readable and must be protected. Full `.noema` archives include all persistent data and encryption material, including generated Links thumbnails, then encrypt the package with a separate backup password. The archive format uses a manifest with SHA-256 checksums and AES-256-GCM authentication.
 
 Restore full archives only while Noema is stopped. Store backup passwords separately, retain off-site copies, and test restoration.
 
@@ -94,14 +106,15 @@ The outer gateway applies Content Security Policy, frame denial, MIME sniffing p
 
 ## Dependency and runtime security
 
-Noema has no runtime npm dependencies, but it still depends on Node.js, Alpine packages in the container, browser APIs, reverse-proxy software, and optional external services. Monitor and update these components.
+Noema has no runtime npm dependencies, but it still depends on Node.js, Alpine packages in the container, Chromium for optional thumbnail generation, browser APIs, reverse-proxy software, and optional external services. Monitor and update these components.
 
 ## Operator checklist
 
 - Use HTTPS and prevent direct public access to the backend port.
 - Use a unique, long `UI_PASSWORD`, a separate API token, and a separate backup password.
-- Back up the complete data directory, including `master.key`, and verify restores.
+- Back up the complete data directory, including `master.key` and generated thumbnail/media directories, and verify restores.
 - Configure only controlled trusted proxies.
 - Revoke unused sessions and share links.
 - Protect `.env`, volumes, logs, CI variables, and backup destinations.
+- Keep Node.js, Chromium, the container base image, reverse proxy, and host patched.
 - Review public gallery content before sharing.
