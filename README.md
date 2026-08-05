@@ -8,13 +8,13 @@ Noema is a zero-dependency, self-hosted personal workspace built with Node.js, t
 - Notes, documents, links, AI projects, Building Sites, Inspiration, Stats, and a private **Files** library.
 - Files metadata stored in encrypted SQLite records and binary content stored below `NOEMA_DATA_DIR/files`; maximum file size is 120 MB.
 - Source-linked tasks: records from Notes, Documents, Links, Files, galleries, and AI Projects can become read-only tasks that deep-link back to their source.
-- One canonical responsive menu, active-page highlighting, light/dark mode, font scaling, and a persistent WIDTH control.
+- One canonical responsive menu, active-page highlighting, light/dark mode, font scaling, and a persistent WIDTH control. The top menu/theme controls stay fixed to the viewport while pages scroll.
 - Google Calendar read-only integration with an encrypted refresh token and session-bound OAuth state.
 - MCP and OpenAPI endpoints for machine clients.
 - Server-side revocable browser sessions, trusted-proxy handling, security headers, login/API rate limits, and expiring gallery-share links.
 - Encrypted SQLite storage, encrypted compatibility mirrors, encrypted metadata snapshots, and password-encrypted `.noema` disaster-recovery archives.
 - Docker image syntax tests, storage tests, and a strict production startup smoke test.
-- Links visual library with 3–6 card density, compact table mode, and optional locally generated page thumbnails using headless Chromium. Generated thumbnails stay below `NOEMA_DATA_DIR/link-thumbnails`; saved URLs are not sent to a third-party screenshot service.
+- Links visual library with 3–6 card density, compact table mode, one-line titles, click-to-select existing labels while adding, and optional locally generated page thumbnails using headless Chromium. Generated thumbnails stay below `NOEMA_DATA_DIR/link-thumbnails`; saved URLs are not sent to a third-party screenshot service.
 
 ## Requirements
 
@@ -94,7 +94,7 @@ A full `.noema` archive includes SQLite, encrypted mirrors, the installation mas
 | `/` | Task board and calendar |
 | `/notes` | Notes |
 | `/documents` | Documents and checklists |
-| `/links` | Saved links |
+| `/links` | Visual bookmarks, Cards/Table views, labels, and local thumbnails |
 | `/files` | Private file library |
 | `/ai-projects` | AI project catalog |
 | `/buildingsite` | Project/site galleries |
