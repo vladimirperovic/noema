@@ -13,6 +13,7 @@ Noema is a zero-dependency, self-hosted personal workspace built with Node.js, t
 - MCP and OpenAPI endpoints for machine clients.
 - Server-side revocable browser sessions, trusted-proxy handling, security headers, login/API rate limits, and expiring gallery-share links.
 - Encrypted SQLite storage, encrypted compatibility mirrors, encrypted metadata snapshots, and password-encrypted `.noema` disaster-recovery archives.
+- One Noema master password for browser login and protection of the installation data-encryption key.
 - Docker image syntax tests, storage tests, and a strict production startup smoke test.
 
 ## Requirements
@@ -26,7 +27,8 @@ Noema is a zero-dependency, self-hosted personal workspace built with Node.js, t
 
 ```bash
 cp .env.example .env
-# Set ENCRYPTION_KEY. For an isolated local test you may also set:
+# Set UI_PASSWORD. It is the single password used to sign in and protect Noema's data key.
+# For an isolated local test you may instead set:
 # ALLOW_INSECURE_NO_AUTH=true
 npm run check
 npm start
@@ -42,11 +44,14 @@ Production fails closed unless authentication and HTTPS are configured. At minim
 NODE_ENV=production
 PUBLIC_BASE_URL=https://noema.example.com
 NOEMA_CORS_ORIGIN=https://noema.example.com
-UI_PASSWORD=replace-with-a-strong-password
+UI_PASSWORD=replace-with-a-strong-master-password
 NOEMA_API_TOKEN=replace-with-a-long-random-token
-ENCRYPTION_KEY=replace-with-a-long-random-encryption-secret
 NOEMA_BACKUP_PASSWORD=replace-with-a-separate-long-backup-password
 ```
+
+`UI_PASSWORD` is the single Noema master password. A random installation data-encryption key is stored only in wrapped form in `NOEMA_DATA_DIR/master.key`, protected by a key derived from this password.
+
+Existing installations that previously used a separate `ENCRYPTION_KEY` can leave it configured for the first startup after upgrading. On the first successful browser login, Noema validates existing encrypted storage and re-wraps the same data key with the login password. Records are not mass re-encrypted. After a successful restart with the migrated `master.key`, the legacy `ENCRYPTION_KEY` can be removed.
 
 Do not use `ALLOW_INSECURE_NO_AUTH=true` for an Internet-facing deployment. See [DEPLOYMENT.md](DEPLOYMENT.md) and [SECURITY.md](SECURITY.md).
 
@@ -78,7 +83,7 @@ Restore while Noema is stopped:
 npm run restore -- ./noema-backup.noema /path/to/restored-data
 ```
 
-A full `.noema` archive includes SQLite, encrypted mirrors, the installation master key, uploaded files, galleries, and other persistent data. Metadata JSON exports are portable but intentionally do not include binary contents. See [SQLITE_MIGRATION.md](SQLITE_MIGRATION.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
+A full `.noema` archive includes SQLite, encrypted mirrors, the wrapped installation master key, uploaded files, galleries, and other persistent data. Metadata JSON exports are portable but intentionally do not include binary contents. See [SQLITE_MIGRATION.md](SQLITE_MIGRATION.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Main routes
 
