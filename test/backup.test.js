@@ -15,18 +15,24 @@ function run(dataDir, source) {
   return spawnSync(process.execPath, ["--input-type=module", "--eval", source], {
     cwd: root,
     encoding: "utf8",
-    env: { ...process.env, NODE_ENV: "test", NOEMA_DATA_DIR: dataDir, ENCRYPTION_KEY: "archive-storage-key", NOEMA_BACKUP_PASSWORD: "archive-password-123" },
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      NOEMA_DATA_DIR: dataDir,
+      UI_PASSWORD: "",
+      ENCRYPTION_KEY: "archive-storage-key",
+      NOEMA_BACKUP_PASSWORD: "archive-password-123",
+    },
   });
 }
 
-test("full archive verifies checksums and restores binary data", { skip: !(commandExists("zip") && commandExists("unzip")) }, async () => {
+test("full archive verifies checksums and restores encrypted binary data", { skip: !(commandExists("zip") && commandExists("unzip")) }, async () => {
   const cwd = await mkdtemp(path.join(tmpdir(), "noema-backup-"));
   const dataDir = path.join(cwd, "data");
   const restoredDir = path.join(cwd, "restored");
   try {
     const result = run(dataDir, `
       import assert from "node:assert/strict";
-      import path from "node:path";
       import { config } from ${JSON.stringify(moduleUrl("../src/config.js"))};
       import { initCrypto } from ${JSON.stringify(moduleUrl("../src/store/crypto.js"))};
       initCrypto(config.ENCRYPTION_KEY);
@@ -42,15 +48,39 @@ test("full archive verifies checksums and restores binary data", { skip: !(comma
       assert.ok(restored.manifest.files.length > 0);
       const metadata = manifest.files.find((entry) => entry.path.includes("files/") && !entry.path.endsWith(".tmp"));
       assert.ok(metadata);
-      console.log(JSON.stringify({ storedName: created.storedName }));
+      console.log(JSON.stringify({ storedName: created.storedName, id: created.id }));
       const { closeDatabase } = await import(${JSON.stringify(moduleUrl("../src/store/database.js"))});
       closeDatabase();
     `);
     assert.equal(result.status, 0, result.stderr || result.stdout);
     const line = result.stdout.trim().split("\n").find((value) => value.startsWith("{"));
-    const { storedName } = JSON.parse(line);
-    await access(path.join(restoredDir, "files", storedName), constants.R_OK);
-    assert.equal((await readFile(path.join(restoredDir, "files", storedName))).toString(), "binary-content");
+    const { storedName, id } = JSON.parse(line);
+    const restoredFilePath = path.join(restoredDir, "files", storedName);
+    await access(restoredFilePath, constants.R_OK);
+
+    // A full backup restores the persistent storage representation, which must
+    // remain ciphertext. Restore is not allowed to turn Files back into plaintext.
+    const stored = await readFile(restoredFilePath);
+    assert.equal(stored.subarray(0, 14).toString("utf8"), "NOEMA-FILE-V1\0");
+    assert.equal(stored.includes(Buffer.from("binary-content")), false);
+
+    // The restored data directory still decrypts to the exact original bytes
+    // through Noema when the installation encryption key is initialized.
+    const verify = run(restoredDir, `
+      import assert from "node:assert/strict";
+      import { config } from ${JSON.stringify(moduleUrl("../src/config.js"))};
+      import { initCrypto } from ${JSON.stringify(moduleUrl("../src/store/crypto.js"))};
+      initCrypto(config.ENCRYPTION_KEY);
+      const files = await import(${JSON.stringify(moduleUrl("../src/store/files.js"))});
+      files.loadFiles();
+      const restored = files.readFileContent(${JSON.stringify(id)});
+      assert.ok(restored);
+      assert.equal(restored.data.toString(), "binary-content");
+      files.closeFiles();
+      const { closeDatabase } = await import(${JSON.stringify(moduleUrl("../src/store/database.js"))});
+      closeDatabase();
+    `);
+    assert.equal(verify.status, 0, verify.stderr || verify.stdout);
   } finally { await rm(cwd, { recursive: true, force: true }); }
 });
 
