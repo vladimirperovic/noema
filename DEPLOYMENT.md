@@ -14,11 +14,14 @@ Noema 0.3 fails closed in production. Unless the explicit development escape hat
 NODE_ENV=production
 PUBLIC_BASE_URL=https://noema.example.com
 NOEMA_CORS_ORIGIN=https://noema.example.com
-UI_PASSWORD=a-strong-browser-password
+UI_PASSWORD=a-strong-master-password
 NOEMA_API_TOKEN=a-long-random-machine-token
-ENCRYPTION_KEY=a-long-random-storage-secret
 NOEMA_BACKUP_PASSWORD=a-different-long-backup-password
 ```
+
+`UI_PASSWORD` is the single Noema master password. It authenticates the browser UI and protects the random installation data-encryption key stored in wrapped form in `NOEMA_DATA_DIR/master.key`.
+
+Existing installations that previously used a separate `ENCRYPTION_KEY` should keep that value for the first startup after upgrading. Sign in once with the normal UI password; Noema validates existing encrypted storage and re-wraps the same data key with that login password. This does not bulk re-encrypt records. After a successful restart with the migrated `master.key`, remove the legacy `ENCRYPTION_KEY` from the environment.
 
 `PUBLIC_BASE_URL` must use HTTPS and CORS must be an exact origin. `ALLOW_INSECURE_NO_AUTH=true` is only for isolated development and should never be used on an Internet-facing host.
 
@@ -64,7 +67,7 @@ Browser sessions are revocable and expire on both idle and absolute timers. Gall
 The Dockerfile performs two independent checks:
 
 1. `npm run check` under `NODE_ENV=test`, including syntax and storage tests.
-2. A strict production process startup and `/healthz` request using complete security settings.
+2. A strict production process startup and `/healthz` request using complete security settings and only the single `UI_PASSWORD` for browser/encryption master-password duties.
 
 A failed test or startup prevents the image from being built.
 
@@ -74,17 +77,17 @@ Typical contents include:
 
 ```text
 noema.sqlite
-noema-master.key
-*.json                 encrypted compatibility mirrors
-files/                 private Files binary data
-uploads/               document uploads
-buildingsites/         Building Sites media
-inspirations/          Inspiration media
-google-token.enc       encrypted Calendar refresh token
-snapshots/             encrypted metadata snapshots
+master.key              wrapped installation data-encryption key
+*.json                  encrypted compatibility mirrors
+files/                  private Files binary data
+uploads/                document uploads
+buildingsites/          Building Sites media
+inspirations/           Inspiration media
+google-token.enc        encrypted Calendar refresh token
+snapshots/              encrypted metadata snapshots
 ```
 
-Do not copy only `noema.sqlite` and assume a complete recovery. Encrypted records depend on the installation key and binary modules depend on their directories.
+Do not copy only `noema.sqlite` and assume a complete recovery. Encrypted records depend on `master.key`, and binary modules depend on their directories. The master password alone cannot reconstruct a lost random installation data key.
 
 ## Backups
 
@@ -114,10 +117,13 @@ The Backup page can export a readable JSON snapshot of record metadata. It inclu
 
 1. Create and verify a full encrypted backup.
 2. Pull the new source or image.
-3. Run `npm run check` when building outside Docker.
-4. Replace the container while preserving the data volume.
-5. Confirm `/healthz`, login, Files, galleries, Calendar, and backup download.
-6. Keep the previous image and pre-upgrade backup until validation is complete.
+3. If upgrading from the old two-secret model, keep the existing `ENCRYPTION_KEY` for the first startup.
+4. Run `npm run check` when building outside Docker.
+5. Replace the container while preserving the data volume.
+6. Sign in once with `UI_PASSWORD`; this migrates legacy `master.key` protection without re-encrypting application records.
+7. Restart and confirm `/healthz`, login, Notes, Files, galleries, Calendar, and backup download.
+8. After that successful restart, remove the legacy `ENCRYPTION_KEY` if one was previously configured.
+9. Keep the previous image and pre-upgrade backup until validation is complete.
 
 ## Health monitoring
 
