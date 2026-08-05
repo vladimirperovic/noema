@@ -2,14 +2,18 @@
 
 ## Overview
 
-Noema is a single-process Node.js application with no runtime package dependencies. It uses the built-in HTTP server, `node:sqlite`, `fetch`, `node:crypto`, and static browser assets.
+Noema is a single-process Node.js application with no runtime npm package dependencies. It uses the built-in HTTP server, `node:sqlite`, `fetch`, `node:crypto`, static browser assets, and an optional system Chromium executable for Links screenshot generation.
 
 The runtime is composed rather than implemented as one replacement server:
 
 ```text
 installSecurityGateway(
-  installFileLibrary(
-    createServer()
+  installGalleryDownloads(
+    installFileLibrary(
+      installLinkThumbnails(
+        createServer()
+      )
+    )
   )
 )
 ```
@@ -33,9 +37,17 @@ Each wrapper removes the previous request listener, installs its own listener, h
 
 Related modules live under `src/security/` and security collections under `src/store/`.
 
+### Gallery download gateway
+
+`src/gallery-downloads.js` handles authenticated/scoped album ZIP downloads and original-image downloads without expanding the authorization assumptions in the core server.
+
 ### Files gateway
 
 `src/file-library.js` serves `/files`, the Files REST API, and binary content. It accepts a verified UI session or API bearer token. Files metadata is handled by `src/store/files.js`; binary content is kept outside SQLite under `NOEMA_DATA_DIR/files`.
+
+### Links thumbnail gateway
+
+`src/link-thumbnails.js` handles authenticated generation and delivery of local page screenshots for Links records. It looks up the stored link, performs the same public-URL/SSRF preflight used by outbound fetches, launches headless Chromium only after validation, stores PNGs below `NOEMA_DATA_DIR/link-thumbnails`, updates the link image path, and serves generated thumbnails only to authenticated UI requests.
 
 ### Core server
 
@@ -56,19 +68,24 @@ files/
 uploads/
 buildingsites/
 inspirations/
+link-thumbnails/
 ```
 
-The Files module writes randomized names atomically and stores the original display name in encrypted metadata. Gallery modules keep their own media directory conventions.
+The Files module writes randomized names atomically and stores the original display name in encrypted metadata. Gallery modules keep their own media directory conventions. Links screenshots are generated PNGs referenced by encrypted link metadata.
 
-### Encryption
+### Encryption and key wrapping
 
-`src/store/crypto.js` derives or loads the installation encryption key and provides authenticated encryption. It protects SQLite record payloads, collection mirrors, snapshots, sessions, shares, and Calendar refresh-token storage.
+`src/store/crypto.js` loads the random installation data-encryption key and provides authenticated encryption. It protects SQLite record payloads, collection mirrors, snapshots, sessions, shares, and Calendar refresh-token storage.
+
+The installation data key is not derived directly from the user's password. It is random and stored in `NOEMA_DATA_DIR/master.key` wrapped by a key derived from `UI_PASSWORD` with scrypt. Existing deployments can temporarily provide the legacy `ENCRYPTION_KEY`; the first successful login validates the old data key and re-wraps that same key with the normal UI password instead of re-encrypting every stored record.
 
 ## Authentication and authorization
 
 ### Browser sessions
 
 Successful UI login creates a random opaque token. `src/store/sessions.js` stores only its hash, plus encrypted session metadata. Verification enforces idle expiry, absolute expiry, password fingerprint, and revocation.
+
+The same entered `UI_PASSWORD` unlocks both login and the wrapped installation data key, giving the user a single-password flow while keeping authentication/session state and data encryption as separate mechanisms.
 
 ### Machine clients
 
@@ -94,13 +111,13 @@ Recurring task templates keep a stable template ID. Generated occurrences use de
 
 `src/security/backup-state.js` exports and restores portable metadata collections. `src/store/backup.js` creates full disaster-recovery archives by checkpointing SQLite, flushing mirrors, copying the persistent directory, generating a SHA-256 manifest, zipping the payload, and encrypting it with AES-256-GCM.
 
-Full archive restore is an offline operation because replacing the live SQLite database and encryption material while the process is running would be unsafe.
+Full archive restore is an offline operation because replacing the live SQLite database and encryption material while the process is running would be unsafe. Generated Links thumbnails are included because they live inside the persistent data directory.
 
 ## Frontend architecture
 
-Pages remain independent HTML documents with inline page-specific behavior. `public/noema-header-footer.js` supplies the canonical menu, theme, footer, font scale, WIDTH mode, build badge, and module-controller loading. It removes duplicate legacy controls before rendering fresh shared controls.
+Pages remain independent HTML documents with inline page-specific behavior. `public/noema-header-footer.js` supplies the canonical menu, theme, footer, font scale, WIDTH mode, build badge, and module-controller loading. Shared top menu/theme controls are moved to the viewport layer so they do not scroll with page content.
 
-`public/source-task-buttons.js` and `public/source-task-navigation.js` add cross-page linked-task behavior. `public/noema-i18n.js` provides interface localization.
+`public/source-task-buttons.js` and `public/source-task-navigation.js` add cross-page linked-task behavior and shared browser enhancements. `public/links-enhancements.js` adds the Links Cards/Table switch, 3–6 cards-per-row control, compact text treatment, and missing-thumbnail batch generator without changing the underlying Links data model. `public/noema-i18n.js` provides interface localization.
 
 ## Shutdown
 
@@ -108,4 +125,4 @@ Pages remain independent HTML documents with inline page-specific behavior. `pub
 
 ## Testing boundary
 
-`npm run check` performs syntax checks across runtime/browser/scripts and runs all Node tests. The Dockerfile runs that suite in test mode and then starts the full application under strict production configuration and probes `/healthz`.
+`npm run check` performs syntax checks across runtime/browser/scripts and runs all Node tests. The Dockerfile runs that suite in test mode and then starts the full application under strict production configuration and probes `/healthz`. The Docker runtime also includes Chromium so the same image can service optional Links thumbnail requests after deployment.

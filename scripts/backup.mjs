@@ -4,7 +4,7 @@ import { config } from "../src/config.js";
 import { initCrypto } from "../src/store/crypto.js";
 import { createEncryptedBackup, inspectEncryptedBackup } from "../src/store/backup.js";
 
-initCrypto(config.ENCRYPTION_KEY);
+initCrypto({ masterPassword: config.UI_PASSWORD, legacyPassword: config.ENCRYPTION_KEY });
 const output = path.resolve(process.argv[2] || `noema_full_${new Date().toISOString().replace(/[:.]/g, "-")}.noema`);
 const archive = createEncryptedBackup();
 writeFileSync(output, archive, { mode: 0o600 });

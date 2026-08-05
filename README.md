@@ -8,12 +8,13 @@ Noema is a zero-dependency, self-hosted personal workspace built with Node.js, t
 - Notes, documents, links, AI projects, Building Sites, Inspiration, Stats, and a private **Files** library.
 - Files metadata stored in encrypted SQLite records and binary content stored below `NOEMA_DATA_DIR/files`; maximum file size is 120 MB.
 - Source-linked tasks: records from Notes, Documents, Links, Files, galleries, and AI Projects can become read-only tasks that deep-link back to their source.
-- One canonical responsive menu, active-page highlighting, light/dark mode, font scaling, and a persistent WIDTH control.
+- One canonical responsive menu, active-page highlighting, light/dark mode, font scaling, and a persistent WIDTH control. The top menu/theme controls stay fixed to the viewport while pages scroll.
 - Google Calendar read-only integration with an encrypted refresh token and session-bound OAuth state.
 - MCP and OpenAPI endpoints for machine clients.
 - Server-side revocable browser sessions, trusted-proxy handling, security headers, login/API rate limits, and expiring gallery-share links.
 - Encrypted SQLite storage, encrypted compatibility mirrors, encrypted metadata snapshots, and password-encrypted `.noema` disaster-recovery archives.
 - Docker image syntax tests, storage tests, and a strict production startup smoke test.
+- Links visual library with 3–6 card density, compact table mode, one-line titles, click-to-select existing labels while adding, and optional locally generated page thumbnails using headless Chromium. Generated thumbnails stay below `NOEMA_DATA_DIR/link-thumbnails`; saved URLs are not sent to a third-party screenshot service.
 
 ## Requirements
 
@@ -21,12 +22,15 @@ Noema is a zero-dependency, self-hosted personal workspace built with Node.js, t
 - Persistent storage for `NOEMA_DATA_DIR`.
 - HTTPS for production.
 - `zip` and `unzip` for full encrypted backup/restore outside the provided Docker image.
+- Chromium is required only if you want to generate Links page thumbnails outside the provided Docker image. Set `NOEMA_CHROMIUM_PATH` when Chromium is installed in a non-standard location.
 
 ## Quick local start
 
 ```bash
 cp .env.example .env
-# Set ENCRYPTION_KEY. For an isolated local test you may also set:
+# Set UI_PASSWORD. It is the single browser master password used for login and
+# for protection of Noema's installation data-encryption key.
+# For an isolated local test you may also set:
 # ALLOW_INSECURE_NO_AUTH=true
 npm run check
 npm start
@@ -42,11 +46,14 @@ Production fails closed unless authentication and HTTPS are configured. At minim
 NODE_ENV=production
 PUBLIC_BASE_URL=https://noema.example.com
 NOEMA_CORS_ORIGIN=https://noema.example.com
-UI_PASSWORD=replace-with-a-strong-password
+UI_PASSWORD=replace-with-a-strong-master-password
 NOEMA_API_TOKEN=replace-with-a-long-random-token
-ENCRYPTION_KEY=replace-with-a-long-random-encryption-secret
 NOEMA_BACKUP_PASSWORD=replace-with-a-separate-long-backup-password
 ```
+
+`UI_PASSWORD` is the one password entered in the browser. Noema uses it both to authenticate the UI session and to wrap the random installation data-encryption key. The password itself is not used directly as the AES data key.
+
+Existing installations that still use a legacy `ENCRYPTION_KEY` can keep it temporarily during migration. After one successful login with the normal `UI_PASSWORD`, Noema re-wraps the existing data key without bulk re-encrypting stored records; the legacy variable can then be removed after a successful restart.
 
 Do not use `ALLOW_INSECURE_NO_AUTH=true` for an Internet-facing deployment. See [DEPLOYMENT.md](DEPLOYMENT.md) and [SECURITY.md](SECURITY.md).
 
@@ -60,11 +67,11 @@ docker run --rm -p 3000:3000 \
   noema
 ```
 
-The image runs the complete test suite during build and then performs a strict production smoke test before it can be published.
+The image runs the complete test suite during build and then performs a strict production smoke test before it can be published. Chromium is included in the image for local Links thumbnail generation.
 
 ## Data and backups
 
-Primary metadata lives in `NOEMA_DATA_DIR/noema.sqlite`; record payloads are encrypted before entering SQLite. Binary assets stay in dedicated directories such as `files/`, `uploads/`, `buildingsites/`, and `inspirations/`.
+Primary metadata lives in `NOEMA_DATA_DIR/noema.sqlite`; record payloads are encrypted before entering SQLite. Binary assets stay in dedicated directories such as `files/`, `uploads/`, `buildingsites/`, `inspirations/`, and `link-thumbnails/`.
 
 Create a full encrypted archive:
 
@@ -78,7 +85,7 @@ Restore while Noema is stopped:
 npm run restore -- ./noema-backup.noema /path/to/restored-data
 ```
 
-A full `.noema` archive includes SQLite, encrypted mirrors, the installation master key, uploaded files, galleries, and other persistent data. Metadata JSON exports are portable but intentionally do not include binary contents. See [SQLITE_MIGRATION.md](SQLITE_MIGRATION.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
+A full `.noema` archive includes SQLite, encrypted mirrors, the installation master key, uploaded files, generated Links thumbnails, galleries, and other persistent data. Metadata JSON exports are portable but intentionally do not include binary contents. See [SQLITE_MIGRATION.md](SQLITE_MIGRATION.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Main routes
 
@@ -87,7 +94,7 @@ A full `.noema` archive includes SQLite, encrypted mirrors, the installation mas
 | `/` | Task board and calendar |
 | `/notes` | Notes |
 | `/documents` | Documents and checklists |
-| `/links` | Saved links |
+| `/links` | Visual bookmarks, Cards/Table views, labels, and local thumbnails |
 | `/files` | Private file library |
 | `/ai-projects` | AI project catalog |
 | `/buildingsite` | Project/site galleries |

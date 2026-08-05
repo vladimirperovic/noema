@@ -9,11 +9,33 @@ All notable public changes are documented here.
 - One-click ZIP downloads containing the numbered original files from an open Inspiration or Building Site album.
 - A compact monochrome lightbox control for downloading the currently displayed original image.
 - Album-download support for authenticated users and valid scope-limited public gallery links.
+- One-password browser flow: `UI_PASSWORD` now authenticates the UI and protects the wrapped random installation data-encryption key.
+- Links visual-density control with persistent 3 / 4 / 5 / 6 cards-per-row settings.
+- Links Cards/Table view switch with persistent browser preference.
+- Local Links thumbnail generation for records without images using headless Chromium inside the Noema deployment.
+- Authenticated storage/serving of generated thumbnail PNGs below `NOEMA_DATA_DIR/link-thumbnails`.
+
+### Changed
+
+- Existing installations using a legacy `ENCRYPTION_KEY` migrate by re-wrapping the same random data key after successful login instead of bulk re-encrypting records.
+- Links titles are restricted to one visual line with ellipsis and descriptions are capped to keep card heights compact and consistent.
+- Existing Links labels can be clicked while composing a new link instead of being retyped.
+- Shared menu and theme buttons are pinned to the viewport so they remain in the same top-right location while pages scroll.
+- Docker includes Chromium for local Links screenshot generation.
 
 ### Security
 
 - Shared gallery links can download only albums allowed by their scope and optional album ID.
 - ZIP creation uses temporary isolated staging directories, sanitized archive names, and automatic cleanup after streaming.
+- Links screenshot generation performs centralized public-URL/SSRF validation before Chromium is launched.
+- Generated Links thumbnails require an authenticated UI session and remain inside the persistent Noema data directory.
+- The user's login password is never used directly as the AES data-encryption key; it derives a wrapping key for the random installation key.
+
+### Migration notes
+
+- Existing deployments should keep their current `ENCRYPTION_KEY` for the first startup after upgrading, sign in once with the normal `UI_PASSWORD`, restart successfully, and then remove the legacy variable.
+- Full backups should include `master.key` and the complete data directory, including `link-thumbnails/`.
+- Non-Docker installations that use Links screenshot generation need Chromium/Chrome; set `NOEMA_CHROMIUM_PATH` only when the executable is outside common paths.
 
 ## [0.3.0] — 2026-07-31
 

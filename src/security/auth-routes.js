@@ -1,6 +1,8 @@
 import { createHmac } from "node:crypto";
 import { config } from "../config.js";
 import { buildAuthUrl, handleOAuthCallback, isCalendarConfigured } from "../store/calendar.js";
+import { protectCryptoWithPassword } from "../store/crypto.js";
+import { assertDatabaseCryptoReadable } from "../store/database.js";
 import { createSession, revokeSession, sessionBinding, verifySession } from "../store/sessions.js";
 import { clearLoginFailure, json, loginStatus, readJson, recordLoginFailure, redirect, safeEqual, secureCookieSuffix } from "./http.js";
 
@@ -8,7 +10,7 @@ export const SESSION_COOKIE = "noema_session";
 
 export function legacySessionToken() {
   const timestamp = Date.now();
-  const secret = config.ENCRYPTION_KEY || config.UI_PASSWORD || config.NOEMA_API_TOKEN || "noema_secret_session_key_2026";
+  const secret = config.UI_PASSWORD || config.ENCRYPTION_KEY || config.NOEMA_API_TOKEN || "noema_secret_session_key_2026";
   return `${timestamp}.${createHmac("sha256", secret).update(`noema_session_${timestamp}`).digest("hex")}`;
 }
 
@@ -25,11 +27,26 @@ async function handleLogin(req, res, ip, sessionToken) {
     return true;
   }
   const body = await readJson(req);
-  if (!safeEqual(body.password || body.UI_PASSWORD || "", config.UI_PASSWORD)) {
+  const password = body.password || body.UI_PASSWORD || "";
+  if (!safeEqual(password, config.UI_PASSWORD)) {
     const remaining = recordLoginFailure(ip);
     json(res, remaining ? 401 : 429, { ok: false, error: remaining ? "Incorrect password." : "Maximum failed attempts reached.", remainingAttempts: remaining }, { "Cache-Control": "no-store" });
     return true;
   }
+
+  // The same password now authenticates the UI and protects the installation
+  // data key. Existing v2/legacy key files are re-wrapped only; records are not
+  // re-encrypted. Validate one real record first so a bad legacy key can never
+  // be sealed into the new master.key format.
+  try {
+    assertDatabaseCryptoReadable();
+    protectCryptoWithPassword(password);
+  } catch (error) {
+    console.error("[noema] Master-password migration failed:", error.message);
+    json(res, 500, { ok: false, error: "Noema could not unlock encrypted storage with this master password." }, { "Cache-Control": "no-store" });
+    return true;
+  }
+
   clearLoginFailure(ip);
   const token = createSession();
   const maxAge = Math.floor(config.SESSION_ABSOLUTE_TTL_MS / 1000);

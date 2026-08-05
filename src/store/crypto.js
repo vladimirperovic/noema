@@ -5,101 +5,214 @@ import { config } from "../config.js";
 
 const DATA_DIR = config.DATA_DIR;
 const KEY_FILE = path.join(DATA_DIR, "master.key");
+const WRAPPED_PREFIX = "v3:wrapped:";
 
 let ENCRYPTION_KEY = Buffer.alloc(0);
 
-/**
- * Inicijalizuj ključ za enkripciju podataka u mirovanju (data/*.json).
- *
- * Dva moda, jasno razdvojena:
- *   - "salt" mod (kada je ENCRYPTION_KEY postavljen): ključ se izvodi iz lozinke
- *     i salt-a (scrypt). Na disk se čuva SAMO salt — sam ključ nikad ne dira disk,
- *     pa je lozinka stvarno potrebna pri svakom startu.
- *   - "key" mod (bez ENCRYPTION_KEY): generiše se nasumičan ključ i čuva na disku
- *     (mode 0600). Ovo je samo zaštita-na-disku (npr. ako curi backup bez .key),
- *     NE štiti od nekoga ko ima pristup i data/master.key fajlu.
- *
- * Fail-fast: neispravan/neusklađen master.key baca grešku umesto da tiho prepiše
- * postojeći ključ (čime bi postojeći podaci postali nedešifrabilni).
- */
-export function initCrypto(envKey) {
-  const password = typeof envKey === "string" && envKey ? envKey : null;
+function normalizePassword(value) {
+  return typeof value === "string" && value ? value : null;
+}
 
-  if (existsSync(KEY_FILE)) {
-    const raw = readFileSync(KEY_FILE, "utf8").trim();
-    if (loadExistingKey(raw, password)) return;
-    throw new Error(
-      "[noema] data/master.key je neispravan ili ne odgovara ENCRYPTION_KEY. " +
-        "Provjeri konfiguraciju (ne prepisujem ključ automatski da ne izgubim podatke).",
-    );
+function uniquePasswords(...values) {
+  return [...new Set(values.map(normalizePassword).filter(Boolean))];
+}
+
+function atomicWriteKey(value) {
+  mkdirSync(DATA_DIR, { recursive: true });
+  const tempPath = `${KEY_FILE}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    writeFileSync(tempPath, value, { encoding: "utf8", mode: 0o600 });
+    renameSync(tempPath, KEY_FILE);
+  } catch (error) {
+    try { unlinkSync(tempPath); } catch {}
+    throw error;
+  }
+}
+
+function wrapDataKey(dataKey, password) {
+  const secret = normalizePassword(password);
+  if (!secret) throw new Error("[noema] Master password is required to protect the encryption key.");
+  if (!Buffer.isBuffer(dataKey) || dataKey.length !== 32) throw new Error("[noema] Invalid installation encryption key.");
+
+  const salt = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(12);
+  const wrappingKey = crypto.scryptSync(secret, salt, 32);
+  const cipher = crypto.createCipheriv("aes-256-gcm", wrappingKey, iv);
+  const ciphertext = Buffer.concat([cipher.update(dataKey), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${WRAPPED_PREFIX}${salt.toString("hex")}:${iv.toString("hex")}:${tag.toString("hex")}:${ciphertext.toString("hex")}`;
+}
+
+function unwrapDataKey(raw, password) {
+  const secret = normalizePassword(password);
+  if (!secret) throw new Error("[noema] data/master.key requires the Noema master password.");
+  const parts = raw.split(":");
+  if (parts.length !== 6 || parts[0] !== "v3" || parts[1] !== "wrapped") {
+    throw new Error("[noema] Invalid wrapped master.key format.");
   }
 
-  // Nema key fajla — kreiraj novi.
-  mkdirSync(DATA_DIR, { recursive: true });
-  if (password) {
-    const salt = crypto.randomBytes(16);
-    ENCRYPTION_KEY = crypto.scryptSync(password, salt, 32);
-    writeFileSync(KEY_FILE, `v2:salt:${salt.toString("hex")}`, { mode: 0o600 });
-    console.log("[noema] Master ključ izveden iz ENCRYPTION_KEY (na disku samo salt).");
-  } else {
-    ENCRYPTION_KEY = crypto.randomBytes(32);
-    writeFileSync(KEY_FILE, `v2:key:${ENCRYPTION_KEY.toString("hex")}`, { mode: 0o600 });
-    console.log("[noema] Generisan lokalni master ključ. Za ključ izveden iz lozinke postavi ENCRYPTION_KEY.");
+  try {
+    const salt = Buffer.from(parts[2], "hex");
+    const iv = Buffer.from(parts[3], "hex");
+    const tag = Buffer.from(parts[4], "hex");
+    const ciphertext = Buffer.from(parts[5], "hex");
+    if (salt.length !== 16 || iv.length !== 12 || tag.length !== 16 || ciphertext.length !== 32) throw new Error("invalid lengths");
+    const wrappingKey = crypto.scryptSync(secret, salt, 32);
+    const decipher = crypto.createDecipheriv("aes-256-gcm", wrappingKey, iv);
+    decipher.setAuthTag(tag);
+    const key = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    if (key.length !== 32) throw new Error("invalid key length");
+    return key;
+  } catch {
+    throw new Error("[noema] Master password does not unlock data/master.key.");
   }
 }
 
 /**
- * Učitaj postojeći ključ iz raznih formata. Vraća true ako je uspeo, false ako
- * je fajl neprepoznatljiv. Migrira legacy formate na v2 (bez gubitka podataka).
+ * Initialize the installation encryption key.
+ *
+ * Current format:
+ *   v3:wrapped:<salt>:<iv>:<tag>:<ciphertext>
+ *
+ * The actual random 256-bit data-encryption key is wrapped with a key derived
+ * from the same master password used for the browser login. This keeps the UX
+ * to one password and lets the login password be changed/re-wrapped without
+ * re-encrypting every record or file metadata entry.
+ *
+ * Legacy formats remain readable so an existing installation can migrate on
+ * the first successful login without touching encrypted application data.
  */
-function loadExistingKey(raw, password) {
-  // v2:salt:<salthex> — ključ izveden iz lozinke, na disku samo salt.
+export function initCrypto(options = {}) {
+  let masterPassword = null;
+  let legacyPassword = null;
+
+  // Backward compatibility for older callers that passed only ENCRYPTION_KEY.
+  if (typeof options === "string") {
+    masterPassword = normalizePassword(config.UI_PASSWORD) || normalizePassword(options);
+    legacyPassword = normalizePassword(options);
+  } else {
+    masterPassword = normalizePassword(options?.masterPassword) || normalizePassword(config.UI_PASSWORD);
+    legacyPassword = normalizePassword(options?.legacyPassword) || normalizePassword(config.ENCRYPTION_KEY);
+  }
+
+  if (existsSync(KEY_FILE)) {
+    const raw = readFileSync(KEY_FILE, "utf8").trim();
+    if (loadExistingKey(raw, { masterPassword, legacyPassword })) return;
+    throw new Error(
+      "[noema] data/master.key is invalid or does not match the configured master password. " +
+        "The key file will not be overwritten automatically.",
+    );
+  }
+
+  mkdirSync(DATA_DIR, { recursive: true });
+  if (masterPassword) {
+    ENCRYPTION_KEY = crypto.randomBytes(32);
+    atomicWriteKey(wrapDataKey(ENCRYPTION_KEY, masterPassword));
+    console.log("[noema] Generated installation data key protected by the Noema master password.");
+  } else if (legacyPassword) {
+    const salt = crypto.randomBytes(16);
+    ENCRYPTION_KEY = crypto.scryptSync(legacyPassword, salt, 32);
+    atomicWriteKey(`v2:salt:${salt.toString("hex")}`);
+    console.log("[noema] Master key derived from legacy ENCRYPTION_KEY. Sign in once with UI_PASSWORD to migrate to one-password mode.");
+  } else {
+    ENCRYPTION_KEY = crypto.randomBytes(32);
+    atomicWriteKey(`v2:key:${ENCRYPTION_KEY.toString("hex")}`);
+    console.log("[noema] Generated local installation key. Configure UI_PASSWORD for password-protected key storage.");
+  }
+}
+
+function loadExistingKey(raw, { masterPassword, legacyPassword }) {
+  if (raw.startsWith(WRAPPED_PREFIX)) {
+    const candidates = uniquePasswords(masterPassword, config.UI_PASSWORD, legacyPassword, config.ENCRYPTION_KEY);
+    if (!candidates.length) throw new Error("[noema] data/master.key requires UI_PASSWORD.");
+    let lastError = null;
+    for (const password of candidates) {
+      try {
+        ENCRYPTION_KEY = unwrapDataKey(raw, password);
+        return true;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error("[noema] Master password does not unlock data/master.key.");
+  }
+
+  // v2:salt:<salthex> — legacy key derived directly from ENCRYPTION_KEY.
   if (raw.startsWith("v2:salt:")) {
+    const password = uniquePasswords(legacyPassword, config.ENCRYPTION_KEY, masterPassword, config.UI_PASSWORD)[0];
     if (!password) {
-      throw new Error("[noema] master.key zahtijeva ENCRYPTION_KEY (ključ izveden iz lozinke), a varijabla nije postavljena.");
+      throw new Error("[noema] Legacy master.key requires ENCRYPTION_KEY or UI_PASSWORD for one-time migration.");
     }
     const salt = Buffer.from(raw.slice("v2:salt:".length), "hex");
     ENCRYPTION_KEY = crypto.scryptSync(password, salt, 32);
     return true;
   }
 
-  // v2:key:<keyhex> — nasumičan ključ sačuvan na disku.
+  // v2:key:<keyhex> — legacy random key stored directly on disk.
   if (raw.startsWith("v2:key:")) {
     ENCRYPTION_KEY = Buffer.from(raw.slice("v2:key:".length), "hex");
-    return true;
+    return ENCRYPTION_KEY.length === 32;
   }
 
-  // Legacy "salt:key" (oba hex) — ranije se izvedeni ključ čuvao u plaintextu.
+  // Legacy "salt:key" (both hex).
   const parts = raw.split(":");
   if (parts.length === 2 && /^[0-9a-f]+$/i.test(parts[0]) && /^[0-9a-f]+$/i.test(parts[1])) {
     const salt = Buffer.from(parts[0], "hex");
     const storedKey = Buffer.from(parts[1], "hex");
-    if (password) {
-      const derived = crypto.scryptSync(password, salt, 32);
-      if (!derived.equals(storedKey)) {
-        throw new Error("[noema] ENCRYPTION_KEY ne odgovara postojećem ključu u master.key.");
-      }
-      ENCRYPTION_KEY = derived;
-      writeFileSync(KEY_FILE, `v2:salt:${salt.toString("hex")}`, { mode: 0o600 }); // skloni ključ sa diska
-    } else {
-      ENCRYPTION_KEY = storedKey;
-      writeFileSync(KEY_FILE, `v2:key:${storedKey.toString("hex")}`, { mode: 0o600 });
+    const candidate = uniquePasswords(legacyPassword, config.ENCRYPTION_KEY, masterPassword, config.UI_PASSWORD)[0];
+    if (candidate) {
+      const derived = crypto.scryptSync(candidate, salt, 32);
+      if (!derived.equals(storedKey)) throw new Error("[noema] Configured password does not match the legacy master.key.");
     }
-    return true;
+    ENCRYPTION_KEY = storedKey;
+    return ENCRYPTION_KEY.length === 32;
   }
 
-  // Legacy raw 64-hex (nasumičan ključ bez salt-a).
+  // Legacy raw 64-hex random key.
   if (/^[0-9a-f]{64}$/i.test(raw)) {
     ENCRYPTION_KEY = Buffer.from(raw, "hex");
-    writeFileSync(KEY_FILE, `v2:key:${raw.toLowerCase()}`, { mode: 0o600 });
     return true;
   }
 
   return false;
 }
 
+/**
+ * Protect the already-loaded data-encryption key with the password the user
+ * just used to sign in. Existing encrypted records are NOT re-encrypted.
+ * Returns true when a legacy key file was migrated, false when already wrapped
+ * by this same password.
+ */
+export function protectCryptoWithPassword(password) {
+  const secret = normalizePassword(password);
+  if (!secret) throw new Error("[noema] A master password is required.");
+  if (ENCRYPTION_KEY.length !== 32) throw new Error("[noema] Crypto is not initialized.");
+
+  if (existsSync(KEY_FILE)) {
+    const raw = readFileSync(KEY_FILE, "utf8").trim();
+    if (raw.startsWith(WRAPPED_PREFIX)) {
+      try {
+        const unwrapped = unwrapDataKey(raw, secret);
+        if (!unwrapped.equals(ENCRYPTION_KEY)) throw new Error("[noema] Master password unlocked a different installation key.");
+        return false;
+      } catch {
+        // The loaded installation key may have come from the legacy
+        // ENCRYPTION_KEY candidate. After the caller validates real encrypted
+        // storage, safely re-wrap that same in-memory key with UI_PASSWORD.
+        atomicWriteKey(wrapDataKey(ENCRYPTION_KEY, secret));
+        console.log("[noema] Re-wrapped legacy v3 master.key with the Noema master password.");
+        return true;
+      }
+    }
+  }
+
+  atomicWriteKey(wrapDataKey(ENCRYPTION_KEY, secret));
+  console.log("[noema] Migrated master.key to one-password mode; ENCRYPTION_KEY is no longer needed after restart.");
+  return true;
+}
+
 export function encryptData(text) {
-  if (ENCRYPTION_KEY.length === 0) throw new Error("Kripto nije inicijalizovan");
+  if (ENCRYPTION_KEY.length === 0) throw new Error("Crypto is not initialized");
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv("aes-256-gcm", ENCRYPTION_KEY, iv);
   let encrypted = cipher.update(text, "utf8", "hex");
@@ -109,10 +222,10 @@ export function encryptData(text) {
 }
 
 export function decryptData(encryptedStr) {
-  if (ENCRYPTION_KEY.length === 0) throw new Error("Kripto nije inicijalizovan");
+  if (ENCRYPTION_KEY.length === 0) throw new Error("Crypto is not initialized");
   const parts = encryptedStr.split(":");
-  if (parts.length !== 3) throw new Error("Neispravan format enkriptovanih podataka");
-  
+  if (parts.length !== 3) throw new Error("Invalid encrypted data format");
+
   const iv = Buffer.from(parts[0], "hex");
   const authTag = Buffer.from(parts[1], "hex");
   const encryptedText = parts[2];
@@ -126,19 +239,14 @@ export function decryptData(encryptedStr) {
 
 export function readEncryptedJson(filePath, defaultValue = [], { throwOnError = false } = {}) {
   if (!existsSync(filePath)) return defaultValue;
-  
+
   try {
     const raw = readFileSync(filePath, "utf8").trim();
-    // Migracija: ako počinje sa [ ili { onda je obično JSON
-    if (raw.startsWith("[") || raw.startsWith("{")) {
-      return JSON.parse(raw);
-    }
-    
-    // Inače pokušaj dekripciju
+    if (raw.startsWith("[") || raw.startsWith("{")) return JSON.parse(raw);
     const decrypted = decryptData(raw);
     return JSON.parse(decrypted);
   } catch (err) {
-    console.error(`[noema] Greška pri čitanju/dekripciji ${filePath}:`, err.message);
+    console.error(`[noema] Error reading/decrypting ${filePath}:`, err.message);
     if (throwOnError) throw err;
     return defaultValue;
   }
