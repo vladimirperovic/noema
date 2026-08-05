@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { copyFile, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { config } from "./config.js";
 import { listInspirations } from "./store/inspirations.js";
 import { listBuildingSites } from "./store/buildingsites.js";
+import { decryptPrivateAssetToFile } from "./store/private-assets.js";
 
 const run = promisify(execFile);
 const DOWNLOAD_PATTERN = /^\/api\/(inspirations|buildingsites)\/([^/]+)\/download$/;
@@ -25,33 +26,18 @@ function json(res, status, body) {
 export function matchAlbumDownloadPath(pathname) {
   const match = String(pathname || "").match(DOWNLOAD_PATTERN);
   if (!match) return null;
-  try {
-    return {
-      scope: match[1] === "inspirations" ? "inspiration" : "buildingsite",
-      id: decodeURIComponent(match[2]),
-    };
-  } catch {
-    return null;
-  }
+  try { return { scope: match[1] === "inspirations" ? "inspiration" : "buildingsite", id: decodeURIComponent(match[2]) }; }
+  catch { return null; }
 }
 
 export function safeArchiveBaseName(value, fallback = "album") {
-  const cleaned = String(value || "")
-    .normalize("NFKC")
-    .replace(/[\u0000-\u001f\u007f<>:"/\\|?*]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 120);
+  const cleaned = String(value || "").normalize("NFKC").replace(/[\u0000-\u001f\u007f<>:"/\\|?*]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
   return cleaned || fallback;
 }
 
 function sourceFilename(value) {
-  try {
-    const pathname = new URL(String(value || ""), config.PUBLIC_BASE_URL).pathname;
-    return path.basename(decodeURIComponent(pathname));
-  } catch {
-    return path.basename(String(value || ""));
-  }
+  try { return path.basename(decodeURIComponent(new URL(String(value || ""), config.PUBLIC_BASE_URL).pathname)); }
+  catch { return path.basename(String(value || "")); }
 }
 
 function extensionFor(filename) {
@@ -59,19 +45,14 @@ function extensionFor(filename) {
   return /^\.[a-z0-9]{1,10}$/.test(extension) ? extension : ".bin";
 }
 
-function albumCollection(scope) {
-  return scope === "inspiration" ? listInspirations() : listBuildingSites();
-}
-
-function albumStorageRoot(scope, dataDir = config.DATA_DIR) {
-  return path.resolve(dataDir, scope === "inspiration" ? "inspirations" : "buildingsites");
-}
+function albumCollection(scope) { return scope === "inspiration" ? listInspirations() : listBuildingSites(); }
+function albumStorageRoot(scope, dataDir = config.DATA_DIR) { return path.resolve(dataDir, scope === "inspiration" ? "inspirations" : "buildingsites"); }
 
 export async function createAlbumArchive(scope, album, dataDir = config.DATA_DIR) {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "noema-album-"));
   const staging = path.join(tempRoot, "album");
   const archivePath = path.join(tempRoot, "album.zip");
-  await mkdir(staging, { recursive: true });
+  await mkdir(staging, { recursive: true, mode: 0o700 });
 
   const storageRoot = albumStorageRoot(scope, dataDir);
   const originalsRoot = path.resolve(storageRoot, String(album.id), "originals");
@@ -91,10 +72,10 @@ export async function createAlbumArchive(scope, album, dataDir = config.DATA_DIR
       const info = await stat(sourcePath);
       if (!info.isFile()) continue;
       const targetName = `${String(index + 1).padStart(3, "0")}${extensionFor(filename)}`;
-      await copyFile(sourcePath, path.join(staging, targetName));
+      await decryptPrivateAssetToFile(sourcePath, path.join(staging, targetName));
       copied += 1;
     } catch {
-      // Skip metadata entries whose original file is missing.
+      // Skip missing/corrupt metadata entries without exposing other album files.
     }
   }
 
@@ -104,59 +85,33 @@ export async function createAlbumArchive(scope, album, dataDir = config.DATA_DIR
   }
 
   try {
-    await run("zip", ["-q", "-r", archivePath, "."], {
-      cwd: staging,
-      windowsHide: true,
-      maxBuffer: 1024 * 1024,
-    });
+    await run("zip", ["-q", "-r", archivePath, "."], { cwd: staging, windowsHide: true, maxBuffer: 1024 * 1024 });
   } catch (error) {
     await rm(tempRoot, { recursive: true, force: true });
     const unavailable = error?.code === "ENOENT";
-    throw Object.assign(
-      new Error(unavailable ? "The system zip utility is not available." : "The album archive could not be created."),
-      { status: unavailable ? 503 : 500 },
-    );
+    throw Object.assign(new Error(unavailable ? "The system zip utility is not available." : "The album archive could not be created."), { status: unavailable ? 503 : 500 });
   }
-
   return { tempRoot, archivePath, copied };
 }
 
 async function streamAlbumArchive(req, res, route) {
   const album = albumCollection(route.scope).find((item) => item.id === route.id);
-  if (!album) {
-    json(res, 404, { ok: false, error: "Album not found." });
-    return;
-  }
-
+  if (!album) { json(res, 404, { ok: false, error: "Album not found." }); return; }
   const archive = await createAlbumArchive(route.scope, album);
   const archiveInfo = await stat(archive.archivePath);
   const baseName = safeArchiveBaseName(album.title, `${route.scope}-album`);
   const unicodeName = `${baseName}.zip`;
   const asciiName = `${baseName.normalize("NFKD").replace(/[^\x20-\x7e]+/g, "").replace(/["\\/]/g, "_").trim() || "album"}.zip`;
   let cleaned = false;
-  const cleanup = () => {
-    if (cleaned) return;
-    cleaned = true;
-    rm(archive.tempRoot, { recursive: true, force: true }).catch(() => {});
-  };
-
-  res.once("finish", cleanup);
-  res.once("close", cleanup);
+  const cleanup = () => { if (!cleaned) { cleaned = true; rm(archive.tempRoot, { recursive: true, force: true }).catch(() => {}); } };
+  res.once("finish", cleanup); res.once("close", cleanup);
   res.writeHead(200, {
-    "Content-Type": "application/zip",
-    "Content-Length": archiveInfo.size,
+    "Content-Type": "application/zip", "Content-Length": archiveInfo.size,
     "Content-Disposition": `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(unicodeName)}`,
-    "Cache-Control": "private, no-store",
-    "X-Content-Type-Options": "nosniff",
-    "X-Noema-Album-Images": String(archive.copied),
+    "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "X-Noema-Album-Images": String(archive.copied),
   });
-
   const stream = createReadStream(archive.archivePath);
-  stream.on("error", (error) => {
-    cleanup();
-    if (!res.headersSent) json(res, 500, { ok: false, error: "The album archive could not be read." });
-    else res.destroy(error);
-  });
+  stream.on("error", (error) => { cleanup(); if (!res.headersSent) json(res, 500, { ok: false, error: "The album archive could not be read." }); else res.destroy(error); });
   stream.pipe(res);
 }
 
@@ -168,10 +123,7 @@ export function installGalleryDownloads(server) {
     try {
       const url = new URL(req.url, config.PUBLIC_BASE_URL);
       const route = req.method === "GET" ? matchAlbumDownloadPath(url.pathname) : null;
-      if (route) {
-        await streamAlbumArchive(req, res, route);
-        return;
-      }
+      if (route) { await streamAlbumArchive(req, res, route); return; }
       await original(req, res);
     } catch (error) {
       if (!res.headersSent) json(res, error.status || 500, { ok: false, error: error.message || "Internal server error." });
