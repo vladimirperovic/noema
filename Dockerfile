@@ -25,6 +25,8 @@ RUN NODE_ENV=test \
 RUN node -e "const fs=require('node:fs');const commit=(process.env.SOURCE_COMMIT||'unknown').trim();fs.writeFileSync('/app/public/build-version.json',JSON.stringify({commit}));"
 
 # Fail the image build if the complete strict production graph cannot start.
+# The production smoke test intentionally uses only UI_PASSWORD for browser
+# authentication and protection of the installation data-encryption key.
 RUN set -eu; \
     NODE_ENV=production \
     NOEMA_DATA_DIR=/tmp/noema-build-smoke \
@@ -32,9 +34,8 @@ RUN set -eu; \
     PORT=3999 \
     PUBLIC_BASE_URL=https://127.0.0.1:3999 \
     NOEMA_CORS_ORIGIN=https://127.0.0.1:3999 \
-    UI_PASSWORD=ci-ui-password \
+    UI_PASSWORD=ci-ui-master-password \
     NOEMA_API_TOKEN=ci-api-token \
-    ENCRYPTION_KEY=ci-encryption-key \
     NOEMA_BACKUP_PASSWORD=ci-backup-password \
     node src/index.js >/tmp/noema-build-smoke.log 2>&1 & \
     pid=$!; healthy=0; \
