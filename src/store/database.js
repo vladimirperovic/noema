@@ -61,6 +61,18 @@ export function databasePath() {
   return DATABASE_FILE;
 }
 
+/**
+ * Verify the currently loaded installation key against one real encrypted
+ * record before rewriting legacy master.key metadata. Empty databases are
+ * valid and need no additional check.
+ */
+export function assertDatabaseCryptoReadable() {
+  const row = openDatabase().prepare("SELECT payload FROM noema_records LIMIT 1").get();
+  if (!row) return true;
+  decodeRecord(row);
+  return true;
+}
+
 export function getMeta(key) {
   const row = openDatabase().prepare("SELECT value FROM noema_meta WHERE key = ?").get(String(key));
   return row ? row.value : null;
