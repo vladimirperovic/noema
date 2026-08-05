@@ -3,8 +3,9 @@ FROM node:24-alpine
 
 ARG SOURCE_COMMIT=unknown
 
-# Backups use zip/unzip; curl is used by the build and runtime health checks.
-RUN apk add --no-cache curl unzip zip
+# Backups use zip/unzip; curl is used by the build/runtime health checks; Chromium
+# generates local screenshots for Links thumbnails without a third-party service.
+RUN apk add --no-cache curl unzip zip chromium
 
 WORKDIR /app
 COPY package.json ./
