@@ -13,8 +13,8 @@ Noema is a zero-dependency, self-hosted personal workspace built with Node.js, t
 - MCP and OpenAPI endpoints for machine clients.
 - Server-side revocable browser sessions, trusted-proxy handling, security headers, login/API rate limits, and expiring gallery-share links.
 - Encrypted SQLite storage, encrypted compatibility mirrors, encrypted metadata snapshots, and password-encrypted `.noema` disaster-recovery archives.
-- One Noema master password for browser login and protection of the installation data-encryption key.
 - Docker image syntax tests, storage tests, and a strict production startup smoke test.
+- Links visual library with 3–6 card density, compact table mode, and optional locally generated page thumbnails using headless Chromium. Generated thumbnails stay below `NOEMA_DATA_DIR/link-thumbnails`; saved URLs are not sent to a third-party screenshot service.
 
 ## Requirements
 
@@ -22,13 +22,15 @@ Noema is a zero-dependency, self-hosted personal workspace built with Node.js, t
 - Persistent storage for `NOEMA_DATA_DIR`.
 - HTTPS for production.
 - `zip` and `unzip` for full encrypted backup/restore outside the provided Docker image.
+- Chromium is required only if you want to generate Links page thumbnails outside the provided Docker image. Set `NOEMA_CHROMIUM_PATH` when Chromium is installed in a non-standard location.
 
 ## Quick local start
 
 ```bash
 cp .env.example .env
-# Set UI_PASSWORD. It is the single password used to sign in and protect Noema's data key.
-# For an isolated local test you may instead set:
+# Set UI_PASSWORD. It is the single browser master password used for login and
+# for protection of Noema's installation data-encryption key.
+# For an isolated local test you may also set:
 # ALLOW_INSECURE_NO_AUTH=true
 npm run check
 npm start
@@ -49,9 +51,9 @@ NOEMA_API_TOKEN=replace-with-a-long-random-token
 NOEMA_BACKUP_PASSWORD=replace-with-a-separate-long-backup-password
 ```
 
-`UI_PASSWORD` is the single Noema master password. A random installation data-encryption key is stored only in wrapped form in `NOEMA_DATA_DIR/master.key`, protected by a key derived from this password.
+`UI_PASSWORD` is the one password entered in the browser. Noema uses it both to authenticate the UI session and to wrap the random installation data-encryption key. The password itself is not used directly as the AES data key.
 
-Existing installations that previously used a separate `ENCRYPTION_KEY` can leave it configured for the first startup after upgrading. On the first successful browser login, Noema validates existing encrypted storage and re-wraps the same data key with the login password. Records are not mass re-encrypted. After a successful restart with the migrated `master.key`, the legacy `ENCRYPTION_KEY` can be removed.
+Existing installations that still use a legacy `ENCRYPTION_KEY` can keep it temporarily during migration. After one successful login with the normal `UI_PASSWORD`, Noema re-wraps the existing data key without bulk re-encrypting stored records; the legacy variable can then be removed after a successful restart.
 
 Do not use `ALLOW_INSECURE_NO_AUTH=true` for an Internet-facing deployment. See [DEPLOYMENT.md](DEPLOYMENT.md) and [SECURITY.md](SECURITY.md).
 
@@ -65,11 +67,11 @@ docker run --rm -p 3000:3000 \
   noema
 ```
 
-The image runs the complete test suite during build and then performs a strict production smoke test before it can be published.
+The image runs the complete test suite during build and then performs a strict production smoke test before it can be published. Chromium is included in the image for local Links thumbnail generation.
 
 ## Data and backups
 
-Primary metadata lives in `NOEMA_DATA_DIR/noema.sqlite`; record payloads are encrypted before entering SQLite. Binary assets stay in dedicated directories such as `files/`, `uploads/`, `buildingsites/`, and `inspirations/`.
+Primary metadata lives in `NOEMA_DATA_DIR/noema.sqlite`; record payloads are encrypted before entering SQLite. Binary assets stay in dedicated directories such as `files/`, `uploads/`, `buildingsites/`, `inspirations/`, and `link-thumbnails/`.
 
 Create a full encrypted archive:
 
@@ -83,7 +85,7 @@ Restore while Noema is stopped:
 npm run restore -- ./noema-backup.noema /path/to/restored-data
 ```
 
-A full `.noema` archive includes SQLite, encrypted mirrors, the wrapped installation master key, uploaded files, galleries, and other persistent data. Metadata JSON exports are portable but intentionally do not include binary contents. See [SQLITE_MIGRATION.md](SQLITE_MIGRATION.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
+A full `.noema` archive includes SQLite, encrypted mirrors, the installation master key, uploaded files, generated Links thumbnails, galleries, and other persistent data. Metadata JSON exports are portable but intentionally do not include binary contents. See [SQLITE_MIGRATION.md](SQLITE_MIGRATION.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Main routes
 
