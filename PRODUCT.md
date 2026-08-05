@@ -31,7 +31,11 @@ Notes are lightweight text records. Documents support richer content, formatting
 
 ### Links and AI Projects
 
-Links collect URLs and fetched metadata. AI Projects use the same underlying link collection with a separate workspace and presentation.
+Links is a visual bookmark manager for saved URLs and fetched metadata. The Cards view supports a persistent 3–6 cards-per-row density control, one-line ellipsized titles, compact descriptions, labels, search, sorting, pinning, archive/bulk actions, and a compact Table view. Existing labels can be clicked while composing a new link instead of being retyped.
+
+If a saved link has no image, the authenticated UI can generate a local page screenshot with headless Chromium. Generated thumbnails remain in the Noema data directory and saved URLs are not sent to a third-party screenshot service.
+
+AI Projects uses the same underlying link collection with a separate workspace and presentation.
 
 ### Files
 
@@ -47,13 +51,17 @@ Google Calendar is optional and read-only. Its refresh token is encrypted. Stats
 
 ## Navigation and accessibility
 
-Every private page receives the same generated menu, theme switcher, footer controls, and active-page state. WIDTH switches between the page’s designed maximum width and a 92% viewport layout. Theme, width, and font scale persist locally in the browser.
+Every private page receives the same generated menu, theme switcher, footer controls, and active-page state. The menu and top theme buttons are pinned to the viewport rather than page content, so they remain in the same top-right location while long pages scroll. WIDTH switches between the page’s designed maximum width and a 92% viewport layout. Theme, width, font scale, Links card density, and Links Cards/Table view persist locally in the browser.
 
 Public gallery mode deliberately exposes only the gallery navigation and theme control.
 
 ## Authentication model
 
+The user enters one `UI_PASSWORD`. It authenticates the browser session and also protects the random installation data-encryption key stored in wrapped form. The password itself is not used directly as the AES data key.
+
 Browser login creates an opaque random session token. Only its SHA-256 hash is stored in the encrypted collection. Sessions have idle and absolute expiration and are revoked on logout or password change. API clients use a separate bearer token.
+
+Existing installations that used a separate `ENCRYPTION_KEY` migrate by re-wrapping the existing random data key after a successful login; stored application records are not bulk re-encrypted.
 
 Production requires a UI password, API token, HTTPS public URL, and exact CORS origin unless the operator explicitly enables the development-only insecure override.
 
@@ -62,7 +70,7 @@ Production requires a UI password, API token, HTTPS public URL, and exact CORS o
 Noema offers two different products:
 
 - **Portable metadata JSON** for inspecting or moving record data. It excludes binary content.
-- **Encrypted `.noema` disaster-recovery archive** for restoring the complete installation, including SQLite, encryption material, binary files, galleries, and compatibility mirrors.
+- **Encrypted `.noema` disaster-recovery archive** for restoring the complete installation, including SQLite, encryption material, binary files, generated Links thumbnails, galleries, and compatibility mirrors.
 
 The distinction is intentional and visible in the Backup UI and documentation.
 
