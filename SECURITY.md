@@ -14,12 +14,13 @@ Do not include real credentials, private data, or active share links in a report
 
 Noema fails closed when `NODE_ENV=production` unless the operator explicitly enables the insecure development override. A normal production deployment requires:
 
-- `UI_PASSWORD`
+- `UI_PASSWORD` — the single Noema master password used for browser login and protection of the installation data key
 - `NOEMA_API_TOKEN`
 - HTTPS `PUBLIC_BASE_URL`
 - exact `NOEMA_CORS_ORIGIN`
-- persistent `ENCRYPTION_KEY`
 - separate `NOEMA_BACKUP_PASSWORD` for full archives
+
+`ENCRYPTION_KEY` is retained only as a legacy migration input for installations created before the unified master-password model. It is not required for a migrated/new installation.
 
 `ALLOW_INSECURE_NO_AUTH=true` is not a production configuration.
 
@@ -28,6 +29,8 @@ Noema fails closed when `NODE_ENV=production` unless the operator explicitly ena
 ### Browser UI
 
 Login creates an opaque random token. Only its SHA-256 hash and encrypted session metadata are stored. Sessions enforce idle expiration, absolute expiration, revocation, and a fingerprint of the current UI password. Logout revokes the session.
+
+The same `UI_PASSWORD` also protects the random installation data-encryption key. Existing installations with a legacy `ENCRYPTION_KEY` are migrated on the first successful login by re-wrapping the already-loaded data key; application records are not bulk re-encrypted.
 
 The cookie is HttpOnly and SameSite=Lax, and receives the Secure flag when the public URL is HTTPS. Login attempts are limited per client IP and globally.
 
@@ -43,9 +46,13 @@ Terminate TLS at a maintained reverse proxy, restrict direct backend access, and
 
 ## Encryption at rest
 
-Application records are encrypted with AES-256-GCM before SQLite storage. Encrypted compatibility mirrors, sessions, gallery shares, metadata snapshots, and the Calendar refresh token use the same installation encryption system.
+Application records are encrypted with AES-256-GCM before SQLite storage. Encrypted compatibility mirrors, sessions, gallery shares, metadata snapshots, and the Calendar refresh token use the same random 256-bit installation data key.
 
-This protects storage media and backups from casual inspection but is not end-to-end encryption. The running server can decrypt content for authorized requests. Host compromise or access to both encrypted data and encryption keys defeats storage encryption.
+The installation data key is stored in `NOEMA_DATA_DIR/master.key` only in wrapped form. A wrapping key is derived from `UI_PASSWORD` with scrypt, and AES-256-GCM protects the wrapped data key. This keeps one password for the user while avoiding mass re-encryption of all records when migrating from the legacy format.
+
+This protects storage media and backups from casual inspection but is not end-to-end encryption. The running server can decrypt content for authorized requests. Host compromise or access to the running process defeats storage encryption.
+
+Back up the complete data directory. The master password alone cannot reconstruct a lost random installation data key if `master.key` is lost.
 
 ## Files and uploads
 
@@ -92,8 +99,8 @@ Noema has no runtime npm dependencies, but it still depends on Node.js, Alpine p
 ## Operator checklist
 
 - Use HTTPS and prevent direct public access to the backend port.
-- Use unique, long values for UI, API, encryption, and backup secrets.
-- Back up the complete data directory and verify restores.
+- Use a unique, long `UI_PASSWORD`, a separate API token, and a separate backup password.
+- Back up the complete data directory, including `master.key`, and verify restores.
 - Configure only controlled trusted proxies.
 - Revoke unused sessions and share links.
 - Protect `.env`, volumes, logs, CI variables, and backup destinations.
