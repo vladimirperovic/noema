@@ -2,7 +2,7 @@
 
 ## Supported runtime
 
-Noema requires Node.js 22.16 or newer because it uses the built-in `node:sqlite` module. The provided Docker image uses Node 24 Alpine and includes `curl`, `zip`, and `unzip`.
+Noema requires Node.js 22.16 or newer because it uses the built-in `node:sqlite` module. The provided Docker image uses Node 24 Alpine and includes `curl`, `zip`, `unzip`, and Chromium for local Links thumbnail generation.
 
 Persistent state must be mounted at `NOEMA_DATA_DIR` (`/app/data` in the Docker image).
 
@@ -62,6 +62,14 @@ GALLERY_SHARE_TTL_DAYS=30
 
 Browser sessions are revocable and expire on both idle and absolute timers. Gallery links are random, hashed at rest, expiring, revocable, and may be scoped to one module or album.
 
+## Links thumbnails
+
+The Links page can generate screenshots only for saved links that do not already have an image. The provided Docker image includes Chromium, so no extra package is required there.
+
+For a non-Docker installation, install Chromium/Chrome and set `NOEMA_CHROMIUM_PATH` only when the executable is outside Noema's common lookup paths. Generated PNG files are stored under `NOEMA_DATA_DIR/link-thumbnails` and are served only through authenticated Noema routes.
+
+Before Chromium is launched, Noema validates the saved URL through the centralized public-URL/SSRF safety layer. Loopback, RFC1918/private, link-local, credential-bearing, and otherwise blocked targets are rejected. Login-gated sites such as Instagram may still produce a login/cookie screen rather than the desired post image.
+
 ## Docker build verification
 
 The Dockerfile performs two independent checks:
@@ -69,7 +77,7 @@ The Dockerfile performs two independent checks:
 1. `npm run check` under `NODE_ENV=test`, including syntax and storage tests.
 2. A strict production process startup and `/healthz` request using complete security settings and only the single `UI_PASSWORD` for browser/encryption master-password duties.
 
-A failed test or startup prevents the image from being built.
+A failed test or startup prevents the image from being built. CI also verifies the runtime image contains the tools needed by backup/restore and thumbnail generation.
 
 ## Data directory
 
@@ -83,6 +91,7 @@ files/                  private Files binary data
 uploads/                document uploads
 buildingsites/          Building Sites media
 inspirations/           Inspiration media
+link-thumbnails/        locally generated Links screenshots
 google-token.enc        encrypted Calendar refresh token
 snapshots/              encrypted metadata snapshots
 ```
@@ -111,7 +120,7 @@ The restore verifies the manifest and keeps the previous target directory beside
 
 ### Portable metadata
 
-The Backup page can export a readable JSON snapshot of record metadata. It includes Files metadata but not file binaries, gallery images, document uploads, the SQLite database, or the installation key. Use it for inspection or record migration, not complete disaster recovery.
+The Backup page can export a readable JSON snapshot of record metadata. It includes Files metadata and Links metadata, including thumbnail paths, but not file binaries, generated thumbnail PNGs, gallery images, document uploads, the SQLite database, or the installation key. Use it for inspection or record migration, not complete disaster recovery.
 
 ## Upgrades
 
@@ -121,7 +130,7 @@ The Backup page can export a readable JSON snapshot of record metadata. It inclu
 4. Run `npm run check` when building outside Docker.
 5. Replace the container while preserving the data volume.
 6. Sign in once with `UI_PASSWORD`; this migrates legacy `master.key` protection without re-encrypting application records.
-7. Restart and confirm `/healthz`, login, Notes, Files, galleries, Calendar, and backup download.
+7. Restart and confirm `/healthz`, login, Notes, Files, Links, galleries, Calendar, and backup download. If you use Links screenshots, generate one missing thumbnail as a smoke test.
 8. After that successful restart, remove the legacy `ENCRYPTION_KEY` if one was previously configured.
 9. Keep the previous image and pre-upgrade backup until validation is complete.
 
