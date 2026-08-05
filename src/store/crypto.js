@@ -180,7 +180,8 @@ function loadExistingKey(raw, { masterPassword, legacyPassword }) {
 /**
  * Protect the already-loaded data-encryption key with the password the user
  * just used to sign in. Existing encrypted records are NOT re-encrypted.
- * Returns true when a legacy key file was migrated, false when already v3.
+ * Returns true when a legacy key file was migrated, false when already wrapped
+ * by this same password.
  */
 export function protectCryptoWithPassword(password) {
   const secret = normalizePassword(password);
@@ -190,9 +191,18 @@ export function protectCryptoWithPassword(password) {
   if (existsSync(KEY_FILE)) {
     const raw = readFileSync(KEY_FILE, "utf8").trim();
     if (raw.startsWith(WRAPPED_PREFIX)) {
-      const unwrapped = unwrapDataKey(raw, secret);
-      if (!unwrapped.equals(ENCRYPTION_KEY)) throw new Error("[noema] Master password unlocked a different installation key.");
-      return false;
+      try {
+        const unwrapped = unwrapDataKey(raw, secret);
+        if (!unwrapped.equals(ENCRYPTION_KEY)) throw new Error("[noema] Master password unlocked a different installation key.");
+        return false;
+      } catch {
+        // The loaded installation key may have come from the legacy
+        // ENCRYPTION_KEY candidate. After the caller validates real encrypted
+        // storage, safely re-wrap that same in-memory key with UI_PASSWORD.
+        atomicWriteKey(wrapDataKey(ENCRYPTION_KEY, secret));
+        console.log("[noema] Re-wrapped legacy v3 master.key with the Noema master password.");
+        return true;
+      }
     }
   }
 
