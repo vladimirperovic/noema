@@ -4,7 +4,7 @@ import { loadGalleryShares } from "./store/share-tokens.js";
 import { handleAuthRoute, legacySessionToken, SESSION_COOKIE } from "./security/auth-routes.js";
 import { handleBackupRoute } from "./security/backup-routes.js";
 import { filterSharedList, handleShareAdmin, setShareCookie, shareAllows, shareContext, SHARE_COOKIE } from "./security/share-routes.js";
-import { applyClientIp, clientIp, cookieValue, enforceApiRate, json, redirect, replaceCookieHeader, setSecurityHeaders } from "./security/http.js";
+import { applyClientIp, clientIp, cookieValue, enforceApiRate, isBearerAuthorized, json, redirect, replaceCookieHeader, setSecurityHeaders } from "./security/http.js";
 
 export function installSecurityGateway(server) {
   loadSessions();
@@ -22,10 +22,9 @@ export function installSecurityGateway(server) {
     const pathname = url.pathname;
     const rawSessionToken = cookieValue(req, SESSION_COOKIE);
     const uiSession = config.uiAuthEnabled ? verifySession(rawSessionToken) : { id: "insecure-development-session" };
-    req.noemaUiSession = uiSession;
 
     const share = shareContext(req, url);
-    const shareAllowed = Boolean(share?.share && req.method === "GET" && shareAllows(share.share, pathname));
+    const shareAllowed = Boolean(share?.share && ["GET", "HEAD"].includes(req.method) && shareAllows(share.share, pathname));
     if (share?.token && !share?.share && !uiSession) {
       if (pathname.startsWith("/api/") || !String(req.headers.accept || "").includes("text/html")) json(res, 401, { ok: false, error: "The share link is invalid or expired." });
       else redirect(res, "/login");
@@ -42,6 +41,11 @@ export function installSecurityGateway(server) {
     if (await handleBackupRoute(req, res, url, uiSession)) return;
     if (shareAllowed && pathname === "/api/buildingsites" && share.share.scope === "buildingsite" && filterSharedList(res, share.share)) return;
     if (shareAllowed && pathname === "/api/inspirations" && share.share.scope === "inspiration" && filterSharedList(res, share.share)) return;
+
+    // Inner storage middleware receives authorization results only, never raw secrets.
+    req.noemaUiSession = uiSession || null;
+    req.noemaPrivileged = Boolean(uiSession || isBearerAuthorized(req));
+    req.noemaGalleryShare = shareAllowed ? share.share : null;
 
     if (String(req.headers.authorization || "").startsWith("Basic ")) delete req.headers.authorization;
     replaceCookieHeader(req, {

@@ -3,6 +3,7 @@ import { createServer } from "./server.js";
 import { installFileLibrary } from "./file-library.js";
 import { installGalleryDownloads } from "./gallery-downloads.js";
 import { installLinkThumbnails } from "./link-thumbnails.js";
+import { installPrivateAssetGateway } from "./private-asset-gateway.js";
 import { installSecurityGateway } from "./security-gateway.js";
 import { closeStore } from "./store/todos.js";
 import { closeNotes } from "./store/notes.js";
@@ -14,15 +15,24 @@ import { closeFiles } from "./store/files.js";
 import { closeSessions } from "./store/sessions.js";
 import { closeGalleryShares } from "./store/share-tokens.js";
 import { closeSystem } from "./store/system.js";
-import { closeDatabase } from "./store/database.js";
+import { assertDatabaseCryptoReadable, closeDatabase } from "./store/database.js";
 import { initCrypto } from "./store/crypto.js";
+import { migrateAllPrivateAssets } from "./store/private-assets.js";
 
-function main() {
+async function main() {
   initCrypto({ masterPassword: config.UI_PASSWORD, legacyPassword: config.ENCRYPTION_KEY });
+
+  // Never encrypt legacy plaintext assets with an unverified installation key.
+  // Existing encrypted SQLite data is checked before any in-place binary migration.
+  assertDatabaseCryptoReadable();
+  await migrateAllPrivateAssets();
+
   const server = installSecurityGateway(
-    installGalleryDownloads(
-      installFileLibrary(
-        installLinkThumbnails(createServer()),
+    installPrivateAssetGateway(
+      installGalleryDownloads(
+        installFileLibrary(
+          installLinkThumbnails(createServer()),
+        ),
       ),
     ),
   );
@@ -39,17 +49,7 @@ function main() {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`[noema] received ${signal}, shutting down...`);
-    closeStore();
-    closeNotes();
-    closeDocuments();
-    closeLinks();
-    closeInspirations();
-    closeBuildingSites();
-    closeFiles();
-    closeSessions();
-    closeGalleryShares();
-    closeSystem();
-    closeDatabase();
+    closeStore(); closeNotes(); closeDocuments(); closeLinks(); closeInspirations(); closeBuildingSites(); closeFiles(); closeSessions(); closeGalleryShares(); closeSystem(); closeDatabase();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(1), 10_000).unref();
   };
@@ -57,4 +57,8 @@ function main() {
   process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
-main();
+main().catch((error) => {
+  console.error("[noema] startup failed:", error?.stack || error?.message || error);
+  try { closeDatabase(); } catch {}
+  process.exit(1);
+});

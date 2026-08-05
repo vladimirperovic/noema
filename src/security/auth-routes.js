@@ -10,7 +10,10 @@ export const SESSION_COOKIE = "noema_session";
 
 export function legacySessionToken() {
   const timestamp = Date.now();
-  const secret = config.UI_PASSWORD || config.ENCRYPTION_KEY || config.NOEMA_API_TOKEN || "noema_secret_session_key_2026";
+  // This token exists only for the older inner server/file-library compatibility
+  // layer. While a legacy ENCRYPTION_KEY is still configured, that layer derives
+  // its HMAC from it; after migration/removal it naturally falls back to UI_PASSWORD.
+  const secret = config.ENCRYPTION_KEY || config.UI_PASSWORD || config.NOEMA_API_TOKEN || "noema_secret_session_key_2026";
   return `${timestamp}.${createHmac("sha256", secret).update(`noema_session_${timestamp}`).digest("hex")}`;
 }
 
@@ -34,10 +37,6 @@ async function handleLogin(req, res, ip, sessionToken) {
     return true;
   }
 
-  // The same password now authenticates the UI and protects the installation
-  // data key. Existing v2/legacy key files are re-wrapped only; records are not
-  // re-encrypted. Validate one real record first so a bad legacy key can never
-  // be sealed into the new master.key format.
   try {
     assertDatabaseCryptoReadable();
     protectCryptoWithPassword(password);

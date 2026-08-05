@@ -6,115 +6,132 @@ Security fixes are provided for the latest release on the default branch. Operat
 
 ## Reporting a vulnerability
 
-Do not open a public issue for a vulnerability that could expose authentication, tokens, stored content, backups, private gallery links, filesystem paths, or remote code execution. Use GitHub private vulnerability reporting when available. Include affected version/commit, reproduction steps, impact, and a proposed mitigation if known.
-
-Do not include real credentials, private data, or active share links in a report.
+Do not open a public issue for a vulnerability that could expose authentication, tokens, stored content, backups, private gallery links, filesystem paths, or remote code execution. Use GitHub private vulnerability reporting when available. Do not include real credentials, private data, or active share links in a report.
 
 ## Production requirements
 
-Noema fails closed when `NODE_ENV=production` unless the operator explicitly enables the insecure development override. A normal production deployment requires:
+A normal production deployment requires:
 
-- `UI_PASSWORD` — the single Noema master password used for browser login and protection of the installation data key
-- `NOEMA_API_TOKEN`
-- HTTPS `PUBLIC_BASE_URL`
-- exact `NOEMA_CORS_ORIGIN`
-- separate `NOEMA_BACKUP_PASSWORD` for full archives
+- `UI_PASSWORD` — the single Noema master password used for browser login and protection of the installation data key;
+- `NOEMA_API_TOKEN` for machine clients;
+- HTTPS `PUBLIC_BASE_URL`;
+- exact `NOEMA_CORS_ORIGIN`;
+- separate `NOEMA_BACKUP_PASSWORD` for full archives.
 
-`ENCRYPTION_KEY` is retained only as a legacy migration input for installations created before the unified master-password model. It is not required for a migrated/new installation.
-
-`ALLOW_INSECURE_NO_AUTH=true` is not a production configuration.
+`ENCRYPTION_KEY` is retained only as a legacy migration input. New and fully migrated installations do not require it. `ALLOW_INSECURE_NO_AUTH=true` is development-only.
 
 ## Authentication
 
 ### Browser UI
 
-Login creates an opaque random token. Only its SHA-256 hash and encrypted session metadata are stored. Sessions enforce idle expiration, absolute expiration, revocation, and a fingerprint of the current UI password. Logout revokes the session.
+Login creates an opaque random token. Only its SHA-256 hash and encrypted session metadata are stored. Sessions enforce idle expiration, absolute expiration, revocation, and a fingerprint of the current UI password.
 
-The same `UI_PASSWORD` also protects the random installation data-encryption key. Existing installations with a legacy `ENCRYPTION_KEY` are migrated on the first successful login by re-wrapping the already-loaded data key; application records are not bulk re-encrypted.
-
-The cookie is HttpOnly and SameSite=Lax, and receives the Secure flag when the public URL is HTTPS. Login attempts are limited per client IP and globally.
+The same `UI_PASSWORD` protects the random installation data-encryption key. Existing installations with a legacy `ENCRYPTION_KEY` migrate by re-wrapping the already-loaded data key; this does not require bulk re-encryption of SQLite records.
 
 ### API, MCP, and OpenAPI
 
-Machine clients use `NOEMA_API_TOKEN` as a bearer token. Do not place it in URLs, client-side JavaScript, source files, screenshots, or logs. Rotate it after suspected disclosure.
+Machine clients use `NOEMA_API_TOKEN` as a bearer token. Do not place it in URLs, client-side JavaScript, source files, screenshots, or logs.
 
-## Reverse proxies
+## Reverse proxies and HTTPS
 
-Forwarded client addresses are accepted only when the direct connection comes from an address listed in `NOEMA_TRUSTED_PROXY_IPS`. Do not trust arbitrary `X-Forwarded-For` headers.
+Terminate TLS at a maintained reverse proxy, restrict direct backend access, and configure only controlled proxy addresses in `NOEMA_TRUSTED_PROXY_IPS`. Forwarded client addresses are ignored from untrusted immediate peers.
 
-Terminate TLS at a maintained reverse proxy, restrict direct backend access, and set upload/body limits deliberately.
+## Encryption-at-rest policy
 
-## Encryption at rest
+Noema applies one storage rule:
 
-Application records are encrypted with AES-256-GCM before SQLite storage. Encrypted compatibility mirrors, sessions, gallery shares, metadata snapshots, and the Calendar refresh token use the same random 256-bit installation data key.
+> **Everything the user enters, uploads, or Noema generates from private user data is encrypted at rest.**
 
-The installation data key is stored in `NOEMA_DATA_DIR/master.key` only in wrapped form. A wrapping key is derived from `UI_PASSWORD` with scrypt, and AES-256-GCM protects the wrapped data key. This keeps one password for the user while avoiding mass re-encryption of all records when migrating from the legacy format.
+This includes:
 
-This protects storage media and backups from casual inspection but is not end-to-end encryption. The running server can decrypt content for authorized requests. Host compromise or access to the running process defeats storage encryption.
+- task, note, document, link, gallery, session/share, and other record payloads in SQLite;
+- compatibility mirrors and metadata snapshots;
+- Files binary content;
+- document uploads;
+- Building Site and Inspiration originals and thumbnails;
+- generated Links screenshot thumbnails;
+- Calendar refresh-token storage.
 
-Back up the complete data directory. The master password alone cannot reconstruct a lost random installation data key if `master.key` is lost.
+Application metadata is encrypted with AES-256-GCM before SQLite storage. Files use an authenticated versioned binary container. Other private binary media uses a chunked authenticated asset format so large objects can support byte-range access without loading an entire object into RAM.
+
+## Master key model
+
+The 256-bit installation data key is random. It is not the user's password. `NOEMA_DATA_DIR/master.key` stores that random key only in wrapped form; a wrapping key is derived from `UI_PASSWORD` with scrypt and AES-256-GCM protects the wrapped data key.
+
+The running server necessarily holds the unlocked data key in process memory so it can serve authorized requests. This is **not end-to-end encryption**. Offline storage exposure is protected; compromise of the running host/process can defeat server-side encryption.
+
+Back up `master.key` together with the complete data directory. Knowing the password cannot reconstruct a lost random installation key.
+
+## Legacy plaintext migration
+
+Private binary migration is fail-closed. Before touching legacy plaintext media, startup verifies the loaded installation key against encrypted SQLite data. For each plaintext asset Noema creates an encrypted candidate, fully authenticates/decrypts it, confirms its plaintext SHA-256 matches the source, temporarily renames the original as a rollback copy, installs/re-verifies the ciphertext, and only then removes the plaintext backup.
+
+A migration error aborts startup instead of silently deleting source content or serving a partially migrated data set.
 
 ## Files and uploads
 
-The Files module:
+Files:
 
-- limits content to 120 MB;
-- validates base64 input;
-- generates UUID-based stored names;
-- normalizes every path;
-- writes through temporary files and atomic rename;
-- rolls back failed metadata/content replacement;
-- serves authenticated content with `nosniff` and private no-store caching.
+- limit content to 120 MB;
+- validate base64 input;
+- use normalized UUID-based stored names;
+- encrypt binary content with AES-256-GCM and record-bound associated data;
+- atomically replace content and roll back failures;
+- automatically migrate older plaintext File objects.
 
-Other upload modules should follow the same invariants. Reverse-proxy limits should not be substantially larger than application limits without a reason.
+Document uploads and other managed private assets follow the generic encrypted private-asset layer.
+
+## Gallery and media access
+
+Encrypted gallery assets are served only after the hardened outer security gateway has established an authorized UI session/API bearer context or a valid gallery share. Share tokens remain scoped by module and optional album; the binary gateway applies the same scope to media bytes.
+
+Large private assets support authenticated byte-range decryption. Persistent ciphertext never needs to be copied to a public/static directory.
+
+Album ZIP creation decrypts selected originals only into an isolated system temporary directory. That directory is deleted after the archive stream completes or fails.
 
 ## Links thumbnail generation
 
-Links screenshots are optional and are generated locally with headless Chromium. Noema does not send saved URLs to a third-party screenshot API.
+Links screenshots are generated locally with headless Chromium. Noema does not send saved URLs to a third-party screenshot API.
 
-Before Chromium is launched, the saved URL is passed through the centralized public-URL validation and DNS/IP checks. Localhost, RFC1918/private, link-local, credential-bearing, unsupported-scheme, and redirect targets that resolve into blocked networks are rejected.
+Before Chromium is launched, the saved URL passes centralized public-URL/SSRF validation. The transient screenshot is written to system temporary storage and encrypted before it is moved into persistent Noema storage. Generated thumbnails require an authenticated UI session.
 
-Generated PNGs live under `NOEMA_DATA_DIR/link-thumbnails` and are exposed only through authenticated UI routes. They are part of the persistent data set and therefore part of full disaster-recovery archives.
-
-Chromium is still a complex network-facing parser. Keep the container/base image updated, do not disable the existing URL preflight, and avoid granting the Noema process broader filesystem or host privileges than it needs. A compromised target page must not be treated as trusted application code.
+Keep Chromium current: it is a complex network-facing parser even though its output is stored encrypted.
 
 ## Gallery shares
 
-Share tokens are generated from 32 random bytes and stored only as SHA-256 hashes. They expire, can be revoked, and may be limited by module and album. A share URL is a bearer secret: anyone who has it can access the permitted gallery until expiry or revocation.
-
-Public gallery requests cannot use the normal private menu or unrelated API routes.
+Share tokens are generated from cryptographically random bytes and stored only as SHA-256 hashes. They expire, can be revoked, and may be limited by module and album. A share URL is a bearer secret.
 
 ## OAuth
 
-Google OAuth state is random, short-lived, and bound to the administrator session that initiated it. Refresh tokens are encrypted in `google-token.enc`; access tokens remain in memory. OAuth client credentials belong in environment configuration.
+Google OAuth state is random, short-lived, and bound to the administrator session. Refresh tokens are encrypted at rest; access tokens remain only in process memory.
 
 ## Outbound requests
 
-Features that fetch user-supplied URLs must use the centralized outbound URL controls and reject unsafe schemes, credentials in URLs, loopback/private destinations where prohibited, and redirect chains that cross into blocked networks.
-
-This rule applies to link metadata, Reader Mode fetches, remote media helpers, and the preflight performed before local Links screenshot generation.
+Features that fetch user-supplied URLs must use centralized URL/DNS controls and reject unsafe schemes, credentials, loopback/private targets where prohibited, and redirect chains into blocked networks.
 
 ## Backups
 
-Portable JSON backups are readable and must be protected. Full `.noema` archives include all persistent data and encryption material, including generated Links thumbnails, then encrypt the package with a separate backup password. The archive format uses a manifest with SHA-256 checksums and AES-256-GCM authentication.
+Portable JSON exports are readable and must be protected. Full `.noema` archives include the complete persistent data set, including already-encrypted private binary assets and `master.key`, then add a second AES-256-GCM encryption layer using a separate backup password.
 
-Restore full archives only while Noema is stopped. Store backup passwords separately, retain off-site copies, and test restoration.
+The separate backup password is deliberate: backup archives may live off-server and should not depend solely on the application's online credential.
+
+Restore full archives only while Noema is stopped, keep off-site copies, and test restoration.
 
 ## Security headers
 
-The outer gateway applies Content Security Policy, frame denial, MIME sniffing protection, referrer policy, permissions policy, and HSTS for HTTPS production deployments. Review CSP changes whenever adding an external script, font, image, map, or API provider.
+The outer gateway applies Content Security Policy, frame denial, MIME sniffing protection, referrer policy, permissions policy, and HSTS for HTTPS production deployments.
 
 ## Dependency and runtime security
 
-Noema has no runtime npm dependencies, but it still depends on Node.js, Alpine packages in the container, Chromium for optional thumbnail generation, browser APIs, reverse-proxy software, and optional external services. Monitor and update these components.
+Noema has no runtime npm dependencies, but it still depends on Node.js, Alpine/container packages, Chromium for optional thumbnail generation, browser APIs, reverse-proxy software, and optional external services. Keep those components patched.
 
 ## Operator checklist
 
 - Use HTTPS and prevent direct public access to the backend port.
 - Use a unique, long `UI_PASSWORD`, a separate API token, and a separate backup password.
-- Back up the complete data directory, including `master.key` and generated thumbnail/media directories, and verify restores.
+- Preserve the complete data directory, including `master.key` and all encrypted binary directories.
+- Do not interrupt the first upgraded startup while a legacy plaintext media migration is running.
 - Configure only controlled trusted proxies.
 - Revoke unused sessions and share links.
 - Protect `.env`, volumes, logs, CI variables, and backup destinations.
 - Keep Node.js, Chromium, the container base image, reverse proxy, and host patched.
-- Review public gallery content before sharing.
