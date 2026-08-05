@@ -2,6 +2,7 @@ import { config } from "./config.js";
 import { createServer } from "./server.js";
 import { installFileLibrary } from "./file-library.js";
 import { installGalleryDownloads } from "./gallery-downloads.js";
+import { installLinkThumbnails } from "./link-thumbnails.js";
 import { installSecurityGateway } from "./security-gateway.js";
 import { closeStore } from "./store/todos.js";
 import { closeNotes } from "./store/notes.js";
@@ -20,7 +21,9 @@ function main() {
   initCrypto({ masterPassword: config.UI_PASSWORD, legacyPassword: config.ENCRYPTION_KEY });
   const server = installSecurityGateway(
     installGalleryDownloads(
-      installFileLibrary(createServer()),
+      installFileLibrary(
+        installLinkThumbnails(createServer()),
+      ),
     ),
   );
 
