@@ -167,11 +167,19 @@ async function handleApi(req, res, url) {
 }
 
 async function serveSharedUiScript(res) {
-  const [base, galleryDownloads] = await Promise.all([
+  const [base, galleryDownloads, markdownDocuments] = await Promise.all([
     readFile(path.join(PUBLIC_DIR, "noema-header-footer.js")),
     readFile(path.join(PUBLIC_DIR, "gallery-downloads.js")),
+    readFile(path.join(PUBLIC_DIR, "markdown-documents.js")),
   ]);
-  const payload = Buffer.concat([base, Buffer.from("\n"), galleryDownloads, Buffer.from("\n")]);
+  const payload = Buffer.concat([
+    base,
+    Buffer.from("\n"),
+    galleryDownloads,
+    Buffer.from("\n"),
+    markdownDocuments,
+    Buffer.from("\n"),
+  ]);
   res.writeHead(200, {
     "Content-Type": "text/javascript; charset=utf-8",
     "Content-Length": payload.length,
