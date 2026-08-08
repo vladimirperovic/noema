@@ -1,0 +1,32 @@
+name: English UI audit
+
+on:
+  push:
+    branches: [agent/english-public-ui]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Inventory possible Serbian UI text
+        shell: bash
+        run: |
+          set +e
+          node scripts/audit-english-ui.mjs > english-ui-audit.txt
+          status=$?
+          cat english-ui-audit.txt
+          echo "audit_status=$status" >> "$GITHUB_ENV"
+          exit 0
+      - name: Upload inventory
+        uses: actions/upload-artifact@v7
+        with:
+          name: english-ui-audit
+          path: english-ui-audit.txt
