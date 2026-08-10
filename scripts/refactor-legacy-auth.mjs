@@ -12,51 +12,40 @@ function cutBetween(startMarker, endMarker, replacement = "") {
   source = source.slice(0, start) + replacement + source.slice(end);
 }
 
-// Legacy gallery HMAC/cookie sharing is replaced by revocable share tokens in security-gateway.js.
 cutBetween(
   'const GALLERY_SHARE_COOKIE = "noema_gallery_share";',
   'function reverseAddressLabel(result) {'
 );
 
-// Remove the inner browser-auth authority entirely: Basic Auth, HMAC sessions,
-// duplicate login limiter and the old authorization helper.
 cutBetween(
   '/**\n * Rute koje OSTAJU javne',
   '/** Pročitaj sirovo telo zahteva (Promise). */'
 );
 
-// The outer gateway now owns all browser/share authorization. The inner server
-// should only receive an already-authorized request.
+// Preserve the existing try block; remove only the legacy authorization preamble.
 cutBetween(
   '    const galleryShareAccess = hasGalleryShareAccess(req, url);',
-  '    try {',
   '    try {'
 );
 
-// Remove legacy login/logout handlers. /login GET remains a static-file alias;
-// POST /login and logout are exclusively handled by security/auth-routes.js.
 cutBetween(
   '      // --- Javne rute i rute za autentifikaciju ---',
   '      // Health check.',
   '      // Health check.'
 );
 
-// OAuth authorization/state validation is handled by security/auth-routes.js.
 cutBetween(
   '      // --- Google OAuth connect flow',
   '      // MCP endpoint',
   '      // MCP endpoint'
 );
 
-// Remove the second API limiter. security/http.js is the single rate-limit authority.
 cutBetween(
   '      // --- Rate limiting za sve /api/* rute ---',
   '      // --- REST za UI: /api/todos ---',
   '      // --- REST za UI: /api/todos ---'
 );
 
-// Remove the deterministic legacy gallery-share endpoint. Revocable, scoped
-// share tokens are created/administered by security/share-routes.js instead.
 cutBetween(
   '      if (pathname === "/api/gallery-share" && method === "POST") {',
   '      // --- Inspiration galerija ---',
