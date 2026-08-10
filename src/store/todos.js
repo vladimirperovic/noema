@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { todayISO, weekdayKey } from "../core/utils.js";
+import { addIsoDays, todayISO, weekdayKey } from "../core/utils.js";
 import { createCollection } from "./collection.js";
 
 const REPEAT_DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -7,20 +7,6 @@ const WEEKDAYS = new Set(["mon", "tue", "wed", "thu", "fri"]);
 const SOURCE_TYPES = new Set(["document", "note", "link", "file", "inspiration", "building-site", "ai-project"]);
 const SOURCE_MARKER = /\u2063NOEMA_SOURCE:([^\s]+)\s*$/;
 let recurringTimer = null;
-
-function toISODate(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function addDays(iso, amount) {
-  const [year, month, day] = iso.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  date.setDate(date.getDate() + amount);
-  return toISODate(date);
-}
 
 function normTime(value) {
   if (typeof value !== "string") return null;
@@ -33,8 +19,8 @@ function normTime(value) {
 }
 
 function dayToDate(day, today = todayISO()) {
-  if (day === "yesterday") return addDays(today, -1);
-  if (day === "tomorrow") return addDays(today, 1);
+  if (day === "yesterday") return addIsoDays(today, -1);
+  if (day === "tomorrow") return addIsoDays(today, 1);
   return today;
 }
 
@@ -65,12 +51,16 @@ function parseSourceTitle(value) {
   return { title: text.slice(0, match.index).trim(), source };
 }
 
+function validRepeat(value) {
+  return REPEAT_DAYS.includes(value) || ["daily", "weekdays", "weekends"].includes(value);
+}
+
 function normalizeTask(raw) {
   const task = { ...raw };
   const now = Date.now();
   const parsedTitle = parseSourceTitle(task.title);
   if (!task.scheduledFor && typeof task.day === "string") task.scheduledFor = dayToDate(task.day);
-  if (!task.scheduledFor) task.scheduledFor = todayISO();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(task.scheduledFor || ""))) task.scheduledFor = todayISO();
   delete task.day;
   task.title = parsedTitle.title;
   task.source = normalizeSource(task.source) || parsedTitle.source;
@@ -78,7 +68,7 @@ function normalizeTask(raw) {
   task.time = task.time ? normTime(task.time) : null;
   task.priority = ["low", "normal", "medium", "high"].includes(task.priority) ? task.priority : "normal";
   task.done = Boolean(task.done);
-  task.repeat = REPEAT_DAYS.includes(task.repeat) || ["daily", "weekdays", "weekends"].includes(task.repeat) ? task.repeat : "";
+  task.repeat = validRepeat(task.repeat) ? task.repeat : "";
   const recurrenceTemplateId = String(task.recurrenceTemplateId || "").trim();
   const occurrenceDate = /^\d{4}-\d{2}-\d{2}$/.test(String(task.occurrenceDate || "")) ? String(task.occurrenceDate) : "";
   if (recurrenceTemplateId) task.recurrenceTemplateId = recurrenceTemplateId;
@@ -102,7 +92,10 @@ const tasks = createCollection({
 export function loadStore() {
   const loaded = tasks.load();
   if (loaded.length === 0) seedDemo();
-  else migrateLegacyRecurringTasks(loaded);
+  else {
+    migrateLegacyRecurringTasks(loaded);
+    ensureRecurrenceTemplates();
+  }
   generateRecurring();
   if (!recurringTimer) {
     recurringTimer = setInterval(() => generateRecurring(), 3_600_000);
@@ -134,13 +127,21 @@ function migrateLegacyRecurringTasks(loaded) {
     const distinctDates = new Set(group.map((task) => task.scheduledFor));
     if (group.length > 1 && distinctDates.size > 1) {
       const template = group[0];
-      tasks.set(normalizeTask({ ...template, recurrenceTemplateId: template.id }));
+      tasks.set(normalizeTask({ ...template, recurrenceTemplateId: template.id, occurrenceDate: template.scheduledFor }));
       for (const occurrence of group.slice(1)) {
         tasks.set(normalizeTask({ ...occurrence, repeat: "", recurrenceTemplateId: template.id, occurrenceDate: occurrence.scheduledFor }));
       }
     } else {
-      for (const template of group) tasks.set(normalizeTask({ ...template, recurrenceTemplateId: template.id }));
+      for (const template of group) tasks.set(normalizeTask({ ...template, recurrenceTemplateId: template.id, occurrenceDate: template.scheduledFor }));
     }
+  }
+}
+
+function ensureRecurrenceTemplates() {
+  for (const task of tasks.list()) {
+    if (!task.repeat) continue;
+    if (task.recurrenceTemplateId === task.id && task.occurrenceDate === task.scheduledFor) continue;
+    tasks.set(normalizeTask({ ...task, recurrenceTemplateId: task.id, occurrenceDate: task.occurrenceDate || task.scheduledFor }));
   }
 }
 
@@ -181,7 +182,10 @@ export function addTask(title, day, priority = "normal", done = false, time = nu
     createdAt: now,
     updatedAt: now,
   });
-  if (task.repeat) task.recurrenceTemplateId = task.id;
+  if (task.repeat) {
+    task.recurrenceTemplateId = task.id;
+    task.occurrenceDate = task.scheduledFor;
+  }
   return withDay(tasks.set(task));
 }
 
@@ -207,13 +211,13 @@ export function updateTask(id, patch) {
   }
   if (Object.hasOwn(patch, "time")) next.time = patch.time === null || patch.time === "" ? null : normTime(patch.time);
   if (Object.hasOwn(patch, "repeat")) {
-    next.repeat = patch.repeat === null ? "" : patch.repeat;
-    const validRepeat = REPEAT_DAYS.includes(next.repeat) || ["daily", "weekdays", "weekends"].includes(next.repeat);
-    if (validRepeat) {
+    next.repeat = validRepeat(patch.repeat) ? patch.repeat : "";
+    if (next.repeat) {
       next.recurrenceTemplateId = next.id;
-      delete next.occurrenceDate;
-    } else if (!next.occurrenceDate) delete next.recurrenceTemplateId;
+      next.occurrenceDate = next.scheduledFor;
+    }
   }
+  if (next.repeat && next.recurrenceTemplateId === next.id && Object.hasOwn(patch, "day")) next.occurrenceDate = next.scheduledFor;
   if (typeof patch.order === "number") next.order = patch.order;
   if (Array.isArray(patch.subtasks)) next.subtasks = patch.subtasks;
   next.updatedAt = Date.now();
@@ -222,21 +226,27 @@ export function updateTask(id, patch) {
 
 export function removeTask(id) { return tasks.remove(id); }
 
+function recurrenceMatches(repeat, instant) {
+  const dayName = weekdayKey(instant);
+  return repeat === "daily"
+    || (repeat === "weekdays" && WEEKDAYS.has(dayName))
+    || (repeat === "weekends" && !WEEKDAYS.has(dayName))
+    || repeat === dayName;
+}
+
 export function generateRecurring(now = Date.now()) {
-  const today = todayISO(now);
-  const dayName = weekdayKey(now);
+  const instant = new Date(now).getTime();
+  const today = todayISO(instant);
   let created = 0;
   const all = tasks.list();
-  const templates = all.filter((task) => task.repeat && (!task.recurrenceTemplateId || task.recurrenceTemplateId === task.id));
+  const knownOccurrences = new Set(all.filter((item) => item.recurrenceTemplateId && item.occurrenceDate).map((item) => `${item.recurrenceTemplateId}:${item.occurrenceDate}`));
+  const knownIds = new Set(all.map((item) => item.id));
+  const templates = all.filter((task) => task.repeat && task.recurrenceTemplateId === task.id);
   for (const template of templates) {
-    const matches = template.repeat === "daily"
-      || (template.repeat === "weekdays" && WEEKDAYS.has(dayName))
-      || (template.repeat === "weekends" && !WEEKDAYS.has(dayName))
-      || template.repeat === dayName;
-    if (!matches) continue;
+    if (today < template.scheduledFor || !recurrenceMatches(template.repeat, instant)) continue;
+    const occurrenceKey = `${template.id}:${today}`;
     const occurrenceId = recurrenceOccurrenceId(template.id, today);
-    if (all.some((item) => item.id === occurrenceId || (item.recurrenceTemplateId === template.id && item.occurrenceDate === today))) continue;
-    const timestamp = Date.now();
+    if (knownOccurrences.has(occurrenceKey) || knownIds.has(occurrenceId)) continue;
     tasks.set(normalizeTask({
       id: occurrenceId,
       title: template.title,
@@ -248,10 +258,12 @@ export function generateRecurring(now = Date.now()) {
       recurrenceTemplateId: template.id,
       occurrenceDate: today,
       subtasks: template.subtasks.map((subtask) => ({ ...subtask, done: false })),
-      order: timestamp,
-      createdAt: timestamp,
-      updatedAt: timestamp,
+      order: instant,
+      createdAt: instant,
+      updatedAt: instant,
     }));
+    knownOccurrences.add(occurrenceKey);
+    knownIds.add(occurrenceId);
     created += 1;
   }
   return created;
@@ -293,7 +305,11 @@ export function summary() {
   };
 }
 
-export function replaceTasks(values) { tasks.replace(values); }
+export function replaceTasks(values) {
+  tasks.replace(values);
+  migrateLegacyRecurringTasks(tasks.list());
+  ensureRecurrenceTemplates();
+}
 
 export function closeStore() {
   if (recurringTimer) {
