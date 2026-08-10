@@ -51,7 +51,9 @@ test("recurring generation is idempotent and respects its start date", async () 
       assert.equal(all.filter((item) => item.recurrenceTemplateId === "daily-template" && item.occurrenceDate === "2026-03-29").length, 1);
       assert.equal(all.filter((item) => item.recurrenceTemplateId === "future-template" && item.occurrenceDate === "2026-03-29").length, 0);
       const monday = Date.parse("2026-03-30T10:00:00Z");
-      assert.equal(todos.generateRecurring(monday), 2);
+      // future-template is itself the first 2026-03-30 occurrence; only the
+      // already-running daily-template needs a newly materialized occurrence.
+      assert.equal(todos.generateRecurring(monday), 1);
       assert.equal(todos.generateRecurring(monday), 0);
       all = todos.listTasks(undefined, { includeDone: true });
       assert.equal(all.filter((item) => item.recurrenceTemplateId === "daily-template" && item.occurrenceDate === "2026-03-30").length, 1);
