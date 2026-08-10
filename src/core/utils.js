@@ -4,15 +4,9 @@
 
 import { config } from "../config.js";
 
-/**
- * Vraća datumsko vreme u YYYY-MM-DD formatu, u zadatoj (podrazumevano
- * konfigurisanoj, npr. Europe/Belgrade) vremenskoj zoni — NE u vremenskoj zoni
- * servera/kontejnera (koja je npr. u Dockeru podrazumevano UTC).
- * @param {Date|number} [d=Date.now()]
- * @param {string} [timeZone=config.NOEMA_TIMEZONE]
- */
-export function todayISO(d, timeZone = config.NOEMA_TIMEZONE) {
-  const date = d ? new Date(d) : new Date();
+/** Vraća datum u YYYY-MM-DD formatu u zadatoj IANA vremenskoj zoni. */
+export function todayISO(d = Date.now(), timeZone = config.NOEMA_TIMEZONE) {
+  const date = new Date(d);
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
@@ -23,10 +17,17 @@ export function todayISO(d, timeZone = config.NOEMA_TIMEZONE) {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-/**
- * Offset (u minutima, istočno od UTC pozitivan) date vremenske zone u datom trenutku.
- * Bez eksternih zavisnosti (npr. moment-timezone) — koristi Intl.DateTimeFormat.
- */
+/** Calendar-day arithmetic without relying on the host/container timezone. */
+export function addIsoDays(iso, amount) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || "")) || !Number.isInteger(amount)) {
+    throw new Error("Invalid ISO date arithmetic input.");
+  }
+  const [year, month, day] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + amount, 12));
+  return [date.getUTCFullYear(), String(date.getUTCMonth() + 1).padStart(2, "0"), String(date.getUTCDate()).padStart(2, "0")].join("-");
+}
+
+/** Offset in minutes, east of UTC positive, at a specific instant. */
 function tzOffsetMinutes(timeZone, instant) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -43,46 +44,43 @@ function tzOffsetMinutes(timeZone, instant) {
   return Math.round((asUTC - instant.getTime()) / 60_000);
 }
 
-/**
- * UTC granice (00:00:00–23:59:59) datog kalendarskog dana U ZADATOJ vremenskoj zoni.
- * Bitno za Google Calendar celodnevne (all-day) događaje: Google ih smešta u
- * podrazumevanu vremensku zonu kalendara — ne u UTC niti u vremensku zonu servera —
- * pa granice moramo računati u istoj zoni, inače susedni dan "procuri" u upit
- * (npr. rođendan sutra se prikaže pod "danas").
- * @param {string} iso YYYY-MM-DD
- * @param {string} timeZone IANA zona (npr. "Europe/Belgrade")
- */
-export function zonedDayBoundsUTC(iso, timeZone) {
-  const [y, m, d] = iso.split("-").map(Number);
-  const noonUTC = new Date(Date.UTC(y, m - 1, d, 12)); // referenca za offset, izbjegava DST ivice
-  const offsetMin = tzOffsetMinutes(timeZone, noonUTC);
-  const start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - offsetMin * 60_000);
-  const end = new Date(Date.UTC(y, m - 1, d, 23, 59, 59) - offsetMin * 60_000);
-  return { timeMin: start.toISOString(), timeMax: end.toISOString() };
+function zonedWallTimeUTC(year, month, day, hour, minute, second, timeZone) {
+  const wallUtc = Date.UTC(year, month - 1, day, hour, minute, second);
+  let instant = wallUtc;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const offset = tzOffsetMinutes(timeZone, new Date(instant));
+    const next = wallUtc - offset * 60_000;
+    if (next === instant) break;
+    instant = next;
+  }
+  return new Date(instant);
 }
 
 /**
- * Prebacuje string "yesterday" | "today" | "tomorrow" u YYYY-MM-DD format
- * bazirano na navedenom baznom datumu (podrazumevano todayISO()).
- * @param {"yesterday"|"today"|"tomorrow"} dayStr
- * @param {string} [baseIso=todayISO()]
+ * UTC bounds for a calendar day in an IANA timezone. Start of the next local
+ * day is resolved separately so DST transition days correctly span 23/25 h.
  */
+export function zonedDayBoundsUTC(iso, timeZone = config.NOEMA_TIMEZONE) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ""))) throw new Error("Invalid ISO date.");
+  const [year, month, day] = iso.split("-").map(Number);
+  const nextIso = addIsoDays(iso, 1);
+  const [nextYear, nextMonth, nextDay] = nextIso.split("-").map(Number);
+  const start = zonedWallTimeUTC(year, month, day, 0, 0, 0, timeZone);
+  const nextStart = zonedWallTimeUTC(nextYear, nextMonth, nextDay, 0, 0, 0, timeZone);
+  return {
+    timeMin: start.toISOString(),
+    timeMax: new Date(nextStart.getTime() - 1).toISOString(),
+  };
+}
+
+/** Convert yesterday/today/tomorrow to YYYY-MM-DD. */
 export function resolveIsoDay(dayStr, baseIso) {
   const base = baseIso || todayISO();
-  const d = new Date(base + "T00:00:00"); // Lokalna ponoć umesto Z
-  if (dayStr === "yesterday") {
-    d.setDate(d.getDate() - 1);
-  } else if (dayStr === "tomorrow") {
-    d.setDate(d.getDate() + 1);
-  } else if (dayStr !== "today") {
-    throw new Error(`Nevalidan parametar za dan: ${dayStr}`);
-  }
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
+  if (dayStr === "yesterday") return addIsoDays(base, -1);
+  if (dayStr === "tomorrow") return addIsoDays(base, 1);
+  if (dayStr === "today") return base;
+  throw new Error(`Nevalidan parametar za dan: ${dayStr}`);
 }
-
 
 /** Return the weekday key (sun..sat) in the configured timezone. */
 export function weekdayKey(d = Date.now(), timeZone = config.NOEMA_TIMEZONE) {
