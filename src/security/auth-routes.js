@@ -1,4 +1,3 @@
-import { createHmac } from "node:crypto";
 import { config } from "../config.js";
 import { buildAuthUrl, handleOAuthCallback, isCalendarConfigured } from "../store/calendar.js";
 import { protectCryptoWithPassword } from "../store/crypto.js";
@@ -7,15 +6,6 @@ import { createSession, revokeSession, sessionBinding, verifySession } from "../
 import { clearLoginFailure, json, loginStatus, readJson, recordLoginFailure, redirect, safeEqual, secureCookieSuffix } from "./http.js";
 
 export const SESSION_COOKIE = "noema_session";
-
-export function legacySessionToken() {
-  const timestamp = Date.now();
-  // This token exists only for the older inner server/file-library compatibility
-  // layer. While a legacy ENCRYPTION_KEY is still configured, that layer derives
-  // its HMAC from it; after migration/removal it naturally falls back to UI_PASSWORD.
-  const secret = config.ENCRYPTION_KEY || config.UI_PASSWORD || config.NOEMA_API_TOKEN || "noema_secret_session_key_2026";
-  return `${timestamp}.${createHmac("sha256", secret).update(`noema_session_${timestamp}`).digest("hex")}`;
-}
 
 async function handleLogin(req, res, ip, sessionToken) {
   if (req.method === "GET") {
@@ -61,7 +51,7 @@ export async function handleAuthRoute(req, res, url, ip, rawSessionToken, uiSess
     revokeSession(rawSessionToken);
     res.setHeader("Set-Cookie", `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureCookieSuffix()}`);
     if (req.method === "GET") redirect(res, "/login");
-    else json(res, 200, { ok: true });
+    else json(res, 200, { ok: true }, { "Cache-Control": "no-store" });
     return true;
   }
   if (pathname === "/auth/google" && req.method === "GET") {
