@@ -1,10 +1,63 @@
 import { config } from "./config.js";
 import { loadSessions, verifySession } from "./store/sessions.js";
 import { loadGalleryShares } from "./store/share-tokens.js";
-import { handleAuthRoute, legacySessionToken, SESSION_COOKIE } from "./security/auth-routes.js";
+import { handleAuthRoute, SESSION_COOKIE } from "./security/auth-routes.js";
 import { handleBackupRoute } from "./security/backup-routes.js";
-import { filterSharedList, handleShareAdmin, setShareCookie, shareAllows, shareContext, SHARE_COOKIE } from "./security/share-routes.js";
-import { applyClientIp, clientIp, cookieValue, enforceApiRate, isBearerAuthorized, json, redirect, replaceCookieHeader, setSecurityHeaders } from "./security/http.js";
+import { filterSharedList, handleShareAdmin, setShareCookie, shareAllows, shareContext } from "./security/share-routes.js";
+import { applyClientIp, clientIp, cookieValue, enforceApiRate, isBearerAuthorized, json, redirect, setSecurityHeaders } from "./security/http.js";
+
+const PUBLIC_UNAUTHENTICATED_PATHS = new Set([
+  "/healthz",
+  "/openapi.json",
+  "/mcp",
+  "/login",
+  "/login/",
+  "/login.html",
+  "/sw.js",
+  "/manifest.json",
+  "/favicon.ico",
+  "/favicon.svg",
+  "/noema-i18n.js",
+]);
+
+function isPublicUnauthenticatedPath(pathname) {
+  return PUBLIC_UNAUTHENTICATED_PATHS.has(pathname) || pathname.startsWith("/api/tools/");
+}
+
+function isPrivateDataPath(pathname) {
+  return pathname.startsWith("/api/")
+    || pathname.startsWith("/uploads/")
+    || pathname.startsWith("/files/")
+    || pathname.startsWith("/file/")
+    || pathname.startsWith("/inspiration-files/")
+    || pathname.startsWith("/buildingsite-files/")
+    || pathname.startsWith("/thumbnails/")
+    || pathname.startsWith("/private-assets/")
+    || pathname.startsWith("/gallery-media/")
+    || pathname.startsWith("/backup/");
+}
+
+function forceNoStore(res) {
+  const originalWriteHead = res.writeHead.bind(res);
+  res.writeHead = (statusCode, statusMessageOrHeaders, maybeHeaders) => {
+    const harden = (headers = {}) => ({
+      ...headers,
+      "Cache-Control": "private, no-store",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
+    if (typeof statusMessageOrHeaders === "string") {
+      return originalWriteHead(statusCode, statusMessageOrHeaders, harden(maybeHeaders));
+    }
+    return originalWriteHead(statusCode, harden(statusMessageOrHeaders));
+  };
+}
+
+function redirectToLogin(res, req) {
+  const login = new URL("/login", config.PUBLIC_BASE_URL);
+  login.searchParams.set("next", String(req.url || "/"));
+  redirect(res, `${login.pathname}${login.search}`);
+}
 
 export function installSecurityGateway(server) {
   loadSessions();
@@ -14,24 +67,31 @@ export function installSecurityGateway(server) {
   server.removeAllListeners("request");
   server.on("request", async (req, res) => {
     setSecurityHeaders(res);
+
+    const url = new URL(req.url, config.PUBLIC_BASE_URL);
+    const pathname = url.pathname;
+    if (isPrivateDataPath(pathname)) forceNoStore(res);
+
+    // HTTP Basic is not a supported Noema authentication mechanism. Strip it
+    // before any downstream handler can interpret it or emit a browser challenge.
+    if (String(req.headers.authorization || "").startsWith("Basic ")) delete req.headers.authorization;
+
     const ip = clientIp(req);
     applyClientIp(req, ip);
     if (enforceApiRate(req, res, ip)) return;
 
-    const url = new URL(req.url, config.PUBLIC_BASE_URL);
-    const pathname = url.pathname;
     const rawSessionToken = cookieValue(req, SESSION_COOKIE);
     const uiSession = config.uiAuthEnabled ? verifySession(rawSessionToken) : { id: "insecure-development-session" };
 
     const share = shareContext(req, url);
     const shareAllowed = Boolean(share?.share && ["GET", "HEAD"].includes(req.method) && shareAllows(share.share, pathname));
     if (share?.token && !share?.share && !uiSession) {
-      if (pathname.startsWith("/api/") || !String(req.headers.accept || "").includes("text/html")) json(res, 401, { ok: false, error: "The share link is invalid or expired." }, { "Cache-Control": "no-store" });
+      if (pathname.startsWith("/api/") || !String(req.headers.accept || "").includes("text/html")) json(res, 401, { ok: false, error: "The share link is invalid or expired." });
       else redirect(res, "/login");
       return;
     }
     if (share?.share && !shareAllowed && !uiSession) {
-      json(res, 403, { ok: false, error: "This share link does not allow access to the requested path." }, { "Cache-Control": "no-store" });
+      json(res, 403, { ok: false, error: "This share link does not allow access to the requested path." });
       return;
     }
     if (share?.share && url.searchParams.has("gallery")) setShareCookie(res, share);
@@ -45,38 +105,24 @@ export function installSecurityGateway(server) {
     const bearerAuthorized = isBearerAuthorized(req);
     const privileged = Boolean(uiSession || bearerAuthorized);
 
-    // The outer gateway is the browser-auth authority. Do not delegate an
-    // unauthenticated private API request to the legacy inner server because it
-    // still emits a Basic-auth challenge for backward compatibility. Browsers
-    // interpret that challenge as a native username/password popup even though
-    // Noema's supported UI login is password-only at /login.
-    if (
-      config.uiAuthEnabled &&
-      pathname.startsWith("/api/") &&
-      !pathname.startsWith("/api/tools/") &&
-      !privileged &&
-      !shareAllowed
-    ) {
-      json(res, 401, { ok: false, error: "Authentication required. Sign in at /login." }, { "Cache-Control": "no-store" });
+    if (config.uiAuthEnabled && !privileged && !shareAllowed && !isPublicUnauthenticatedPath(pathname)) {
+      const wantsHtml = ["GET", "HEAD"].includes(req.method) && (pathname === "/" || String(req.headers.accept || "").includes("text/html"));
+      if (wantsHtml) redirectToLogin(res, req);
+      else json(res, 401, { ok: false, error: "Authentication required. Sign in at /login." });
       return;
     }
 
-    // Inner storage middleware receives authorization results only, never raw secrets.
+    // Downstream storage/routes receive authorization results only. They never
+    // receive a synthetic legacy session cookie or a Basic authorization header.
     req.noemaUiSession = uiSession || null;
     req.noemaPrivileged = privileged;
     req.noemaBearerAuthorized = bearerAuthorized;
     req.noemaGalleryShare = shareAllowed ? share.share : null;
 
-    if (String(req.headers.authorization || "").startsWith("Basic ")) delete req.headers.authorization;
-    replaceCookieHeader(req, {
-      [SESSION_COOKIE]: (uiSession || shareAllowed) ? legacySessionToken() : null,
-      [SHARE_COOKIE]: null,
-    });
-
     try {
       await original(req, res);
     } catch (error) {
-      if (!res.headersSent) json(res, 500, { ok: false, error: "Internal server error." }, { "Cache-Control": "no-store" });
+      if (!res.headersSent) json(res, 500, { ok: false, error: "Internal server error." });
       else res.destroy(error);
     }
   });
