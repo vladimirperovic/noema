@@ -5,10 +5,8 @@ const LOGIN_WINDOW_MS = 15 * 60_000;
 const API_WINDOW_MS = 60_000;
 const MAX_RATE_BUCKETS = 10_000;
 const MAX_LOGIN_FAILURES_PER_IP = 5;
-const MAX_LOGIN_FAILURES_GLOBAL = 100;
 const loginByIp = new Map();
 const apiByIp = new Map();
-let globalLoginFailures = { count: 0, since: 0 };
 
 export function safeEqual(left, right) {
   const a = Buffer.from(String(left || ""));
@@ -128,23 +126,15 @@ function pruneBuckets(map, windowMs, now) {
   }
 }
 
-function normalizeGlobalLoginWindow(now) {
-  if (!globalLoginFailures.since || now - globalLoginFailures.since > LOGIN_WINDOW_MS) {
-    globalLoginFailures = { count: 0, since: now };
-  }
-}
-
 export function loginStatus(ip) {
   const now = Date.now();
   pruneBuckets(loginByIp, LOGIN_WINDOW_MS, now);
-  normalizeGlobalLoginWindow(now);
   const current = loginByIp.get(ip) || { count: 0, since: now };
-  const ipLocked = current.count >= MAX_LOGIN_FAILURES_PER_IP;
-  const globalLocked = globalLoginFailures.count >= MAX_LOGIN_FAILURES_GLOBAL;
+  const locked = current.count >= MAX_LOGIN_FAILURES_PER_IP;
   return {
-    locked: ipLocked || globalLocked,
-    ipLocked,
-    globalLocked,
+    locked,
+    ipLocked: locked,
+    globalLocked: false,
     remaining: Math.max(0, MAX_LOGIN_FAILURES_PER_IP - current.count),
   };
 }
@@ -152,14 +142,12 @@ export function loginStatus(ip) {
 export function recordLoginFailure(ip) {
   const now = Date.now();
   pruneBuckets(loginByIp, LOGIN_WINDOW_MS, now);
-  normalizeGlobalLoginWindow(now);
   const record = loginByIp.get(ip);
   const next = !record || now - record.since > LOGIN_WINDOW_MS
     ? { count: 1, since: now }
     : { ...record, count: record.count + 1 };
   loginByIp.delete(ip);
   loginByIp.set(ip, next);
-  globalLoginFailures.count += 1;
   return Math.max(0, MAX_LOGIN_FAILURES_PER_IP - next.count);
 }
 
