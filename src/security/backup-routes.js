@@ -4,13 +4,16 @@ import { config } from "../config.js";
 import { backupDataSize, createEncryptedBackup } from "../store/backup.js";
 import { readEncryptedJson, writeEncryptedJson } from "../store/crypto.js";
 import { exportPortableState, restorePortableState } from "./backup-state.js";
-import { isBearerAuthorized, json, readJson } from "./http.js";
+import { json, readJson } from "./http.js";
 
 const snapshotsDir = () => path.join(config.DATA_DIR, "snapshots");
 
-function requireAdmin(req, res, uiSession) {
-  if (!config.uiAuthEnabled || uiSession || isBearerAuthorized(req)) return false;
-  json(res, 401, { ok: false, error: "An administrator session or API bearer token is required." });
+function requireAdmin(res, uiSession) {
+  // Backup/restore carries the application's complete private state. The general
+  // API bearer token is intentionally insufficient; only an authenticated UI
+  // administrator may export, snapshot or restore it.
+  if (!config.uiAuthEnabled || uiSession) return false;
+  json(res, 403, { ok: false, error: "An administrator UI session is required for backup operations." });
   return true;
 }
 
@@ -22,7 +25,7 @@ function counts() {
 export async function handleBackupRoute(req, res, url, uiSession) {
   const pathname = url.pathname;
   if (!pathname.startsWith("/api/backup/")) return false;
-  if (requireAdmin(req, res, uiSession)) return true;
+  if (requireAdmin(res, uiSession)) return true;
 
   if (pathname === "/api/backup/info" && req.method === "GET") {
     json(res, 200, { ok: true, ...counts(), sizes: { total: backupDataSize() }, encryptedArchiveConfigured: Boolean(config.NOEMA_BACKUP_PASSWORD) });
