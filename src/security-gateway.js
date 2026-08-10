@@ -26,12 +26,12 @@ export function installSecurityGateway(server) {
     const share = shareContext(req, url);
     const shareAllowed = Boolean(share?.share && ["GET", "HEAD"].includes(req.method) && shareAllows(share.share, pathname));
     if (share?.token && !share?.share && !uiSession) {
-      if (pathname.startsWith("/api/") || !String(req.headers.accept || "").includes("text/html")) json(res, 401, { ok: false, error: "The share link is invalid or expired." });
+      if (pathname.startsWith("/api/") || !String(req.headers.accept || "").includes("text/html")) json(res, 401, { ok: false, error: "The share link is invalid or expired." }, { "Cache-Control": "no-store" });
       else redirect(res, "/login");
       return;
     }
     if (share?.share && !shareAllowed && !uiSession) {
-      json(res, 403, { ok: false, error: "This share link does not allow access to the requested path." });
+      json(res, 403, { ok: false, error: "This share link does not allow access to the requested path." }, { "Cache-Control": "no-store" });
       return;
     }
     if (share?.share && url.searchParams.has("gallery")) setShareCookie(res, share);
@@ -42,9 +42,29 @@ export function installSecurityGateway(server) {
     if (shareAllowed && pathname === "/api/buildingsites" && share.share.scope === "buildingsite" && filterSharedList(res, share.share)) return;
     if (shareAllowed && pathname === "/api/inspirations" && share.share.scope === "inspiration" && filterSharedList(res, share.share)) return;
 
+    const bearerAuthorized = isBearerAuthorized(req);
+    const privileged = Boolean(uiSession || bearerAuthorized);
+
+    // The outer gateway is the browser-auth authority. Do not delegate an
+    // unauthenticated private API request to the legacy inner server because it
+    // still emits a Basic-auth challenge for backward compatibility. Browsers
+    // interpret that challenge as a native username/password popup even though
+    // Noema's supported UI login is password-only at /login.
+    if (
+      config.uiAuthEnabled &&
+      pathname.startsWith("/api/") &&
+      !pathname.startsWith("/api/tools/") &&
+      !privileged &&
+      !shareAllowed
+    ) {
+      json(res, 401, { ok: false, error: "Authentication required. Sign in at /login." }, { "Cache-Control": "no-store" });
+      return;
+    }
+
     // Inner storage middleware receives authorization results only, never raw secrets.
     req.noemaUiSession = uiSession || null;
-    req.noemaPrivileged = Boolean(uiSession || isBearerAuthorized(req));
+    req.noemaPrivileged = privileged;
+    req.noemaBearerAuthorized = bearerAuthorized;
     req.noemaGalleryShare = shareAllowed ? share.share : null;
 
     if (String(req.headers.authorization || "").startsWith("Basic ")) delete req.headers.authorization;
@@ -56,7 +76,7 @@ export function installSecurityGateway(server) {
     try {
       await original(req, res);
     } catch (error) {
-      if (!res.headersSent) json(res, 500, { ok: false, error: "Internal server error." });
+      if (!res.headersSent) json(res, 500, { ok: false, error: "Internal server error." }, { "Cache-Control": "no-store" });
       else res.destroy(error);
     }
   });

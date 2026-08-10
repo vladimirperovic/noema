@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 /** Centralized, validated environment configuration. */
@@ -63,6 +63,9 @@ const ENCRYPTION_KEY = stringValue("ENCRYPTION_KEY", "");
 const NOEMA_BACKUP_PASSWORD = stringValue("NOEMA_BACKUP_PASSWORD", "");
 const NOEMA_TIMEZONE = stringValue("NOEMA_TIMEZONE", "UTC");
 const DATA_DIR = path.resolve(stringValue("NOEMA_DATA_DIR", path.join(process.cwd(), "data")));
+const EXISTING_INSTALLATION = existsSync(path.join(DATA_DIR, "master.key")) || existsSync(path.join(DATA_DIR, "noema.sqlite"));
+const LEGACY_SHORT_UI_PASSWORD = Boolean(UI_PASSWORD && UI_PASSWORD.length < 14 && EXISTING_INSTALLATION);
+const LEGACY_SHORT_API_TOKEN = Boolean(NOEMA_API_TOKEN && NOEMA_API_TOKEN.length < 32 && EXISTING_INSTALLATION);
 const SESSION_IDLE_TTL_MS = numberValue("SESSION_IDLE_HOURS", 24) * 60 * 60 * 1000;
 const SESSION_ABSOLUTE_TTL_MS = numberValue("SESSION_ABSOLUTE_HOURS", 168) * 60 * 60 * 1000;
 const GALLERY_SHARE_TTL_DAYS = numberValue("GALLERY_SHARE_TTL_DAYS", 30);
@@ -75,10 +78,20 @@ if (NOEMA_BACKUP_PASSWORD && NOEMA_BACKUP_PASSWORD.length < 12) fail("NOEMA_BACK
 if (NODE_ENV === "production" && !ALLOW_INSECURE_NO_AUTH) {
   const errors = [];
   if (!UI_PASSWORD) errors.push("UI_PASSWORD is required in production");
+  else if (UI_PASSWORD.length < 14 && !LEGACY_SHORT_UI_PASSWORD) errors.push("UI_PASSWORD must contain at least 14 characters for a new production installation");
   if (!NOEMA_API_TOKEN) errors.push("NOEMA_API_TOKEN is required in production");
+  else if (NOEMA_API_TOKEN.length < 32 && !LEGACY_SHORT_API_TOKEN) errors.push("NOEMA_API_TOKEN must contain at least 32 characters for a new production installation");
+  if (NOEMA_API_TOKEN && UI_PASSWORD && NOEMA_API_TOKEN === UI_PASSWORD) errors.push("NOEMA_API_TOKEN must be different from UI_PASSWORD");
   if (!PUBLIC_BASE_URL.startsWith("https://")) errors.push("PUBLIC_BASE_URL must use HTTPS in production");
   if (NOEMA_CORS_ORIGIN === "*") errors.push("NOEMA_CORS_ORIGIN cannot be * in production");
   if (errors.length) fail(errors.join("; "));
+
+  if (LEGACY_SHORT_UI_PASSWORD) {
+    console.warn("[noema] Existing installation uses a UI_PASSWORD shorter than 14 characters. Startup is allowed for migration compatibility; rotate it after confirming the current data key can be unlocked.");
+  }
+  if (LEGACY_SHORT_API_TOKEN) {
+    console.warn("[noema] Existing installation uses a NOEMA_API_TOKEN shorter than 32 characters. Startup is allowed for migration compatibility; rotate the token when practical.");
+  }
 }
 
 const GOOGLE_CLIENT_ID = stringValue("GOOGLE_CLIENT_ID", "");
@@ -98,6 +111,7 @@ export const config = Object.freeze({
   NOEMA_HTTP_USER_AGENT, NOEMA_ANALYTICS_PROJECTS,
   uiAuthEnabled: UI_PASSWORD.length > 0,
   authEnabled: NOEMA_API_TOKEN.length > 0,
+  apiAuthEnabled: NOEMA_API_TOKEN.length > 0,
   isProduction: NODE_ENV === "production",
   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, GOOGLE_CALENDAR_ID,
   GOOGLE_OAUTH_SCOPE, GOOGLE_REDIRECT_URI, GA4_CLIENT_EMAIL, GA4_PRIVATE_KEY, PAGESPEED_API_KEY,

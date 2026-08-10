@@ -38,7 +38,10 @@ async function main() {
   );
 
   server.listen(config.PORT, config.HOST, () => {
-    console.log(`[noema] listening on http://${config.HOST}:${config.PORT} (env=${config.NODE_ENV}, auth=${config.authEnabled ? "on" : "off"})`);
+    console.log(
+      `[noema] listening on http://${config.HOST}:${config.PORT} ` +
+      `(env=${config.NODE_ENV}, uiAuth=${config.uiAuthEnabled ? "on" : "off"}, apiAuth=${config.apiAuthEnabled ? "on" : "off"})`,
+    );
     console.log(`[noema] UI:       ${config.PUBLIC_BASE_URL}/`);
     console.log(`[noema] OpenAPI:  ${config.PUBLIC_BASE_URL}/openapi.json`);
     console.log(`[noema] MCP:      ${config.PUBLIC_BASE_URL}/mcp`);

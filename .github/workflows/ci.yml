@@ -74,7 +74,7 @@ jobs:
         run: docker build --tag noema-ci .
 
       - name: Verify runtime tools
-        run: docker run --rm --entrypoint sh noema-ci -c 'command -v zip >/dev/null && command -v unzip >/dev/null && node -e "import(\"node:sqlite\")"'
+        run: docker run --rm --entrypoint sh noema-ci -c 'command -v zip >/dev/null && command -v unzip >/dev/null && command -v su-exec >/dev/null && node -e "import(\"node:sqlite\")"'
 
       - name: Smoke-test secure container and encrypted backup
         shell: bash
@@ -89,8 +89,8 @@ jobs:
             -e PUBLIC_BASE_URL=https://noema.example.test \
             -e NOEMA_CORS_ORIGIN=https://noema.example.test \
             -e NOEMA_TIMEZONE=UTC \
-            -e UI_PASSWORD=ci-ui-password \
-            -e NOEMA_API_TOKEN=ci-api-token \
+            -e UI_PASSWORD=ci-ui-master-password \
+            -e NOEMA_API_TOKEN=ci-api-token-0123456789abcdef0123456789abcdef \
             -e ENCRYPTION_KEY=ci-only-encryption-key \
             -e NOEMA_BACKUP_PASSWORD=ci-backup-password \
             noema-ci
@@ -107,7 +107,7 @@ jobs:
           done
 
           curl --fail --silent --show-error \
-            --header 'Authorization: Bearer ci-api-token' \
+            --header 'Authorization: Bearer ci-api-token-0123456789abcdef0123456789abcdef' \
             --output /tmp/noema-backup.noema \
             http://127.0.0.1:3998/api/backup/download
           test -s /tmp/noema-backup.noema
