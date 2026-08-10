@@ -53,13 +53,27 @@ test("recurring occurrences are deterministic across repeated generation", async
       const { initCrypto } = await import(${JSON.stringify(moduleUrl("../src/store/crypto.js"))});
       initCrypto(config.ENCRYPTION_KEY);
       const todos = await import(${JSON.stringify(moduleUrl("../src/store/todos.js"))});
-      todos.loadStore();
-      const template = todos.addTask("Daily review", "yesterday", "normal", false, null, "daily");
+      todos.replaceTasks([{
+        id: "daily-review-template",
+        title: "Daily review",
+        scheduledFor: "2026-07-30",
+        priority: "normal",
+        done: false,
+        repeat: "daily",
+        recurrenceTemplateId: "daily-review-template",
+        occurrenceDate: "2026-07-30",
+        subtasks: [],
+        order: 1,
+        createdAt: 1,
+        updatedAt: 1
+      }]);
       const instant = Date.parse("2026-07-31T10:00:00Z");
-      todos.generateRecurring(instant);
-      todos.generateRecurring(instant);
-      const occurrences = todos.listTasks().filter((task) => task.recurrenceTemplateId === template.id && task.occurrenceDate === "2026-07-31");
+      assert.equal(todos.generateRecurring(instant), 1);
+      assert.equal(todos.generateRecurring(instant), 0);
+      const occurrences = todos.listTasks(undefined, { includeDone: true })
+        .filter((task) => task.recurrenceTemplateId === "daily-review-template" && task.occurrenceDate === "2026-07-31");
       assert.equal(occurrences.length, 1);
+      assert.equal(occurrences[0].repeat, "");
       todos.closeStore();
       const { closeDatabase } = await import(${JSON.stringify(moduleUrl("../src/store/database.js"))});
       closeDatabase();
