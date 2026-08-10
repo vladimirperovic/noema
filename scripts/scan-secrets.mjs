@@ -16,7 +16,9 @@ const rules = [
   ["Google service account private key", /"private_key"\s*:\s*"-----BEGIN PRIVATE KEY-----/],
 ];
 
-const allowedFiles = new Set([".env.example"]);
+// Scanner source necessarily contains the signatures it is looking for. The
+// public example env contains placeholders by design; neither is a secret-bearing input.
+const allowedFiles = new Set([".env.example", "scripts/scan-secrets.mjs"]);
 const findings = [];
 for (const relative of tracked) {
   if (allowedFiles.has(relative)) continue;
