@@ -66,6 +66,13 @@ test("private API uses password-only form login without a Basic-auth browser cha
     assert.equal(unauthorized.headers.get("www-authenticate"), null);
     assert.match(unauthorized.headers.get("cache-control") || "", /no-store/i);
 
+    const htmlUnauthorized = await fetch(`${baseUrl}/documents`, {
+      headers: { Accept: "text/html" },
+      redirect: "manual",
+    });
+    assert.equal(htmlUnauthorized.status, 302);
+    assert.match(htmlUnauthorized.headers.get("location") || "", /^\/login\?next=/);
+
     const basic = Buffer.from("ignored:server-test-password").toString("base64");
     const legacyBasic = await fetch(`${baseUrl}/api/todos`, {
       headers: { Accept: "application/json", Authorization: `Basic ${basic}` },
@@ -87,6 +94,7 @@ test("private API uses password-only form login without a Basic-auth browser cha
       headers: { Cookie: cookie, Accept: "application/json" },
     });
     assert.equal(authorized.status, 200);
+    assert.match(authorized.headers.get("cache-control") || "", /no-store/i);
   } finally {
     child.kill("SIGTERM");
     if (child.exitCode === null) await new Promise((resolve) => child.once("exit", resolve));
@@ -94,10 +102,31 @@ test("private API uses password-only form login without a Basic-auth browser cha
   }
 });
 
-test("service worker only runtime-caches its explicit shell allowlist", async () => {
+test("legacy browser auth is absent from the inner server", async () => {
+  const source = await readFile(path.join(repoRoot, "src", "server.js"), "utf8");
+  for (const forbidden of [
+    "WWW-Authenticate",
+    "checkUiPassword",
+    "createSessionToken",
+    "verifySessionToken",
+    "MAX_FAILED_LOGIN_ATTEMPTS",
+    "ipRequestCounts",
+    "galleryShareToken",
+  ]) {
+    assert.doesNotMatch(source, new RegExp(forbidden.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+});
+
+test("service worker caches only explicit static shell assets", async () => {
   const source = await readFile(path.join(repoRoot, "public", "sw.js"), "utf8");
   assert.match(source, /CACHEABLE_PATHS/);
-  assert.match(source, /network-only/);
-  assert.match(source, /!CACHEABLE_PATHS\.has\(url\.pathname\)/);
-  assert.doesNotMatch(source, /caches\.open\(CACHE_NAME\)\.then\(\(cache\) => cache\.put\(event\.request/);
+  assert.match(source, /isSensitivePath/);
+  assert.match(source, /url\.search === ""/);
+  assert.match(source, /Sensitive\/private and non-shell requests are strictly network-only/);
+  for (const forbidden of ["/api/", "/uploads/", "/buildingsite-files/", "/inspiration-files/", "/thumbnails/", "/private-assets/"]) {
+    assert.match(source, new RegExp(forbidden.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.doesNotMatch(source, /ASSETS\s*=\s*\[[\s\S]*["']\/backup\.html["']/);
+  assert.doesNotMatch(source, /ASSETS\s*=\s*\[[\s\S]*["']\/buildingsite\.html["']/);
+  assert.doesNotMatch(source, /ASSETS\s*=\s*\[[\s\S]*["']\/inspiration\.html["']/);
 });
