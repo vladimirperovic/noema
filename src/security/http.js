@@ -4,6 +4,7 @@ import { config } from "../config.js";
 const LOGIN_WINDOW_MS = 15 * 60_000;
 const API_WINDOW_MS = 60_000;
 const MAX_RATE_BUCKETS = 10_000;
+const MAX_LOGIN_FAILURES_PER_IP = 5;
 const loginByIp = new Map();
 const apiByIp = new Map();
 
@@ -20,21 +21,6 @@ export function cookieValue(req, name) {
     try { return decodeURIComponent(part.slice(separator + 1).trim()); } catch { return ""; }
   }
   return "";
-}
-
-export function replaceCookieHeader(req, replacements) {
-  const cookies = new Map();
-  for (const part of String(req.headers.cookie || "").split(";")) {
-    const separator = part.indexOf("=");
-    if (separator < 0) continue;
-    const name = part.slice(0, separator).trim();
-    if (name) cookies.set(name, part.slice(separator + 1).trim());
-  }
-  for (const [name, value] of Object.entries(replacements)) {
-    if (value === null || value === undefined || value === "") cookies.delete(name);
-    else cookies.set(name, encodeURIComponent(value));
-  }
-  req.headers.cookie = [...cookies].map(([name, value]) => `${name}=${value}`).join("; ");
 }
 
 function normalizeIp(value) {
@@ -144,17 +130,25 @@ export function loginStatus(ip) {
   const now = Date.now();
   pruneBuckets(loginByIp, LOGIN_WINDOW_MS, now);
   const current = loginByIp.get(ip) || { count: 0, since: now };
-  return { locked: current.count >= 5, remaining: Math.max(0, 5 - current.count) };
+  const locked = current.count >= MAX_LOGIN_FAILURES_PER_IP;
+  return {
+    locked,
+    ipLocked: locked,
+    globalLocked: false,
+    remaining: Math.max(0, MAX_LOGIN_FAILURES_PER_IP - current.count),
+  };
 }
 
 export function recordLoginFailure(ip) {
   const now = Date.now();
   pruneBuckets(loginByIp, LOGIN_WINDOW_MS, now);
   const record = loginByIp.get(ip);
-  const next = !record || now - record.since > LOGIN_WINDOW_MS ? { count: 1, since: now } : { ...record, count: record.count + 1 };
+  const next = !record || now - record.since > LOGIN_WINDOW_MS
+    ? { count: 1, since: now }
+    : { ...record, count: record.count + 1 };
   loginByIp.delete(ip);
   loginByIp.set(ip, next);
-  return Math.max(0, 5 - next.count);
+  return Math.max(0, MAX_LOGIN_FAILURES_PER_IP - next.count);
 }
 
 export function clearLoginFailure(ip) {
@@ -166,7 +160,9 @@ export function enforceApiRate(req, res, ip) {
   const now = Date.now();
   pruneBuckets(apiByIp, API_WINDOW_MS, now);
   const record = apiByIp.get(ip);
-  const next = !record || now - record.since > API_WINDOW_MS ? { count: 1, since: now } : { ...record, count: record.count + 1 };
+  const next = !record || now - record.since > API_WINDOW_MS
+    ? { count: 1, since: now }
+    : { ...record, count: record.count + 1 };
   apiByIp.delete(ip);
   apiByIp.set(ip, next);
   if (next.count <= 300) return false;

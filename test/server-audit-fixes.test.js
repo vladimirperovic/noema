@@ -37,7 +37,7 @@ async function stopChild(child) {
   if (child.exitCode === null) child.kill("SIGKILL");
 }
 
-test("OAuth is protected, UI assets are public, and encrypted backups cover all metadata modules", async () => {
+test("OAuth is protected, browser sessions own backup authority, and encrypted backups cover all metadata modules", async () => {
   const cwd = await mkdtemp(path.join(tmpdir(), "noema-audit-"));
   const port = await freePort();
   const base = "http://127.0.0.1:" + port;
@@ -96,8 +96,23 @@ test("OAuth is protected, UI assets are public, and encrypted backups cover all 
     assert.match(missingHtml, /<html[^>]*lang="en"/i);
     assert.match(missingHtml, /<script src="\/noema-i18n\.js"><\/script>/);
 
-    const authHeaders = { ...auth, "Content-Type": "application/json" };
-    const snapshotResponse = await fetch(base + "/api/backup/snapshot", { method: "POST", headers: authHeaders, body: "{}" });
+    // A machine bearer token may use normal API routes, but full private backup
+    // operations require an authenticated administrator browser session.
+    const bearerBackup = await fetch(base + "/api/backup/download-json", { headers: auth });
+    assert.equal(bearerBackup.status, 403);
+
+    const login = await fetch(base + "/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ password: "test-password" }),
+    });
+    assert.equal(login.status, 200);
+    const cookie = (login.headers.get("set-cookie") || "").split(";")[0];
+    assert.match(cookie, /^noema_session=/);
+    const admin = { Cookie: cookie };
+    const adminJson = { ...admin, "Content-Type": "application/json" };
+
+    const snapshotResponse = await fetch(base + "/api/backup/snapshot", { method: "POST", headers: adminJson, body: "{}" });
     assert.equal(snapshotResponse.status, 200);
     const { filename } = await snapshotResponse.json();
     assert.match(filename, /^snapshot_\d+\.enc$/);
@@ -106,7 +121,7 @@ test("OAuth is protected, UI assets are public, and encrypted backups cover all 
     assert.ok(encrypted.length > 32);
     assert.ok(!encrypted.toString("utf8").includes("buildingSites"));
 
-    const download = await fetch(base + "/api/backup/download-json", { headers: auth });
+    const download = await fetch(base + "/api/backup/download-json", { headers: admin });
     assert.equal(download.status, 200);
     const portable = await download.json();
     assert.equal(portable.scope, "metadata");
@@ -118,14 +133,14 @@ test("OAuth is protected, UI assets are public, and encrypted backups cover all 
     portable.data.buildingSites = [{ id: "site-1", title: "Test site", images: [], createdAt: 1, updatedAt: 1 }];
     portable.data.inspirations = [{ id: "inspiration-1", title: "Test inspiration", images: [], createdAt: 1, updatedAt: 1 }];
     portable.data.files = [];
-    const upload = await fetch(base + "/api/backup/upload", { method: "POST", headers: authHeaders, body: JSON.stringify(portable) });
+    const upload = await fetch(base + "/api/backup/upload", { method: "POST", headers: adminJson, body: JSON.stringify(portable) });
     assert.equal(upload.status, 200);
     const restored = (await upload.json()).restored;
     assert.equal(restored.files, 0);
     assert.equal(restored.buildingSites, 1);
     assert.equal(restored.inspirations, 1);
 
-    const restoreSnapshot = await fetch(base + "/api/backup/restore-snapshot", { method: "POST", headers: authHeaders, body: JSON.stringify({ filename }) });
+    const restoreSnapshot = await fetch(base + "/api/backup/restore-snapshot", { method: "POST", headers: adminJson, body: JSON.stringify({ filename }) });
     assert.equal(restoreSnapshot.status, 200);
   } finally {
     await stopChild(child);

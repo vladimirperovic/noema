@@ -1,5 +1,6 @@
 # Noema — zero-dependency vanilla Node.js app with built-in SQLite.
-FROM node:24-alpine
+# Pin the exact LTS patch + Alpine line so production/CI do not silently drift.
+FROM node:24.19.0-alpine3.24
 
 ARG SOURCE_COMMIT=unknown
 
@@ -61,6 +62,22 @@ RUN set -eu; \
     done; \
     if [ "$healthy" -ne 1 ]; then cat /tmp/noema-build-smoke.log; kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; exit 1; fi; \
     kill "$pid"; wait "$pid" 2>/dev/null || true; rm -rf /tmp/noema-build-smoke /tmp/noema-build-smoke.log
+
+# Noema has zero runtime npm dependencies. Keep npm/corepack/yarn available while
+# building and testing, then remove their dependency trees from the production
+# image. This materially reduces the runtime attack surface and ensures package-
+# manager CVEs cannot make a Noema runtime vulnerable when those tools are unused.
+RUN rm -rf \
+      /usr/local/lib/node_modules/npm \
+      /usr/local/lib/node_modules/corepack \
+      /opt/yarn-v1.22.22 \
+    && rm -f \
+      /usr/local/bin/npm \
+      /usr/local/bin/npx \
+      /usr/local/bin/corepack \
+      /usr/local/bin/yarn \
+      /usr/local/bin/yarnpkg \
+    && node -e "import('node:sqlite').then(()=>console.log('runtime node/sqlite ok'))"
 
 VOLUME ["/app/data"]
 
