@@ -2,7 +2,7 @@ import { resolveIsoDay as resolveIso } from "./core/utils.js";
 
 import http from "node:http";
 import { readFile, writeFile, mkdir, readdir, rm, stat } from "node:fs/promises";
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -10,7 +10,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { config } from "./config.js";
 import { registry } from "./core/registry.js";
-import { bearerFromHeader, checkToolAuth, safeTokenEqual } from "./core/auth.js";
+import { bearerFromHeader, checkToolAuth } from "./core/auth.js";
 import { buildOpenApiDocument } from "./core/openapi.js";
 import { validateBySchema } from "./core/validate.js";
 import { handleMcpRequest, mcpMethodNotAllowed } from "./core/mcp.js";
@@ -75,8 +75,6 @@ import {
   getCalendarEvents,
   isCalendarConfigured,
   isCalendarConnected,
-  buildAuthUrl,
-  handleOAuthCallback,
 } from "./store/calendar.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -109,39 +107,6 @@ const IMAGE_TYPES = new Map([
 const reverseGeocodeCache = new Map();
 let reverseGeocodeQueue = Promise.resolve();
 let lastReverseGeocodeAt = 0;
-const GALLERY_SHARE_COOKIE = "noema_gallery_share";
-const galleryShareSecret = config.ENCRYPTION_KEY || config.NOEMA_API_TOKEN || config.UI_PASSWORD;
-
-function galleryShareToken() {
-  if (!galleryShareSecret) return "";
-  return createHmac("sha256", galleryShareSecret).update("noema-gallery-read-v1").digest("base64url");
-}
-
-function cookieValue(req, name) {
-  const cookie = String(req.headers.cookie || "");
-  for (const part of cookie.split(";")) {
-    const separator = part.indexOf("=");
-    if (separator < 0 || part.slice(0, separator).trim() !== name) continue;
-    return decodeURIComponent(part.slice(separator + 1).trim());
-  }
-  return "";
-}
-
-function isPublicGalleryPath(pathname) {
-  return pathname === "/buildingsite" || pathname === "/buildingsite/" || pathname === "/buildingsite.html"
-    || pathname === "/inspiration" || pathname === "/inspiration/" || pathname === "/inspiration.html"
-    || pathname === "/buildingsite.js" || pathname === "/noema-header-footer.js" || pathname === "/noema-i18n.js" || pathname === "/favicon.ico"
-    || pathname === "/api/buildingsites" || pathname === "/api/inspirations"
-    || pathname.startsWith("/buildingsite-files/") || pathname.startsWith("/inspiration-files/");
-}
-
-function hasGalleryShareAccess(req, url) {
-  if (req.method !== "GET" || !isPublicGalleryPath(url.pathname)) return false;
-  const expected = galleryShareToken();
-  const supplied = url.searchParams.get("gallery") || cookieValue(req, GALLERY_SHARE_COOKIE);
-  return Boolean(expected && supplied && safeTokenEqual(supplied, expected));
-}
-
 function reverseAddressLabel(result) {
   const address = result?.address || {};
   const street = address.road || address.pedestrian || address.residential || address.footway || "";
@@ -267,155 +232,6 @@ function setBaseHeaders(res, extra = {}) {
   for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
 }
 
-/**
- * Rute koje OSTAJU javne i kad je UI lozinka uključena: health-check (Coolify),
- * machine endpoints (MCP/OpenAPI/tools with their own bearer token), login assets, and the OAuth callback.
- */
-function isPublicRoute(p) {
-  return (
-    p === "/healthz" ||
-    p === "/openapi.json" ||
-    p === "/mcp" ||
-    p === "/login" ||
-    p === "/logout" ||
-    p === "/noema-i18n.js" ||
-    p === "/auth/google/callback" ||
-    p.startsWith("/api/tools/")
-  );
-}
-
-const ipRequestCounts = new Map();
-
-// Periodično čišćenje starih Rate Limit zapisa
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, record] of ipRequestCounts) {
-    if (key.startsWith("api_")) {
-      if (now - record.time > 60_000) ipRequestCounts.delete(key);
-    } else if (key.startsWith("login_")) {
-      // Login lockout trajanje 15 min
-      if (now - record.time > 15 * 60_000) ipRequestCounts.delete(key);
-    } else {
-      if (now - record.time > 5 * 60_000) ipRequestCounts.delete(key);
-    }
-  }
-}, 60_000).unref?.();
-
-// --- Sesije i Brute-Force Rate Limiting (Maksimalno 5 neuspešnih pokušaja) ---
-const SESSION_COOKIE = "noema_session";
-const MAX_FAILED_LOGIN_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MS = 15 * 60_000; // 15 minuta
-
-const sessionSecret = config.ENCRYPTION_KEY || config.UI_PASSWORD || config.NOEMA_API_TOKEN || "noema_secret_session_key_2026";
-
-function createSessionToken() {
-  const timestamp = Date.now();
-  const hmac = createHmac("sha256", sessionSecret).update(`noema_session_${timestamp}`).digest("hex");
-  return `${timestamp}.${hmac}`;
-}
-
-function verifySessionToken(token) {
-  if (!token || typeof token !== "string") return false;
-  const [tsStr, hmac] = token.split(".");
-  if (!tsStr || !hmac) return false;
-  const ts = Number(tsStr);
-  if (!Number.isFinite(ts)) return false;
-  // Sesija traje 7 dana
-  if (Date.now() - ts > 7 * 24 * 60 * 60 * 1000) return false;
-  const expectedHmac = createHmac("sha256", sessionSecret).update(`noema_session_${tsStr}`).digest("hex");
-  return safeTokenEqual(hmac, expectedHmac);
-}
-
-function parseCookies(req) {
-  const list = {};
-  const rc = req.headers.cookie;
-  if (rc) {
-    rc.split(";").forEach((cookie) => {
-      const parts = cookie.split("=");
-      list[parts.shift().trim()] = decodeURIComponent(parts.join("="));
-    });
-  }
-  return list;
-}
-
-function getIpAuthStatus(ip) {
-  const now = Date.now();
-  const record = ipRequestCounts.get(`login_${ip}`);
-  if (!record) return { isLocked: false, remainingAttempts: MAX_FAILED_LOGIN_ATTEMPTS };
-
-  if (now - record.time > LOCKOUT_DURATION_MS) {
-    ipRequestCounts.delete(`login_${ip}`);
-    return { isLocked: false, remainingAttempts: MAX_FAILED_LOGIN_ATTEMPTS };
-  }
-
-  if (record.count >= MAX_FAILED_LOGIN_ATTEMPTS) {
-    const remainingMs = LOCKOUT_DURATION_MS - (now - record.time);
-    const remainingMinutes = Math.max(1, Math.ceil(remainingMs / 60_000));
-    return { isLocked: true, remainingMinutes, remainingAttempts: 0 };
-  }
-
-  return { isLocked: false, remainingAttempts: MAX_FAILED_LOGIN_ATTEMPTS - record.count };
-}
-
-function recordLoginFailure(ip) {
-  const now = Date.now();
-  const key = `login_${ip}`;
-  const record = ipRequestCounts.get(key) || { count: 0, time: now };
-  record.count++;
-  record.time = now;
-  ipRequestCounts.set(key, record);
-  return Math.max(0, MAX_FAILED_LOGIN_ATTEMPTS - record.count);
-}
-
-function clearLoginFailure(ip) {
-  ipRequestCounts.delete(`login_${ip}`);
-}
-
-/** Proverava autentifikaciju preko Cookie-ja, Basic Auth-a ili Bearer tokena. */
-function checkUiPassword(req) {
-  // 1. Proveri session cookie
-  const cookies = parseCookies(req);
-  if (verifySessionToken(cookies[SESSION_COOKIE])) {
-    return true;
-  }
-
-  // 2. Proveri HTTP Basic Auth header (za unatrag kompatibilnost)
-  const h = req.headers.authorization || "";
-  if (h.startsWith("Basic ")) {
-    const ip = req.socket.remoteAddress || "unknown";
-    const status = getIpAuthStatus(ip);
-    if (status.isLocked) return false;
-
-    let decoded = "";
-    try {
-      decoded = Buffer.from(h.slice(6), "base64").toString("utf8");
-    } catch {
-      recordLoginFailure(ip);
-      return false;
-    }
-    const idx = decoded.indexOf(":");
-    const pass = idx >= 0 ? decoded.slice(idx + 1) : decoded;
-
-    if (safeTokenEqual(pass, config.UI_PASSWORD)) {
-      clearLoginFailure(ip);
-      return true;
-    }
-
-    recordLoginFailure(ip);
-    return false;
-  }
-
-  // 3. Proveri Bearer token (ako postoji NOEMA_API_TOKEN)
-  if (h.startsWith("Bearer ")) {
-    const token = h.slice(7).trim();
-    if (config.NOEMA_API_TOKEN && safeTokenEqual(token, config.NOEMA_API_TOKEN)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 /** Pročitaj sirovo telo zahteva (Promise). */
 function readBody(req, limit = "1mb") {
   return new Promise((resolve, reject) => {
@@ -463,101 +279,8 @@ export function createServer() {
     const url = new URL(req.url, config.PUBLIC_BASE_URL);
     const pathname = url.pathname;
     const method = req.method;
-    const galleryShareAccess = hasGalleryShareAccess(req, url);
-    const uiAuthorized = !config.uiAuthEnabled || checkUiPassword(req);
-
-    if (galleryShareAccess && url.searchParams.has("gallery")) {
-      const secure = config.PUBLIC_BASE_URL.startsWith("https://") ? "; Secure" : "";
-      res.setHeader("Set-Cookie", `${GALLERY_SHARE_COOKIE}=${encodeURIComponent(galleryShareToken())}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure}`);
-    }
-
-    const galleryPage = ["/buildingsite", "/buildingsite/", "/buildingsite.html", "/inspiration", "/inspiration/", "/inspiration.html"].includes(pathname);
-    if (galleryShareAccess && galleryPage && !url.searchParams.has("gallery") && !uiAuthorized) {
-      const destination = new URL(req.url, config.PUBLIC_BASE_URL);
-      destination.searchParams.set("gallery", galleryShareToken());
-      res.writeHead(302, { Location: `${destination.pathname}${destination.search}${destination.hash}` });
-      return res.end();
-    }
-
-    // --- UI lozinka / Forma za prijavu — štiti ceo UI i njegove REST rute. ---
-    // Mašinski endpoint-i i health-check ostaju javni (vidi isPublicRoute).
-    if (!uiAuthorized && !isPublicRoute(pathname) && !galleryShareAccess) {
-      const accept = req.headers.accept || "";
-      if (accept.includes("text/html") || pathname === "/" || !pathname.startsWith("/api/")) {
-        const loginUrl = new URL("/login", config.PUBLIC_BASE_URL);
-        loginUrl.searchParams.set("next", pathname + (url.search || ""));
-        res.writeHead(302, { Location: `${loginUrl.pathname}${loginUrl.search}` });
-        return res.end();
-      }
-      setBaseHeaders(res, { "WWW-Authenticate": 'Basic realm="Noema", charset="UTF-8"' });
-      res.writeHead(401, { "Content-Type": "application/json; charset=utf-8" });
-      return res.end(JSON.stringify({ ok: false, error: "Pristup zaštićen lozinkom. Prijavite se na /login" }));
-    }
-
     try {
-      // --- Javne rute i rute za autentifikaciju ---
-
-      // GET /login — preusmeri na / ako je već ulogovan
-      if (pathname === "/login" && method === "GET") {
-        if (uiAuthorized) {
-          res.writeHead(302, { Location: "/" });
-          return res.end();
-        }
-      }
-
-      // POST /login — obrada prijave korisnika (form login sa rate limit-om od max 5 pokušaja)
-      if (pathname === "/login" && method === "POST") {
-        const ip = req.socket.remoteAddress || "unknown";
-        const status = getIpAuthStatus(ip);
-
-        if (status.isLocked) {
-          setBaseHeaders(res);
-          return json(res, 429, {
-            ok: false,
-            error: `Too many failed attempts (5/5). Your IP address is temporarily blocked for ${status.remainingMinutes} min.`
-          });
-        }
-
-        const body = await parseJson(req);
-        const pass = body.value?.password || body.value?.UI_PASSWORD || "";
-
-        if (safeTokenEqual(pass, config.UI_PASSWORD)) {
-          clearLoginFailure(ip);
-          const token = createSessionToken();
-          const secure = config.PUBLIC_BASE_URL.startsWith("https://") ? "; Secure" : "";
-          res.setHeader("Set-Cookie", `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${secure}`);
-          setBaseHeaders(res);
-          return json(res, 200, { ok: true });
-        }
-
-        const remaining = recordLoginFailure(ip);
-        setBaseHeaders(res);
-        if (remaining === 0) {
-          return json(res, 429, {
-            ok: false,
-            error: "Maximum failed attempts reached (5/5). IP address is blocked for 15 minutes.",
-            remainingAttempts: 0
-          });
-        }
-        return json(res, 401, {
-          ok: false,
-          error: "Incorrect password.",
-          remainingAttempts: remaining
-        });
-      }
-
-      // GET ili POST /logout — odjava korisnika
-      if ((pathname === "/logout" || pathname === "/api/logout") && (method === "GET" || method === "POST")) {
-        res.setHeader("Set-Cookie", `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
-        if (method === "GET") {
-          res.writeHead(302, { Location: "/login" });
-          return res.end();
-        }
-        setBaseHeaders(res);
-        return json(res, 200, { ok: true });
-      }
-
-      // Health check.
+      // Health check.      // Health check.
       if (pathname === "/healthz" && method === "GET") {
         setBaseHeaders(res);
         return json(res, 200, { ok: true, service: SERVICE.name, version: SERVICE.version });
@@ -569,41 +292,7 @@ export function createServer() {
         return json(res, 200, buildOpenApiDocument(registry));
       }
 
-      // --- Google OAuth connect flow (ugrađeni, bez OAuth Playground-a) ---
-      // Korak 1: preusmeri korisnika na Google consent ekran.
-      if (pathname === "/auth/google" && method === "GET") {
-        if (!isCalendarConfigured()) {
-          setBaseHeaders(res);
-          return json(res, 400, {
-            ok: false,
-            error: "Calendar nije konfigurisan. Postavi GOOGLE_CLIENT_ID i GOOGLE_CLIENT_SECRET.",
-          });
-        }
-        res.writeHead(302, { Location: buildAuthUrl() });
-        return res.end();
-      }
-
-      // Korak 2: Google vrati `code` ovde → zameni za refresh token i sačuvaj.
-      if (pathname === "/auth/google/callback" && method === "GET") {
-        const code = url.searchParams.get("code");
-        const state = url.searchParams.get("state");
-        const oauthErr = url.searchParams.get("error");
-        if (oauthErr) {
-          res.writeHead(302, { Location: "/?calendar=denied" });
-          return res.end();
-        }
-        const result = await handleOAuthCallback(code, state);
-        if (!result.ok) {
-          console.error("[noema] OAuth callback neuspešan:", result.error);
-        }
-        const dest = result.ok
-          ? "/?calendar=connected"
-          : `/?calendar=error&reason=${encodeURIComponent(result.error || "unknown")}`;
-        res.writeHead(302, { Location: dest });
-        return res.end();
-      }
-
-      // MCP endpoint (Streamable HTTP, stateless).
+      // MCP endpoint      // MCP endpoint (Streamable HTTP, stateless).
       if (pathname === "/mcp") {
         if (method !== "POST") {
           setBaseHeaders(res);
@@ -612,27 +301,7 @@ export function createServer() {
         return await handleMcpRoute(req, res);
       }
 
-      // --- Rate limiting za sve /api/* rute ---
-      if (pathname.startsWith("/api/")) {
-        const ip = req.socket.remoteAddress || "unknown";
-        const now = Date.now();
-        const record = ipRequestCounts.get(`api_${ip}`) || { count: 0, time: now };
-        
-        if (now - record.time > 60_000) {
-          record.count = 0;
-          record.time = now;
-        }
-        
-        record.count++;
-        ipRequestCounts.set(`api_${ip}`, record);
-        
-        if (record.count > 100) {
-           setBaseHeaders(res);
-           return json(res, 429, { ok: false, error: "Too many requests" });
-        }
-      }
-
-      // --- REST za UI: /api/todos ---
+      // --- REST za UI: /api/todos ---      // --- REST za UI: /api/todos ---
       if (pathname === "/api/todos" && method === "GET") {
         setBaseHeaders(res);
         const yesterdayISO = resolveIso("yesterday");
@@ -885,16 +554,7 @@ export function createServer() {
         }
       }
 
-      if (pathname === "/api/gallery-share" && method === "POST") {
-        setBaseHeaders(res);
-        const token = galleryShareToken();
-        if (!token) return json(res, 503, { ok: false, error: "Share link traži UI_PASSWORD, ENCRYPTION_KEY ili NOEMA_API_TOKEN." });
-        const shareUrl = new URL("/buildingsite", config.PUBLIC_BASE_URL);
-        shareUrl.searchParams.set("gallery", token);
-        return json(res, 200, { ok: true, url: shareUrl.href });
-      }
-
-      // --- Inspiration galerija ---
+      // --- Inspiration galerija ---      // --- Inspiration galerija ---
       if (pathname === "/api/inspirations" && method === "GET") {
         setBaseHeaders(res);
         return json(res, 200, { ok: true, inspirations: await listInspirationsWithStorage() });
