@@ -55,6 +55,14 @@ cutBetween(
   '      // --- REST za UI: /api/todos ---'
 );
 
+// Remove the deterministic legacy gallery-share endpoint. Revocable, scoped
+// share tokens are created/administered by security/share-routes.js instead.
+cutBetween(
+  '      if (pathname === "/api/gallery-share" && method === "POST") {',
+  '      // --- Inspiration galerija ---',
+  '      // --- Inspiration galerija ---'
+);
+
 source = source
   .replace('import { createHmac, randomUUID } from "node:crypto";', 'import { randomUUID } from "node:crypto";')
   .replace('import { bearerFromHeader, checkToolAuth, safeTokenEqual } from "./core/auth.js";', 'import { bearerFromHeader, checkToolAuth } from "./core/auth.js";')
@@ -69,6 +77,7 @@ for (const forbidden of [
   'Basic realm=',
   'ipRequestCounts',
   'galleryShareToken',
+  '/api/gallery-share"',
 ]) {
   if (source.includes(forbidden)) throw new Error(`Legacy auth residue remains: ${forbidden}`);
 }
