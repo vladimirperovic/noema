@@ -1,49 +1,80 @@
-const CACHE_NAME = "noema-v9";
+const CACHE_NAME = "noema-v10-static-only";
 
-// Cache only the explicit application shell. Private/API/media responses must
-// never enter browser Cache Storage because they can contain decrypted user data.
+// Only source-controlled, data-free shell assets may enter Cache Storage.
+// Never add files, galleries, thumbnails, uploads, backups or API responses here.
 const ASSETS = [
-  "/", "/index.html", "/404.html", "/ai-projects.html", "/archive.html", "/backup.html",
-  "/buildingsite.html", "/buildingsite.js", "/documents.html", "/files.html", "/help.html",
-  "/inspiration.html", "/links.html", "/notes.html", "/stats.html", "/stats-model.js",
-  "/cmdk.js", "/noema-header-footer.js", "/source-task-buttons.js", "/source-task-navigation.js",
-  "/favicon.svg", "/manifest.json"
+  "/index.html",
+  "/404.html",
+  "/ai-projects.html",
+  "/archive.html",
+  "/documents.html",
+  "/help.html",
+  "/links.html",
+  "/notes.html",
+  "/stats.html",
+  "/stats-model.js",
+  "/cmdk.js",
+  "/noema-header-footer.js",
+  "/source-task-buttons.js",
+  "/source-task-navigation.js",
+  "/favicon.svg",
+  "/manifest.json",
 ];
 const CACHEABLE_PATHS = new Set(ASSETS);
 
-function responseMayBeCached(request, response) {
-  if (!response || response.status !== 200) return false;
+function isSensitivePath(pathname) {
+  return pathname.startsWith("/api/")
+    || pathname === "/files" || pathname === "/files.html" || pathname.startsWith("/files/")
+    || pathname === "/backup" || pathname === "/backup.html" || pathname.startsWith("/backup/")
+    || pathname === "/buildingsite" || pathname === "/buildingsite.html" || pathname.startsWith("/buildingsite/")
+    || pathname === "/inspiration" || pathname === "/inspiration.html" || pathname.startsWith("/inspiration/")
+    || pathname.startsWith("/buildingsite-files/")
+    || pathname.startsWith("/inspiration-files/")
+    || pathname.startsWith("/uploads/")
+    || pathname.startsWith("/thumbnails/")
+    || pathname.startsWith("/private-assets/")
+    || pathname.startsWith("/gallery")
+    || pathname.startsWith("/media/");
+}
+
+function requestMayBeCached(request) {
+  if (request.method !== "GET") return false;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || !CACHEABLE_PATHS.has(url.pathname)) return false;
+  return url.origin === self.location.origin
+    && url.search === ""
+    && !isSensitivePath(url.pathname)
+    && CACHEABLE_PATHS.has(url.pathname);
+}
+
+function responseMayBeCached(request, response) {
+  if (!requestMayBeCached(request) || !response || response.status !== 200) return false;
   const cacheControl = String(response.headers.get("cache-control") || "").toLowerCase();
   return !cacheControl.includes("no-store") && !cacheControl.includes("private");
 }
 
-async function cacheIfAllowed(request, response) {
-  if (!responseMayBeCached(request, response)) return;
-  const cache = await caches.open(CACHE_NAME);
-  await cache.put(request, response.clone());
-}
-
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS).catch(() => {})));
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => Promise.all(
+      ASSETS.map((asset) => cache.add(asset).catch(() => null)),
+    )),
+  );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  // Bumping CACHE_NAME purges any older cache that may contain private responses.
-  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))));
+  // The version bump deliberately deletes every historical runtime cache that
+  // may have contained decrypted/private responses from older service workers.
+  event.waitUntil(
+    caches.keys().then((keys) => Promise.all(
+      keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)),
+    )),
+  );
   self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-  const url = new URL(event.request.url);
-
-  // Cross-origin requests and every same-origin URL outside the shell allowlist
-  // are network-only. This includes /api, uploads, files, galleries, thumbnails,
-  // backups and every other user-data endpoint.
-  if (url.origin !== self.location.origin || !CACHEABLE_PATHS.has(url.pathname)) {
+  if (!requestMayBeCached(event.request)) {
+    // Sensitive/private and non-shell requests are strictly network-only.
     event.respondWith(fetch(event.request));
     return;
   }
@@ -51,12 +82,15 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(event.request)
       .then(async (response) => {
-        await cacheIfAllowed(event.request, response);
+        if (responseMayBeCached(event.request, response)) {
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(event.request, response.clone());
+        }
         return response;
       })
       .catch(async () => {
-        const cached = await caches.match(event.request);
-        return cached || Response.error();
-      })
+        const cache = await caches.open(CACHE_NAME);
+        return (await cache.match(event.request)) || Response.error();
+      }),
   );
 });
