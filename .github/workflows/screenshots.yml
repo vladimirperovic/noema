@@ -34,7 +34,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # pinned v4
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Run project checks
         run: npm run check
@@ -53,7 +53,7 @@ jobs:
           name: noema-public-screenshots
           path: docs/screenshots/*.png
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
 
       - name: Commit generated screenshots
         shell: bash
