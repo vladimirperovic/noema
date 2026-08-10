@@ -1,5 +1,6 @@
 # Noema — zero-dependency vanilla Node.js app with built-in SQLite.
-FROM node:24-alpine
+# Pin the exact LTS patch + Alpine line so production/CI do not silently drift.
+FROM node:24.19.0-alpine3.24
 
 ARG SOURCE_COMMIT=unknown
 
