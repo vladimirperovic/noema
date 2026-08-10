@@ -126,7 +126,10 @@ test("service worker caches only explicit static shell assets", async () => {
   for (const forbidden of ["/api/", "/uploads/", "/buildingsite-files/", "/inspiration-files/", "/thumbnails/", "/private-assets/"]) {
     assert.match(source, new RegExp(forbidden.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  assert.doesNotMatch(source, /ASSETS\s*=\s*\[[\s\S]*["']\/backup\.html["']/);
-  assert.doesNotMatch(source, /ASSETS\s*=\s*\[[\s\S]*["']\/buildingsite\.html["']/);
-  assert.doesNotMatch(source, /ASSETS\s*=\s*\[[\s\S]*["']\/inspiration\.html["']/);
+  const assetsMatch = source.match(/const ASSETS\s*=\s*\[([\s\S]*?)\];/);
+  assert.ok(assetsMatch, "service worker must declare a finite ASSETS allowlist");
+  const assets = assetsMatch[1];
+  assert.doesNotMatch(assets, /["']\/backup\.html["']/);
+  assert.doesNotMatch(assets, /["']\/buildingsite\.html["']/);
+  assert.doesNotMatch(assets, /["']\/inspiration\.html["']/);
 });
