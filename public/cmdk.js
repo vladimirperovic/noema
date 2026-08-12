@@ -149,12 +149,3 @@ if (document.readyState === 'loading') {
 } else {
   installBuildVersion();
 }
-
-// Backup page local infrastructure preview. Kept in a separate file so the
-// dashboard mockup can be removed or replaced with the real WireGuard API later.
-if (location.pathname.replace(/\.html$/, "").startsWith('/backup') && !document.getElementById('backupLocalMockScript')) {
-  const backupMockScript = document.createElement('script');
-  backupMockScript.id = 'backupLocalMockScript';
-  backupMockScript.src = '/backup-local-mock.js';
-  document.body.appendChild(backupMockScript);
-}
