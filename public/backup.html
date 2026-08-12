@@ -549,6 +549,42 @@
 
   <main class="board">
     <div class="board-inner">
+      <!-- Backup Controller: read-only status iz home infrastrukture (preko WireGuard-a). -->
+      <section class="column is-today">
+        <div class="column-head" style="background: linear-gradient(180deg, var(--beacon-soft), transparent);">
+          <div class="day-title" style="color: var(--beacon-2);">Backup Controller</div>
+          <div class="day-date" id="bcGenerated" style="font-size: 0.78rem; color: var(--beacon-2); font-weight: 500; margin-top: 0.35rem;">Generated: —</div>
+        </div>
+        <div class="col-body" style="padding: 1.2rem 1.5rem;">
+          <div class="cal-list" style="display: flex; flex-direction: column; gap: 0.75rem; font-family: var(--font-mono); font-size: 0.88rem; color: var(--ink-2);">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.4rem; border-bottom: 1px dashed var(--ink-line);">
+              <span>Flow:</span>
+              <span style="text-align:right;">Proxmox 192.168.1.2 → <strong>Office 10.0.10.33</strong></span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.4rem; border-bottom: 1px dashed var(--ink-line);">
+              <span>Latest full backup:</span>
+              <span><strong id="bcFull" style="color: var(--beacon-2);">—</strong></span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.4rem; border-bottom: 1px dashed var(--ink-line);">
+              <span>Archive size:</span>
+              <span><strong id="bcSize" style="color: var(--beacon-2);">—</strong></span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.4rem; border-bottom: 1px dashed var(--ink-line);">
+              <span>Verdict:</span>
+              <span><strong id="bcVerdict" style="color: var(--signal);">—</strong></span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.4rem; border-bottom: 1px dashed var(--ink-line);">
+              <span>Home VM/LXC:</span>
+              <span><strong id="bcVms" style="color: var(--beacon-2);">—</strong></span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span>Office PC (10.0.10.44):</span>
+              <span><strong id="bcOffice" style="color: var(--signal);">—</strong></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Kartica 1: Stanje Baze -->
       <section class="column is-today">
         <div class="column-head" style="background: linear-gradient(180deg, var(--azure-soft), transparent);">
@@ -958,6 +994,35 @@
       if (fab && !fab._themeBound) { fab.addEventListener("click", toggle); fab._themeBound = true; }
     }
 
+    // ── Backup Controller (read-only, home infrastruktura preko WireGuard-a) ──
+    async function loadController() {
+      const el = id => document.getElementById(id);
+      try {
+        const r = await fetch("https://backup-home.renovationsteps.com/api/local/status", { mode: "cors", cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const d = await r.json();
+        const gen = d.generated_at || "";
+        const stale = !!d.stale;
+        const elGen = el("bcGenerated");
+        if (elGen) elGen.innerHTML = "Generated: " + (gen ? gen.replace(" ", " · ") : "—") + (stale ? ' <span style="color: var(--ember); font-weight:600;">STALE</span>' : "");
+        const like = ((d.restic || {}).slike || {}).last;
+        const vmove = ((d.restic || {}).vmove || {}).last;
+        const full = vmove || like;
+        if (el("bcFull")) el("bcFull").textContent = full ? (full.time + " · " + full.size) : "—";
+        if (el("bcSize")) el("bcSize").textContent = full ? full.size : "—";
+        const runState = (d.run || {}).state || (d.run || {}).state || "idle";
+        const verdict = runState === "success" ? "VERIFIED" : (runState === "failed" ? "FAILED" : (runState === "verifying" ? "VERIFYING…" : "nije proveren"));
+        if (el("bcVerdict")) { el("bcVerdict").textContent = verdict; el("bcVerdict").style.color = runState === "success" ? "var(--signal)" : runState === "failed" ? "var(--ember)" : "var(--ink-3)"; }
+        if (el("bcVms")) el("bcVms").textContent = (d.vms ? d.vms.length + " instanci" : "—") + " · " + ((d.host || {}).cpu_idle != null ? "cpu idle " + d.host.cpu_idle + "%" : "");
+        const of = d.office || {};
+        if (el("bcOffice")) { el("bcOffice").textContent = of.reachable ? "ONLINE" : "OFFLINE"; el("bcOffice").style.color = of.reachable ? "var(--signal)" : "var(--ink-3)"; }
+      } catch (err) {
+        const elGen = el("bcGenerated");
+        if (elGen) elGen.textContent = "Backup home nedostupan (WireGuard?)";
+        if (el("bcVerdict")) el("bcVerdict").textContent = "—";
+      }
+    }
+
     // ── Font Scale ──
     let fontScale = Number(localStorage.getItem("noema-font-scale")) || 1;
     function applyFontScale(scale) {
@@ -993,6 +1058,7 @@
       loadInfo();
       loadSnapshots();
       loadSystem();
+      loadController();
       setInterval(loadSystem, 5000); // osvježi resurse svakih 5s
     });
   </script>
