@@ -92,7 +92,7 @@ export function setSecurityHeaders(res) {
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: blob: https:",
       "media-src 'self' blob:",
-      "connect-src 'self' https://nominatim.openstreetmap.org https://www.googleapis.com https://oauth2.googleapis.com",
+      "connect-src 'self' https://nominatim.openstreetmap.org https://www.googleapis.com https://oauth2.googleapis.com https://backup-home.renovationsteps.com",
       "object-src 'none'",
       "base-uri 'self'",
       "frame-ancestors 'none'",
