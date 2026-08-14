@@ -1,0 +1,92 @@
+name: Inspiration fullscreen branch hotfix
+
+on:
+  push:
+    branches:
+      - hotfix/inspiration-fullscreen
+    paths:
+      - .github/workflows/inspiration-fullscreen-hotfix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  hotfix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hotfix/inspiration-fullscreen
+
+      - name: Patch Inspiration viewer
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('public/inspiration.html')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = [
+              (
+                  ".viewer-fullscreen:hover { border-color:var(--accent); color:var(--accent); }",
+                  ".viewer-fullscreen:hover { border-color:rgba(255,255,255,.65); color:#fff; }",
+              ),
+              (
+                  ".rail-thumb.active { border-color:var(--accent); opacity:1; }",
+                  ".rail-thumb.active { border-color:rgba(255,255,255,.72); opacity:1; }",
+              ),
+              (
+                  ".overlay.viewer-fullscreen, .overlay.viewer-fullscreen *, #viewerOverlay:fullscreen, #viewerOverlay:-webkit-full-screen { outline:none !important; outline-offset:0 !important; border-color:transparent !important; box-shadow:none !important; }",
+                  "#viewerOverlay.viewer-fullscreen,#viewerOverlay.viewer-fullscreen .viewer,#viewerOverlay.viewer-fullscreen .viewer-stage,#viewerOverlay.viewer-fullscreen .viewer-stage img { outline:none !important; box-shadow:none !important; } #viewerOverlay.viewer-fullscreen :focus-visible { outline:1px solid rgba(255,255,255,.7) !important; outline-offset:2px !important; }",
+              ),
+              (
+                  ".overlay.viewer-fullscreen .viewer-stage { height:100dvh; padding:0 3.2rem; }",
+                  ".overlay.viewer-fullscreen .viewer-stage { width:100vw; height:100dvh; padding:0; overflow:hidden; }",
+              ),
+              (
+                  ".overlay.viewer-fullscreen .viewer-stage img { max-width:100%; max-height:100dvh; }",
+                  ".overlay.viewer-fullscreen .viewer-stage img { width:100%; height:100%; max-width:100vw; max-height:100dvh; object-fit:contain; }",
+              ),
+              (
+                  ".overlay.viewer-fullscreen .viewer-stage { padding:0 2.5rem; }",
+                  ".overlay.viewer-fullscreen .viewer-stage { padding:0; }",
+              ),
+              (
+                  "function viewerIsFullscreen() { return viewerPseudoFullscreen || document.fullscreenElement === els.viewerOverlay; }",
+                  "function viewerIsFullscreen() { const fullscreenElement = document.fullscreenElement; return viewerPseudoFullscreen || fullscreenElement === els.viewerOverlay || fullscreenElement === document.documentElement; }",
+              ),
+              (
+                  "function leaveViewerFullscreen() { viewerPseudoFullscreen = false; hideViewerControls(); if (document.fullscreenElement === els.viewerOverlay) document.exitFullscreen().catch(() => {}); syncViewerFullscreen(); }",
+                  "function leaveViewerFullscreen() { viewerPseudoFullscreen = false; hideViewerControls(); if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}).finally(syncViewerFullscreen); return; } syncViewerFullscreen(); }",
+              ),
+              (
+                  "async function toggleViewerFullscreen() { if (viewerIsFullscreen()) return leaveViewerFullscreen(); if (els.viewerOverlay.requestFullscreen) { try { await els.viewerOverlay.requestFullscreen(); return; } catch (e) {} } viewerPseudoFullscreen = true; syncViewerFullscreen(); }",
+                  "async function requestViewerFullscreen(target) { if (!target?.requestFullscreen) return false; try { await target.requestFullscreen({navigationUI:'hide'}); return true; } catch (firstError) { try { await target.requestFullscreen(); return true; } catch (secondError) { return false; } } }\n      async function toggleViewerFullscreen() { if (viewerIsFullscreen()) return leaveViewerFullscreen(); if (await requestViewerFullscreen(document.documentElement)) { syncViewerFullscreen(); return; } if (await requestViewerFullscreen(els.viewerOverlay)) { syncViewerFullscreen(); return; } viewerPseudoFullscreen = true; syncViewerFullscreen(); }",
+              ),
+          ]
+
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'Expected Inspiration snippet not found: {old[:100]}')
+              text = text.replace(old, new, 1)
+
+          marker = "/* fullscreen-hotfix: browser fullscreen first, neutral viewer focus */"
+          anchor = "    body.viewer-open .burger, body.viewer-open .theme-fab { display:none !important; }"
+          if marker not in text:
+              if anchor not in text:
+                  raise SystemExit('Viewer CSS anchor not found')
+              text = text.replace(anchor, marker + "\n" + anchor, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit patch to hotfix branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/inspiration.html
+          git diff --cached --check
+          git commit -m "Fix Inspiration fullscreen viewer"
+          git push origin HEAD:hotfix/inspiration-fullscreen
