@@ -8,6 +8,7 @@ const ASSETS = [
   "/ai-projects.html",
   "/archive.html",
   "/documents.html",
+  "/invoices.html",
   "/help.html",
   "/links.html",
   "/notes.html",
