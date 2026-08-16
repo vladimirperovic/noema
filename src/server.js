@@ -1416,6 +1416,7 @@ async function serveStatic(req, res, pathname) {
   if (rel === "/notes" || rel === "/notes/") rel = "/notes.html";
   // Čista URL ruta za dokumente.
   if (rel === "/documents" || rel === "/documents/") rel = "/documents.html";
+  if (rel === "/invoices" || rel === "/invoices/" || rel === "/fakture" || rel === "/fakture/") rel = "/invoices.html";
   // Čista URL ruta za linkove (linkdump).
   if (rel === "/links" || rel === "/links/") rel = "/links.html";
   // Čista URL ruta za AI projekte.
