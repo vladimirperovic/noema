@@ -1,5 +1,6 @@
 import { config } from "./config.js";
 import { createServer } from "./server.js";
+import { installBuildingSiteEnhancements } from "./buildingsite-enhancements.js";
 import { installFileLibrary } from "./file-library.js";
 import { installStreamingFileLibrary } from "./streaming-file-library.js";
 import { installGalleryDownloads } from "./gallery-downloads.js";
@@ -32,7 +33,9 @@ async function main() {
       installGalleryDownloads(
         installStreamingFileLibrary(
           installFileLibrary(
-            installLinkThumbnails(createServer()),
+            installBuildingSiteEnhancements(
+              installLinkThumbnails(createServer()),
+            ),
           ),
         ),
       ),
