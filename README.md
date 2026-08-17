@@ -35,7 +35,8 @@ More neutral screenshots are kept in [`docs/screenshots/`](docs/screenshots/), i
 - Yesterday / today / tomorrow task board with priority, time, subtasks, archive, drag-and-drop ordering and stable recurring tasks.
 - Notes, documents, Links, AI Projects, Building Sites, Inspiration, Stats and a private **Files** library.
 - **Private-data encryption at rest:** record payloads and managed private binary content remain encrypted in persistent storage.
-- Files metadata is encrypted in SQLite; Files binary content is stored in an authenticated AES-256-GCM container below `NOEMA_DATA_DIR/files` with a 120 MB per-file limit.
+- Files metadata is encrypted in SQLite; new Files uploads are encrypted incrementally into authenticated 1 MB chunks below `NOEMA_DATA_DIR/files`, with a 120 MB per-file limit and HTTP Range downloads.
+- Legacy Files/base64 records remain readable for compatibility while browser uploads can use the bounded-memory raw streaming routes.
 - Document uploads, Building Site/Inspiration media and previously generated Links thumbnails are stored encrypted below `NOEMA_DATA_DIR`.
 - Source-linked tasks from Notes, Documents, Links, Files, galleries and AI Projects.
 - One responsive navigation system, active-page highlighting, light/dark mode, font scaling and persistent WIDTH control.
@@ -105,7 +106,7 @@ For a new production installation, `UI_PASSWORD` must be strong and `NOEMA_API_T
 
 Existing installations that still use a legacy `ENCRYPTION_KEY` should keep it only during the controlled migration. Remove it after a successful restart/login/data validation cycle.
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for reverse-proxy, Docker, upgrade and backup guidance.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for reverse-proxy, Docker, upgrades and backups.
 
 ## Docker
 
@@ -131,7 +132,7 @@ inspirations/
 link-thumbnails/
 ```
 
-Large managed media uses independently authenticated chunks so authorized byte ranges can be reconstructed without storing plaintext copies in a public directory.
+Large managed media uses independently authenticated chunks so authorized byte ranges can be reconstructed without storing plaintext copies in a public directory. The reader remains compatible with the earlier `NOEMA-ASSET-V1` chunk envelope while new writes use the compact raw AES-GCM chunk layout.
 
 Create a full encrypted archive:
 
