@@ -1,53 +1,43 @@
 # Noema
 
-Noema is a zero-runtime-dependency, self-hosted personal workspace built with Node.js, the built-in SQLite module, plain HTML, CSS and JavaScript. It brings tasks, notes, documents, links, files, project galleries, calendar events, MCP tools and OpenAPI routes into one private interface.
+Noema is a secure, self-hosted personal workspace built with Node.js, the built-in SQLite module, plain HTML, CSS and JavaScript. It combines tasks, notes, documents, links, encrypted files, contacts, project galleries, calendar integration, analytics, backups, MCP tools and OpenAPI routes in one interface.
 
-> **Current public line: 0.3.x** — encrypted-at-rest storage, one-password browser login, revocable server-side sessions, static-only Service Worker caching, encrypted disaster-recovery backups and a hardened Docker deployment.
+> **Stable public reference line: 0.3.x.** The public repository is a complete standalone application and does not depend on any private Noema deployment or repository.
 
 ## Screenshots
 
-All screenshots below are generated automatically from a clean checkout with neutral demo data. The screenshot job refuses to run when `data/` contains user data.
+All screenshots are generated from a clean checkout with neutral demo data. The screenshot workflow refuses to use a repository `data/` directory containing user data.
 
-### Home — yesterday / today / tomorrow
-
-![Noema home task board](docs/screenshots/home.png)
-
-### Private Files library
-
-![Noema Files library](docs/screenshots/files.png)
-
-### Notes and documents
+| Home | Files |
+|---|---|
+| ![Noema home](docs/screenshots/home.png) | ![Noema Files](docs/screenshots/files.png) |
 
 | Notes | Documents |
 |---|---|
 | ![Noema Notes](docs/screenshots/notes.png) | ![Noema Documents](docs/screenshots/documents.png) |
 
-### Links and project galleries
-
 | Links | Inspiration |
 |---|---|
 | ![Noema Links](docs/screenshots/links.png) | ![Noema Inspiration](docs/screenshots/inspiration.png) |
 
-More neutral screenshots are kept in [`docs/screenshots/`](docs/screenshots/), including Building Sites, AI Projects, Stats, Backup, Help, Login and the 404 page.
+| Contacts | Building Sites |
+|---|---|
+| ![Noema Contacts](docs/screenshots/contacts.png) | ![Noema Building Sites](docs/screenshots/building-sites.png) |
 
-## What Noema includes
+Additional neutral screenshots are available in [`docs/screenshots/`](docs/screenshots/), including Stats, Backup, AI Projects, Archive, Help, Login and the 404 page.
 
-- Yesterday / today / tomorrow task board with priority, time, subtasks, archive, drag-and-drop ordering and stable recurring tasks.
-- Notes, documents, Links, AI Projects, Building Sites, Inspiration, Stats and a private **Files** library.
-- **Private-data encryption at rest:** record payloads and managed private binary content remain encrypted in persistent storage.
-- Files metadata is encrypted in SQLite; new Files uploads are encrypted incrementally into authenticated 1 MB chunks below `NOEMA_DATA_DIR/files`, with a 120 MB per-file limit and HTTP Range downloads.
-- Legacy Files/base64 records remain readable for compatibility while browser uploads can use the bounded-memory raw streaming routes.
-- Document uploads, Building Site/Inspiration media and previously generated Links thumbnails are stored encrypted below `NOEMA_DATA_DIR`.
-- Source-linked tasks from Notes, Documents, Links, Files, galleries and AI Projects.
-- One responsive navigation system, active-page highlighting, light/dark mode, font scaling and persistent WIDTH control.
+## Included modules
+
+- Yesterday / today / tomorrow task board with priority, time, subtasks, recurring tasks, archive and drag-and-drop ordering.
+- Notes and Documents with source-linked task creation.
+- Links with labels, search, card/table views and safe handling of existing encrypted thumbnails.
+- Files with folders, encrypted metadata, encrypted streaming uploads, HTTP Range downloads and a 120 MB per-file limit.
+- Contacts directory with categories, search, favorites, contact details and references.
+- Building Sites and Inspiration galleries with encrypted managed media and scoped share links.
+- AI Projects catalog and optional Stats dashboard.
 - Google Calendar read-only integration with encrypted refresh-token storage and session-bound OAuth state.
-- MCP and OpenAPI endpoints for authenticated machine clients.
-- Opaque, revocable browser sessions with idle/absolute expiration.
-- Trusted-proxy handling, production security headers and bounded login/API rate limiting.
-- Expiring, revocable and scope-limited gallery-share links.
-- Password-encrypted `.noema` disaster-recovery archives protected by a separate backup password.
-- Static-only Service Worker caching: private/API/gallery/file/backup responses are network-only and never intentionally persisted in browser Cache Storage.
-- Docker build tests, encrypted-storage regression tests, recurrence/DST coverage, security checks and a strict production startup smoke test.
+- Encrypted full disaster-recovery backups and portable metadata export.
+- MCP and OpenAPI endpoints for machine integrations.
 
 ## Security model
 
@@ -55,58 +45,50 @@ Noema follows one persistent-storage rule:
 
 > **Everything the user enters, uploads, or Noema generates from private user data is encrypted at rest.**
 
-A random 256-bit installation data key encrypts application data with AES-256-GCM. `UI_PASSWORD` is the single password entered in the browser: it authenticates the UI and protects the random installation key stored in wrapped form in `NOEMA_DATA_DIR/master.key`. The password itself is not the AES data key.
+A random 256-bit installation data key encrypts application data with AES-256-GCM. `UI_PASSWORD` authenticates the browser UI and protects the wrapped installation key stored in `NOEMA_DATA_DIR/master.key`; the password itself is not the AES data key.
 
-Browser authentication is owned by `src/security-gateway.js`. Noema does **not** use HTTP Basic Auth and does not send `WWW-Authenticate` challenges. Successful login creates an opaque random session token; only a hash and encrypted session metadata are stored.
+Browser access is protected by opaque revocable server-side sessions. Machine clients use a separate bearer token. The outer security gateway applies trusted-proxy handling, bounded login/API rate limiting, CSP and other production security headers. Private/API/file/gallery/backup responses are forced away from browser caching, while only source-controlled static assets receive short-lived caching.
 
-This is server-side encryption at rest, **not end-to-end encryption**. An authorized running Noema process can decrypt data to serve it. The model protects persistent/offline storage exposure, not a fully compromised running host.
+Noema uses server-side encryption at rest, **not end-to-end encryption**. An authorized running Noema process can decrypt data to serve it.
 
-See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
+Read [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md) and [ARCHITECTURE.md](ARCHITECTURE.md) before an Internet-facing deployment.
 
 ## Requirements
 
-- Node.js **22.16+** for direct execution, or Docker.
+- Node.js **22.16+**, or Docker.
 - Persistent storage for `NOEMA_DATA_DIR`.
-- HTTPS for an Internet-facing production deployment.
-- `zip` and `unzip` for full backup/restore outside the provided container.
+- HTTPS for Internet-facing production deployments.
+- `zip` and `unzip` for full backup/restore outside the supplied container.
 
 No runtime npm dependencies are required by Noema itself.
-
-### Link thumbnails
-
-Serving existing encrypted thumbnails remains supported. **Automatic browser-based thumbnail generation is intentionally disabled in the main Noema container** because launching a general-purpose browser against user-controlled URLs requires stronger DNS/network isolation than the application process can safely provide. A future isolated renderer can restore generation without weakening the main container.
 
 ## Quick local start
 
 ```bash
 cp .env.example .env
-# Set UI_PASSWORD for the normal browser-login path.
-# For an isolated local test only, you may instead set:
-# ALLOW_INSECURE_NO_AUTH=true
+# Set UI_PASSWORD for normal browser authentication.
 npm run check
 npm start
 ```
 
 Open `http://localhost:3000`.
 
+For an isolated development-only instance, `ALLOW_INSECURE_NO_AUTH=true` may be used instead of browser authentication. Never use that setting for production.
+
 ## Production configuration
 
-Production fails closed unless authentication and HTTPS-related settings are valid. At minimum:
+At minimum:
 
 ```dotenv
 NODE_ENV=production
 PUBLIC_BASE_URL=https://noema.example.com
 NOEMA_CORS_ORIGIN=https://noema.example.com
 UI_PASSWORD=replace-with-a-strong-master-password
-NOEMA_API_TOKEN=replace-with-a-long-random-machine-token
+NOEMA_API_TOKEN=replace-with-a-separate-long-random-token
 NOEMA_BACKUP_PASSWORD=replace-with-a-separate-long-backup-password
 ```
 
-For a new production installation, `UI_PASSWORD` must be strong and `NOEMA_API_TOKEN` must be a separate long secret. `ALLOW_INSECURE_NO_AUTH=true` is development-only.
-
-Existing installations that still use a legacy `ENCRYPTION_KEY` should keep it only during the controlled migration. Remove it after a successful restart/login/data validation cycle.
-
-See [DEPLOYMENT.md](DEPLOYMENT.md) for reverse-proxy, Docker, upgrades and backups.
+Configure controlled reverse-proxy addresses with `NOEMA_TRUSTED_PROXY_IPS` and prevent direct public access to the backend port. See [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Docker
 
@@ -118,11 +100,11 @@ docker run --rm -p 3000:3000 \
   noema
 ```
 
-The supplied image uses Node 24 Alpine, runs the complete project checks under isolated test configuration, performs a strict production startup/health smoke test and removes npm/corepack/yarn from the final runtime image.
+The standard image uses Node 24 Alpine, runs project checks and a production startup/health smoke test during the build, and removes npm/corepack/yarn from the final runtime image.
 
 ## Data and backups
 
-Primary metadata lives in `NOEMA_DATA_DIR/noema.sqlite`; private record payloads are encrypted before insertion. Managed binary data lives in encrypted directories such as:
+Primary metadata lives in `NOEMA_DATA_DIR/noema.sqlite`. Managed encrypted binary data is stored under directories such as:
 
 ```text
 files/
@@ -132,9 +114,9 @@ inspirations/
 link-thumbnails/
 ```
 
-Large managed media uses independently authenticated chunks so authorized byte ranges can be reconstructed without storing plaintext copies in a public directory. The reader remains compatible with the earlier `NOEMA-ASSET-V1` chunk envelope while new writes use the compact raw AES-GCM chunk layout.
+Large managed media is stored in authenticated chunks so authorized byte ranges can be reconstructed without a persistent plaintext copy.
 
-Create a full encrypted archive:
+Create a full encrypted disaster-recovery archive:
 
 ```bash
 npm run backup -- ./noema-backup.noema
@@ -146,57 +128,54 @@ Restore while Noema is stopped:
 npm run restore -- ./noema-backup.noema /path/to/restored-data
 ```
 
-A full `.noema` archive includes the complete persistent data set, including SQLite, `master.key`, encrypted binary media and compatibility state, then adds a second encryption layer using `NOEMA_BACKUP_PASSWORD`.
-
-Portable JSON export is different: it is readable metadata intended for inspection/migration and does not include the complete binary data set.
+A full `.noema` archive includes SQLite, `master.key`, encrypted binary media and compatibility state, then adds a second encryption layer using `NOEMA_BACKUP_PASSWORD`. Portable export is intended for readable metadata transfer and is not a substitute for a full disaster-recovery archive.
 
 ## Main routes
 
 | Route | Purpose |
 |---|---|
-| `/` | Task board and calendar |
+| `/` | Tasks and calendar |
 | `/notes` | Notes |
-| `/documents` | Documents and checklists |
+| `/documents` | Documents |
 | `/links` | Visual bookmarks |
-| `/files` | Private file library |
+| `/files` | Encrypted file library |
+| `/contacts` | Contacts directory |
 | `/ai-projects` | AI project catalog |
 | `/buildingsite` | Project/site galleries |
 | `/inspiration` | Reference galleries |
 | `/stats` | Optional analytics dashboard |
-| `/backup` | Metadata/full-backup controls |
+| `/backup` | Backup/export controls |
+| `/archive` | Archived task history |
 | `/help` | In-app help |
 | `/openapi.json` | OpenAPI description |
 | `/mcp` | MCP Streamable HTTP endpoint |
-| `/healthz` | Unauthenticated health check |
+| `/healthz` | Health check |
+
+## Link thumbnails
+
+Existing encrypted thumbnails can be served. Automatic browser-based thumbnail generation is intentionally disabled in the main Noema container until an isolated renderer with strict sandbox and network-egress controls is available.
 
 ## Public screenshot workflow
 
-`npm run check` validates the application itself. Public repository screenshots are generated separately with Playwright by `.github/workflows/screenshots.yml`.
-
-The screenshot generator:
-
-1. refuses to run if `data/` contains anything;
-2. starts a temporary Noema instance with test-only credentials;
-3. creates neutral demo Notes/Documents/Links/galleries;
-4. captures the public UI at desktop size;
-5. tears down the test data directory;
-6. commits only `docs/screenshots/*.png` back to the documentation branch.
-
-This keeps README imagery reproducible without exposing a real installation.
+`.github/workflows/screenshots.yml` runs project checks, starts an isolated demo instance, generates neutral data with Playwright, captures `docs/screenshots/*.png`, removes the temporary data and commits only changed screenshot files back to the PR branch.
 
 ## Documentation
 
 - [PRODUCT.md](PRODUCT.md) — product scope and behavior
 - [ARCHITECTURE.md](ARCHITECTURE.md) — request layers, storage and runtime architecture
-- [CUSTOMIZATION.md](CUSTOMIZATION.md) — UI/module customization
+- [CUSTOMIZATION.md](CUSTOMIZATION.md) — UI and module customization
 - [DEPLOYMENT.md](DEPLOYMENT.md) — Docker, reverse proxies, upgrades and backups
 - [SQLITE_MIGRATION.md](SQLITE_MIGRATION.md) — storage format and migration
-- [PRIVACY.md](PRIVACY.md) — data flows and browser/storage privacy
-- [SECURITY.md](SECURITY.md) — security model and vulnerability reporting
+- [PRIVACY.md](PRIVACY.md) — data flows and privacy boundaries
+- [SECURITY.md](SECURITY.md) — security model and reporting
 - [CONTRIBUTING.md](CONTRIBUTING.md) — development workflow
 - [SUPPORT.md](SUPPORT.md) — troubleshooting
 - [CHANGELOG.md](CHANGELOG.md) — release history
 - [E2EE_ROADMAP.md](E2EE_ROADMAP.md) — optional future client-side E2EE direction
+
+## Repository scope
+
+This public repository contains only generic Noema functionality. Private deployments may diverge independently; private modules, credentials, internal endpoints and installation-specific configuration are intentionally outside the public codebase.
 
 ## License
 
