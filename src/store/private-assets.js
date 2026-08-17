@@ -4,13 +4,13 @@ import { existsSync } from "node:fs";
 import { copyFile, mkdir, open, readdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { config } from "../config.js";
-import { decryptBuffer, encryptBuffer } from "./crypto.js";
+import { decryptAssetChunk, encryptAssetChunk } from "./crypto.js";
 
 const MAGIC = Buffer.from("NOEMA-ASSET-V1", "ascii");
 const VERSION = 1;
 const HEADER_SIZE = 64;
 const DEFAULT_CHUNK_SIZE = 1024 * 1024;
-const CHUNK_OVERHEAD = 42; // NOEMA-FILE-V1\0 + IV(12) + auth tag(16)
+const CHUNK_OVERHEAD = 12 + 16;
 const ROOT_NAMES = Object.freeze(["uploads", "inspirations", "buildingsites", "link-thumbnails"]);
 
 function assertSafeSize(value) {
@@ -35,14 +35,12 @@ function parseHeader(buffer) {
   const version = buffer.readUInt32LE(16);
   const chunkSize = buffer.readUInt32LE(20);
   const sizeBig = buffer.readBigUInt64LE(24);
-  if (version !== VERSION || chunkSize < 64 * 1024 || chunkSize > 16 * 1024 * 1024 || sizeBig > BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw new Error("Private asset header is invalid or unsupported.");
-  }
+  if (version !== VERSION || chunkSize < 64 * 1024 || chunkSize > 16 * 1024 * 1024 || sizeBig > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("Private asset header is invalid or unsupported.");
   return { encrypted: true, version, chunkSize, size: Number(sizeBig), assetId: Buffer.from(buffer.subarray(32, 48)) };
 }
 
 function chunkAad(info, index) {
-  return `noema:private-asset:v${info.version}:${info.assetId.toString("hex")}:${info.size}:${info.chunkSize}:${index}`;
+  return Buffer.from(`noema:private-asset:v${info.version}:${info.assetId.toString("hex")}:${info.size}:${info.chunkSize}:${index}`, "utf8");
 }
 
 async function readExact(handle, length, position) {
@@ -69,10 +67,7 @@ async function replaceAtomically(tempPath, targetPath) {
   const backupPath = `${targetPath}.${randomUUID()}.noema-asset-backup`;
   let backedUp = false;
   try {
-    if (existsSync(targetPath)) {
-      await rename(targetPath, backupPath);
-      backedUp = true;
-    }
+    if (existsSync(targetPath)) { await rename(targetPath, backupPath); backedUp = true; }
     await rename(tempPath, targetPath);
     if (backedUp) await rm(backupPath, { force: true });
   } catch (error) {
@@ -98,7 +93,7 @@ async function writeEncryptedChunks({ size, readChunk, targetPath, chunkSize = D
       const length = Math.min(chunkSize, safeSize - plainPosition);
       const plain = await readChunk(plainPosition, length);
       if (!Buffer.isBuffer(plain) || plain.length !== length) throw new Error("Private asset source was not read completely.");
-      const encrypted = encryptBuffer(plain, chunkAad(info, index));
+      const encrypted = encryptAssetChunk(plain, chunkAad(info, index));
       if (encrypted.length !== plain.length + CHUNK_OVERHEAD) throw new Error("Private asset chunk has an unexpected size.");
       await output.write(encrypted, 0, encrypted.length, writePosition);
       writePosition += encrypted.length;
@@ -126,11 +121,8 @@ export async function encryptPrivateAssetFile(sourcePath, targetPath) {
   const sourceInfo = await stat(sourcePath);
   if (!sourceInfo.isFile()) throw new Error("Private asset source is not a file.");
   const source = await open(sourcePath, "r");
-  try {
-    return await writeEncryptedChunks({ size: sourceInfo.size, targetPath, readChunk: async (position, length) => readExact(source, length, position) });
-  } finally {
-    await source.close().catch(() => {});
-  }
+  try { return await writeEncryptedChunks({ size: sourceInfo.size, targetPath, readChunk: async (position, length) => readExact(source, length, position) }); }
+  finally { await source.close().catch(() => {}); }
 }
 
 export async function privateAssetInfo(filePath) {
@@ -141,9 +133,11 @@ export async function privateAssetInfo(filePath) {
   try {
     const header = await headerFromHandle(handle);
     return header ? { ...header, physicalSize: fileInfo.size } : { encrypted: false, size: fileInfo.size, physicalSize: fileInfo.size };
-  } finally {
-    await handle.close().catch(() => {});
-  }
+  } finally { await handle.close().catch(() => {}); }
+}
+
+export async function isPrivateAssetFile(filePath) {
+  try { return (await privateAssetInfo(filePath)).encrypted; } catch { return false; }
 }
 
 async function forEachPlainChunk(filePath, { start = 0, end = null } = {}, callback) {
@@ -152,10 +146,7 @@ async function forEachPlainChunk(filePath, { start = 0, end = null } = {}, callb
   if (!size) return info;
   const safeStart = Math.max(0, Number(start) || 0);
   const safeEnd = end === null || end === undefined ? size - 1 : Math.min(size - 1, Number(end));
-  if (!Number.isSafeInteger(safeStart) || !Number.isSafeInteger(safeEnd) || safeStart < 0 || safeStart >= size || safeEnd < safeStart) {
-    throw Object.assign(new Error("Requested byte range is invalid."), { status: 416, size });
-  }
-
+  if (!Number.isSafeInteger(safeStart) || !Number.isSafeInteger(safeEnd) || safeStart < 0 || safeStart >= size || safeEnd < safeStart) throw Object.assign(new Error("Requested byte range is invalid."), { status: 416, size });
   const handle = await open(filePath, "r");
   try {
     if (!info.encrypted) {
@@ -170,7 +161,6 @@ async function forEachPlainChunk(filePath, { start = 0, end = null } = {}, callb
       }
       return info;
     }
-
     const startChunk = Math.floor(safeStart / info.chunkSize);
     const endChunk = Math.floor(safeEnd / info.chunkSize);
     for (let index = startChunk; index <= endChunk; index += 1) {
@@ -180,22 +170,19 @@ async function forEachPlainChunk(filePath, { start = 0, end = null } = {}, callb
       const encryptedOffset = HEADER_SIZE + index * (info.chunkSize + CHUNK_OVERHEAD);
       const encrypted = await readExact(handle, encryptedLength, encryptedOffset);
       let plain;
-      try { plain = decryptBuffer(encrypted, chunkAad(info, index)); }
-      catch { throw new Error("Private asset could not be decrypted or was modified."); }
+      try { plain = decryptAssetChunk(encrypted, chunkAad(info, index)); } catch { throw new Error("Private asset could not be decrypted or was modified."); }
       if (plain.length !== plainLength) throw new Error("Private asset chunk has an invalid length.");
       const from = index === startChunk ? safeStart - chunkPlainStart : 0;
       const to = index === endChunk ? safeEnd - chunkPlainStart + 1 : plain.length;
       if (to > from) await callback(plain.subarray(from, to), chunkPlainStart + from);
     }
     return info;
-  } finally {
-    await handle.close().catch(() => {});
-  }
+  } finally { await handle.close().catch(() => {}); }
 }
 
 export async function readPrivateAssetRange(filePath, start = 0, end = null) {
   const chunks = [];
-  const info = await forEachPlainChunk(filePath, { start, end }, async (chunk) => chunks.push(Buffer.from(chunk)));
+  const info = await forEachPlainChunk(filePath, { start, end }, async (chunk) => { chunks.push(Buffer.from(chunk)); });
   return { info, data: Buffer.concat(chunks) };
 }
 
@@ -215,10 +202,7 @@ export async function streamPrivateAsset(filePath, writable, { start = 0, end = 
 export async function decryptPrivateAssetToFile(sourcePath, targetPath) {
   const info = await privateAssetInfo(sourcePath);
   await mkdir(path.dirname(targetPath), { recursive: true, mode: 0o700 });
-  if (!info.encrypted) {
-    await copyFile(sourcePath, targetPath);
-    return { size: info.size, encrypted: false };
-  }
+  if (!info.encrypted) { await copyFile(sourcePath, targetPath); return { size: info.size, encrypted: false }; }
   const tempPath = `${targetPath}.${randomUUID()}.plain-tmp`;
   const output = await open(tempPath, "wx", 0o600);
   let position = 0;
@@ -238,7 +222,7 @@ export async function decryptPrivateAssetToFile(sourcePath, targetPath) {
 export async function privateAssetSha256(filePath) {
   const hash = createHash("sha256");
   const info = await privateAssetInfo(filePath);
-  if (info.size) await forEachPlainChunk(filePath, {}, async (chunk) => hash.update(chunk));
+  if (info.size) await forEachPlainChunk(filePath, {}, async (chunk) => { hash.update(chunk); });
   return hash.digest("hex");
 }
 
@@ -255,7 +239,6 @@ async function verifyPrivateAsset(filePath, { full = false } = {}) {
 export async function migratePrivateAssetFile(filePath) {
   const info = await privateAssetInfo(filePath);
   if (info.encrypted) { await verifyPrivateAsset(filePath); return false; }
-
   const encryptedTemp = `${filePath}.${randomUUID()}.noema-migration`;
   const backupPath = `${filePath}.${randomUUID()}.plaintext-backup`;
   let originalMoved = false;
@@ -265,8 +248,7 @@ export async function migratePrivateAssetFile(filePath) {
     const encryptedInfo = await privateAssetInfo(encryptedTemp);
     if (!encryptedInfo.encrypted || encryptedInfo.size !== info.size) throw new Error("Migrated private asset failed size verification.");
     await verifyPrivateAsset(encryptedTemp, { full: true });
-    if (await privateAssetSha256(encryptedTemp) !== sourceHash) throw new Error("Migrated private asset is not byte-identical to the original.");
-
+    if (await privateAssetSha256(encryptedTemp) !== sourceHash) throw new Error("Migrated private asset is not byte-for-byte identical to the original.");
     await rename(filePath, backupPath);
     originalMoved = true;
     await rename(encryptedTemp, filePath);
@@ -275,24 +257,21 @@ export async function migratePrivateAssetFile(filePath) {
     return true;
   } catch (error) {
     await rm(encryptedTemp, { force: true }).catch(() => {});
-    if (originalMoved && existsSync(backupPath)) {
-      await rm(filePath, { force: true }).catch(() => {});
-      await rename(backupPath, filePath).catch(() => {});
-    }
+    if (originalMoved && existsSync(backupPath)) { await rm(filePath, { force: true }).catch(() => {}); await rename(backupPath, filePath).catch(() => {}); }
     throw error;
   }
 }
 
 function shouldSkipFile(name) {
-  return name.includes(".noema-asset-tmp") || name.includes(".noema-asset-backup") || name.includes(".noema-migration")
-    || name.includes(".plaintext-backup") || name.endsWith(".tmp") || name.endsWith(".bak");
+  return name.includes(".noema-asset-tmp") || name.includes(".noema-asset-backup") || name.includes(".noema-migration") || name.includes(".plaintext-backup") || name.endsWith(".tmp") || name.endsWith(".bak");
 }
 
 async function listRegularFiles(root) {
   if (!existsSync(root)) return [];
   const result = [];
   async function walk(dir) {
-    for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) await walk(full);
       else if (entry.isFile() && !shouldSkipFile(entry.name)) result.push(full);
@@ -304,14 +283,13 @@ async function listRegularFiles(root) {
 
 export async function migratePrivateAssetDirectory(root, { quiet = false } = {}) {
   const files = await listRegularFiles(root);
-  for (const filePath of files) if ((await privateAssetInfo(filePath)).encrypted) await verifyPrivateAsset(filePath);
+  if (!files.length) return { scanned: 0, migrated: 0 };
+  for (const filePath of files) { const info = await privateAssetInfo(filePath); if (info.encrypted) await verifyPrivateAsset(filePath); }
   let migrated = 0;
   for (const filePath of files) {
-    if (await migratePrivateAssetFile(filePath)) {
-      migrated += 1;
-      if (!quiet && migrated % 25 === 0) console.log(`[noema] Encrypted ${migrated}/${files.length} private assets…`);
-    }
+    if (await migratePrivateAssetFile(filePath)) { migrated += 1; if (!quiet && migrated % 25 === 0) console.log(`[noema] Encrypted ${migrated}/${files.length} private assets…`); }
   }
+  if (!quiet && migrated) console.log(`[noema] Encrypted ${migrated} legacy private assets in ${root}.`);
   return { scanned: files.length, migrated };
 }
 
@@ -323,6 +301,8 @@ export async function migrateAllPrivateAssets({ quiet = false } = {}) {
     scanned += result.scanned;
     migrated += result.migrated;
   }
-  if (!quiet && scanned) console.log(`[noema] Private assets: ${scanned} checked, ${migrated} migrated.`);
+  if (!quiet && scanned) console.log(`[noema] Private asset storage: ${scanned} checked, ${migrated} migrated.`);
   return { scanned, migrated };
 }
+
+export function privateAssetRoots() { return ROOT_NAMES.map((name) => path.join(config.DATA_DIR, name)); }
