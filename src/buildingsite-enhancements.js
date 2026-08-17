@@ -88,7 +88,12 @@ async function handleApi(req, res, pathname) {
 async function handleEnhancementRequest(req, res) {
   const url = new URL(req.url, config.PUBLIC_BASE_URL);
   if (url.pathname === "/buildingsite-enhancements.js" && req.method === "GET") { const source = await readFile(path.join(PUBLIC_DIR, "buildingsite-enhancements.js")); res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff" }); res.end(source); return true; }
-  if (url.pathname === "/noema-header-footer.js" && req.method === "GET") { const source = await readFile(path.join(PUBLIC_DIR, "noema-header-footer.js"), "utf8"); const loader = "\n;if(['/buildingsite','/buildingsite/','/buildingsite.html'].includes(location.pathname)){import('/buildingsite-enhancements.js').catch(console.error);}\n"; res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff" }); res.end(source + loader); return true; }
+  if (url.pathname === "/inspiration-global-modes.js" && req.method === "GET") { const source = await readFile(path.join(PUBLIC_DIR, "inspiration-global-modes.js")); res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff" }); res.end(source); return true; }
+  if (url.pathname === "/noema-header-footer.js" && req.method === "GET") {
+    const source = await readFile(path.join(PUBLIC_DIR, "noema-header-footer.js"), "utf8");
+    const loader = "\n;if(['/buildingsite','/buildingsite/','/buildingsite.html'].includes(location.pathname)){import('/buildingsite-enhancements.js').catch(console.error);}\n;if(['/inspiration','/inspiration/','/inspiration.html'].includes(location.pathname)){import('/inspiration-global-modes.js').catch(console.error);}\n";
+    res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff" }); res.end(source + loader); return true;
+  }
   if (url.pathname.startsWith("/api/buildingsites/") && url.pathname.includes("/images/")) return handleApi(req, res, url.pathname);
   return false;
 }
