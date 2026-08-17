@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { randomBytes } from "node:crypto";
 
 const root = await mkdtemp(path.join(os.tmpdir(), "noema-private-assets-"));
 process.env.NODE_ENV = "test";
@@ -12,7 +13,7 @@ process.env.UI_PASSWORD = "";
 process.env.ENCRYPTION_KEY = "private-assets-test-key";
 
 const { config } = await import("../src/config.js");
-const { initCrypto } = await import("../src/store/crypto.js");
+const { encryptBuffer, initCrypto } = await import("../src/store/crypto.js");
 const {
   migratePrivateAssetFile,
   privateAssetInfo,
@@ -30,6 +31,24 @@ function patternedBuffer(size) {
   return buffer;
 }
 
+function legacyAssetContainer(original, chunkSize = 1024 * 1024) {
+  const version = 1;
+  const assetId = randomBytes(16);
+  const header = Buffer.alloc(64);
+  Buffer.from("NOEMA-ASSET-V1", "ascii").copy(header, 0);
+  header.writeUInt32LE(version, 16);
+  header.writeUInt32LE(chunkSize, 20);
+  header.writeBigUInt64LE(BigInt(original.length), 24);
+  assetId.copy(header, 32);
+  const chunks = [header];
+  for (let index = 0, offset = 0; offset < original.length; index += 1, offset += chunkSize) {
+    const plain = original.subarray(offset, Math.min(original.length, offset + chunkSize));
+    const aad = `noema:private-asset:v${version}:${assetId.toString("hex")}:${original.length}:${chunkSize}:${index}`;
+    chunks.push(encryptBuffer(plain, aad));
+  }
+  return Buffer.concat(chunks);
+}
+
 test("private assets are ciphertext on disk and byte-identical after decryption", async () => {
   const original = patternedBuffer(2 * 1024 * 1024 + 1777);
   const filePath = path.join(config.DATA_DIR, "uploads", "large-private.bin");
@@ -45,6 +64,18 @@ test("private assets are ciphertext on disk and byte-identical after decryption"
   const start = 1_040_000;
   const end = 1_090_123;
   assert.deepEqual((await readPrivateAssetRange(filePath, start, end)).data, original.subarray(start, end + 1));
+});
+
+test("legacy 42-byte chunk containers remain readable after the compact chunk upgrade", async () => {
+  const original = patternedBuffer(2 * 1024 * 1024 + 321);
+  const filePath = path.join(config.DATA_DIR, "uploads", "legacy-chunked.bin");
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, legacyAssetContainer(original), { mode: 0o600 });
+  const info = await privateAssetInfo(filePath);
+  assert.equal(info.encrypted, true);
+  assert.equal(info.size, original.length);
+  assert.deepEqual(await readPrivateAsset(filePath), original);
+  assert.deepEqual((await readPrivateAssetRange(filePath, 900_000, 1_200_000)).data, original.subarray(900_000, 1_200_001));
 });
 
 test("legacy plaintext private assets migrate only after full verification", async () => {
