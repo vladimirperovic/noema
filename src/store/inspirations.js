@@ -11,6 +11,9 @@ function normalizeInspiration(raw) {
   item.images = Array.isArray(item.images) ? item.images : [];
   item.createdAt = Number.isFinite(item.createdAt) ? item.createdAt : now;
   item.updatedAt = Number.isFinite(item.updatedAt) ? item.updatedAt : item.createdAt;
+  if (typeof item.featuredImageId !== "string" || !item.images.some((image) => image?.id === item.featuredImageId)) {
+    delete item.featuredImageId;
+  }
   return item;
 }
 
@@ -36,6 +39,7 @@ export function updateInspiration(id, patch) {
   if (typeof patch.sourceUrl === "string") next.sourceUrl = patch.sourceUrl;
   if (typeof patch.address === "string") next.address = patch.address;
   if (typeof patch.label === "string") next.label = patch.label;
+  if (Array.isArray(patch.images)) next.images = patch.images;
   if (typeof patch.featuredImageId === "string") next.featuredImageId = patch.featuredImageId;
   next.updatedAt = Date.now();
   return inspirations.set(normalizeInspiration(next));

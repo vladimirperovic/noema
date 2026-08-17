@@ -23,6 +23,9 @@ All notable public changes are documented here.
 - Persistent-volume ownership recovery no longer relies on a stale one-time marker; restored trees are rechecked before dropping privileges.
 - Calendar day-bound calculations now resolve each local midnight independently, correctly representing 23-hour and 25-hour DST transition days.
 - Public documentation was refreshed to match the current authentication, cache, encryption, Docker and thumbnail-renderer boundaries.
+- Files storage supports bounded-memory raw uploads, authenticated chunk encryption and HTTP Range downloads while retaining legacy base64 compatibility.
+- New `NOEMA-ASSET-V1` writes use compact AES-GCM chunks while readers remain compatible with the earlier chunk envelope.
+- SQLite collection storage now supports nested-safe immediate transactions, batched upsert/delete operations and an in-memory collection cache.
 
 ### Security
 
@@ -39,6 +42,7 @@ All notable public changes are documented here.
 - Existing deployments should keep their current `ENCRYPTION_KEY` only as long as required for the legacy migration path, then remove it after successful restart/login/data validation.
 - Existing encrypted Links thumbnails remain readable; only new automatic browser rendering is disabled in the standard container.
 - Keep a verified full backup and previous image until login, Files, galleries and backup restore have been validated after upgrade.
+- Existing private-asset containers written with the earlier chunk envelope remain readable after the compact chunk upgrade.
 
 ## [0.3.0] — 2026-07-31
 

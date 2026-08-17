@@ -5,12 +5,13 @@ import { readEncryptedJson, writeEncryptedJson } from "./crypto.js";
 import {
   countRecords,
   deleteRecord,
+  deleteRecords,
   getMeta,
-  getRecord,
   listRecords,
   replaceRecords,
   setMeta,
   upsertRecord,
+  upsertRecords,
 } from "./database.js";
 
 const MIRROR_DELAY_MS = 150;
@@ -23,6 +24,7 @@ export function flushCollectionMirrors() {
 export function createCollection({ name, legacyFile, normalize = (value) => value, validate = (value) => Boolean(value?.id) }) {
   const legacyPath = path.join(config.DATA_DIR, legacyFile);
   const migrationKey = `legacy-json-migrated:${name}`;
+  const cache = new Map();
   let loaded = false;
   let mirrorDirty = false;
   let mirrorTimer = null;
@@ -33,8 +35,13 @@ export function createCollection({ name, legacyFile, normalize = (value) => valu
     return validate(normalized) ? normalized : null;
   }
 
+  function cacheRecords(records) {
+    cache.clear();
+    for (const record of records) cache.set(record.id, record);
+  }
+
   function currentRecords() {
-    return listRecords(name).map(clean).filter(Boolean);
+    return [...cache.values()].map((record) => structuredClone(record));
   }
 
   function flushMirror() {
@@ -67,6 +74,7 @@ export function createCollection({ name, legacyFile, normalize = (value) => valu
       setMeta(migrationKey, JSON.stringify({ importedAt: new Date().toISOString(), count: records.length }));
       console.log(`[noema] Imported ${records.length} ${name} records from ${legacyFile} into SQLite.`);
     }
+    cacheRecords(listRecords(name).map(clean).filter(Boolean));
     loaded = true;
     return currentRecords();
   }
@@ -78,8 +86,8 @@ export function createCollection({ name, legacyFile, normalize = (value) => valu
 
   function get(id) {
     if (!loaded) load();
-    const value = getRecord(name, id);
-    return value ? clean(value) : null;
+    const value = cache.get(String(id));
+    return value ? structuredClone(value) : null;
   }
 
   function set(value) {
@@ -87,28 +95,56 @@ export function createCollection({ name, legacyFile, normalize = (value) => valu
     const normalized = clean(value);
     if (!normalized) throw new Error(`Invalid ${name} record.`);
     upsertRecord(name, normalized);
+    cache.set(normalized.id, normalized);
     scheduleMirror();
-    return normalized;
+    return structuredClone(normalized);
+  }
+
+  function setMany(values) {
+    if (!loaded) load();
+    const records = (Array.isArray(values) ? values : []).map(clean).filter(Boolean);
+    if (!records.length) return [];
+    upsertRecords(name, records);
+    for (const record of records) cache.set(record.id, record);
+    scheduleMirror();
+    return records.map((record) => structuredClone(record));
   }
 
   function remove(id) {
     if (!loaded) load();
-    const removed = deleteRecord(name, id);
-    if (removed) scheduleMirror();
+    const key = String(id);
+    const removed = deleteRecord(name, key);
+    if (removed) {
+      cache.delete(key);
+      scheduleMirror();
+    }
     return removed;
+  }
+
+  function removeMany(ids) {
+    if (!loaded) load();
+    const values = [...new Set((Array.isArray(ids) ? ids : []).map((id) => String(id)).filter(Boolean))];
+    if (!values.length) return 0;
+    const count = deleteRecords(name, values);
+    if (count) {
+      for (const id of values) cache.delete(id);
+      scheduleMirror();
+    }
+    return count;
   }
 
   function replace(values) {
     if (!loaded) load();
     const records = (Array.isArray(values) ? values : []).map(clean).filter(Boolean);
     replaceRecords(name, records);
+    cacheRecords(records);
     scheduleMirror();
-    return records;
+    return records.map((record) => structuredClone(record));
   }
 
   function close() {
     flushMirror();
   }
 
-  return { load, list, get, set, remove, replace, close, legacyPath };
+  return { load, list, get, set, setMany, remove, removeMany, replace, close, legacyPath };
 }

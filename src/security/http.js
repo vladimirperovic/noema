@@ -5,8 +5,10 @@ const LOGIN_WINDOW_MS = 15 * 60_000;
 const API_WINDOW_MS = 60_000;
 const MAX_RATE_BUCKETS = 10_000;
 const MAX_LOGIN_FAILURES_PER_IP = 5;
+const MAX_API_REQUESTS_PER_BUCKET = 300;
 const loginByIp = new Map();
-const apiByIp = new Map();
+const apiByIdentity = new Map();
+const warnedUntrustedForwarders = new Set();
 
 export function safeEqual(left, right) {
   const a = Buffer.from(String(left || ""));
@@ -30,8 +32,15 @@ function normalizeIp(value) {
 
 export function clientIp(req) {
   const direct = normalizeIp(req.socket?.remoteAddress);
-  if (!config.TRUSTED_PROXY_IPS.includes(direct)) return direct;
-  return String(req.headers["x-forwarded-for"] || "").split(",").map(normalizeIp).find(Boolean) || direct;
+  const forwarded = String(req.headers["x-forwarded-for"] || "").trim();
+  if (!config.TRUSTED_PROXY_IPS.includes(direct)) {
+    if (config.isProduction && forwarded && !warnedUntrustedForwarders.has(direct)) {
+      warnedUntrustedForwarders.add(direct);
+      console.warn(`[noema] Ignoring X-Forwarded-For from untrusted peer ${direct}; check NOEMA_TRUSTED_PROXY_IPS.`);
+    }
+    return direct;
+  }
+  return forwarded.split(",").map(normalizeIp).find(Boolean) || direct;
 }
 
 export function applyClientIp(req, ip) {
@@ -83,7 +92,10 @@ export function setSecurityHeaders(res) {
   const headers = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
+    "X-Permitted-Cross-Domain-Policies": "none",
     "Referrer-Policy": "same-origin",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(self), payment=(), usb=()",
     "Content-Security-Policy": [
       "default-src 'self'",
@@ -126,46 +138,41 @@ function pruneBuckets(map, windowMs, now) {
   }
 }
 
+function apiRateClass(req) {
+  const method = String(req.method || "GET").toUpperCase();
+  return method === "GET" || method === "HEAD" || method === "OPTIONS" ? "read" : "write";
+}
+
 export function loginStatus(ip) {
   const now = Date.now();
   pruneBuckets(loginByIp, LOGIN_WINDOW_MS, now);
   const current = loginByIp.get(ip) || { count: 0, since: now };
   const locked = current.count >= MAX_LOGIN_FAILURES_PER_IP;
-  return {
-    locked,
-    ipLocked: locked,
-    globalLocked: false,
-    remaining: Math.max(0, MAX_LOGIN_FAILURES_PER_IP - current.count),
-  };
+  return { locked, ipLocked: locked, globalLocked: false, remaining: Math.max(0, MAX_LOGIN_FAILURES_PER_IP - current.count) };
 }
 
 export function recordLoginFailure(ip) {
   const now = Date.now();
   pruneBuckets(loginByIp, LOGIN_WINDOW_MS, now);
   const record = loginByIp.get(ip);
-  const next = !record || now - record.since > LOGIN_WINDOW_MS
-    ? { count: 1, since: now }
-    : { ...record, count: record.count + 1 };
+  const next = !record || now - record.since > LOGIN_WINDOW_MS ? { count: 1, since: now } : { ...record, count: record.count + 1 };
   loginByIp.delete(ip);
   loginByIp.set(ip, next);
   return Math.max(0, MAX_LOGIN_FAILURES_PER_IP - next.count);
 }
 
-export function clearLoginFailure(ip) {
-  loginByIp.delete(ip);
-}
+export function clearLoginFailure(ip) { loginByIp.delete(ip); }
 
-export function enforceApiRate(req, res, ip) {
+export function enforceApiRate(req, res, identity) {
   if (!req.url?.startsWith("/api/")) return false;
   const now = Date.now();
-  pruneBuckets(apiByIp, API_WINDOW_MS, now);
-  const record = apiByIp.get(ip);
-  const next = !record || now - record.since > API_WINDOW_MS
-    ? { count: 1, since: now }
-    : { ...record, count: record.count + 1 };
-  apiByIp.delete(ip);
-  apiByIp.set(ip, next);
-  if (next.count <= 300) return false;
+  pruneBuckets(apiByIdentity, API_WINDOW_MS, now);
+  const key = `${String(identity || "unknown")}:${apiRateClass(req)}`;
+  const record = apiByIdentity.get(key);
+  const next = !record || now - record.since > API_WINDOW_MS ? { count: 1, since: now } : { ...record, count: record.count + 1 };
+  apiByIdentity.delete(key);
+  apiByIdentity.set(key, next);
+  if (next.count <= MAX_API_REQUESTS_PER_BUCKET) return false;
   json(res, 429, { ok: false, error: "Too many requests." }, { "Retry-After": "60" });
   return true;
 }

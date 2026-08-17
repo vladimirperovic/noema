@@ -1,0 +1,69 @@
+name: Publish container image
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: noema-container-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, pinned
+
+      - name: Resolve image tags
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          sha_tag="sha-${GITHUB_SHA::12}"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")"
+          fi
+          {
+            echo "image=$image"
+            echo "version=$version"
+            echo "sha_tag=$sha_tag"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        shell: bash
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build tested image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build \
+            --build-arg SOURCE_COMMIT="$GITHUB_SHA" \
+            --tag "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" \
+            --tag "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha_tag }}" \
+            .
+
+      - name: Push immutable image tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+          docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha_tag }}"
+
+      - name: Publish latest for release tags
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker tag "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" "${{ steps.meta.outputs.image }}:latest"
+          docker push "${{ steps.meta.outputs.image }}:latest"

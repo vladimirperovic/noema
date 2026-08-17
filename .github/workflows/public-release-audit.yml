@@ -40,6 +40,16 @@ jobs:
             exit 1
           fi
 
+      - name: Check private-only module boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden_paths='(^|/)(invoice|invoices|invest|investicije)([-_.].*|/|$)'
+          if git ls-files | grep -Ei "$forbidden_paths"; then
+            echo "Private-only Invoice/Invest modules must not be tracked in public Noema."
+            exit 1
+          fi
+
       - name: Check private-network addresses
         shell: bash
         run: |
