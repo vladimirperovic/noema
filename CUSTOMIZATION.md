@@ -2,6 +2,16 @@
 
 Noema is intentionally built from plain HTML, CSS, and JavaScript. Most visual and product changes can be made without a build system.
 
+## Public core and private overlays
+
+The public repository is the canonical generic Noema core. Installation-specific code should be layered outside the public source instead of maintaining a full private fork.
+
+Keep generic capabilities such as Tasks, Notes, Documents, Links, Files, galleries, storage, encryption, backup, authentication, MCP/OpenAPI and shared UI infrastructure in the public core. Keep operator-specific modules, branding, private network links and organization-specific workflows in a private overlay or deployment repository.
+
+A private deployment may build from a pinned public Noema container image and add its private modules/configuration during its own image build. Pin a version or immutable image digest rather than cloning public `main` at deploy time so production remains reproducible.
+
+Runtime user data is separate from both source layers and belongs in `NOEMA_DATA_DIR` on persistent storage. Full encrypted `.noema` backups should be kept independently from the live volume.
+
 ## Canonical navigation
 
 The shared menu, theme controls, footer, font scaling, active-page color, and WIDTH behavior live in:
@@ -10,7 +20,7 @@ The shared menu, theme controls, footer, font scaling, active-page color, and WI
 public/noema-header-footer.js
 ```
 
-Edit the `pages` array to add, remove, rename, or reorder private modules. Each entry contains a route, label, and outline SVG icon. Keep private hostnames and installation-specific tools out of the public repository; configure them in a private fork or a local extension.
+Edit the `pages` array to add, remove, rename, or reorder generic modules. Keep private hostnames and installation-specific tools out of the public repository; configure them in a private overlay or local extension.
 
 The script removes legacy duplicate menu controls and renders one canonical instance on every page. The top menu and theme buttons are attached to the viewport layer rather than the scrolling page shell, so custom page layouts should not reposition them. Public gallery mode intentionally renders only Building Site and Inspiration links.
 
@@ -61,7 +71,7 @@ Pages use a common family of variables:
 
 Preserve these names when adding a page so the shared controls and both themes work without special cases.
 
-## Adding a module
+## Adding a generic module
 
 1. Add its HTML/JS under `public/`.
 2. Add API/storage code under `src/`.
@@ -70,21 +80,24 @@ Preserve these names when adding a page so the shared controls and both themes w
 5. Add syntax and behavior tests.
 6. Update README, Product, Architecture, Privacy, Security, Support, Deployment, and Changelog when relevant.
 
+Installation-specific modules should instead live in the private overlay and attach through the deployment's extension layer; they should not require copying the whole public source tree.
+
 ## Files module
 
 Files is split between:
 
 - `public/files.html` — interface
-- `src/file-library.js` — authenticated routes
+- `src/file-library.js` — metadata/legacy compatibility routes
+- `src/streaming-file-library.js` — bounded-memory raw upload and Range download routes
 - `src/store/files.js` — encrypted metadata and binary storage
 
-Change `MAX_FILE_BYTES` only after also adjusting the request limit in `src/file-library.js`, reverse-proxy upload limits, documentation, and tests. Binary names must remain randomized and path-normalized.
+Change `MAX_FILE_BYTES` only after also adjusting request limits, reverse-proxy upload limits, documentation, and tests. Binary names must remain randomized and path-normalized.
 
 ## Links module
 
 The base Links page remains `public/links.html`. Cross-cutting visual controls are layered by `public/links-enhancements.js` so Cards/Table mode, density, and thumbnail actions can evolve without rewriting the stored link schema.
 
-Local screenshot generation is handled server-side by `src/link-thumbnails.js`. Keep the URL preflight and authenticated delivery intact when customizing it. The Docker image includes Chromium; non-Docker installations may use `NOEMA_CHROMIUM_PATH` for a non-standard browser location.
+Local screenshot generation is handled server-side by `src/link-thumbnails.js`. Keep the URL preflight and authenticated delivery intact when customizing it.
 
 ## Source-linked tasks
 
@@ -98,4 +111,4 @@ Existing interface localization is handled by `public/noema-i18n.js`. New stable
 
 ## Branding and examples
 
-Use neutral example domains, projects, locations, and analytics IDs in public code. Real domains, property IDs, account emails, proxy addresses, and private network URLs belong in `.env` or a private fork.
+Use neutral example domains, projects, locations, and analytics IDs in public code. Real domains, property IDs, account emails, proxy addresses, private network URLs and organization-specific modules belong in deployment configuration or a private overlay.
