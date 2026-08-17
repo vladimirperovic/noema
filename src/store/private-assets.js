@@ -4,13 +4,14 @@ import { existsSync } from "node:fs";
 import { copyFile, mkdir, open, readdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { config } from "../config.js";
-import { decryptAssetChunk, encryptAssetChunk } from "./crypto.js";
+import { decryptAssetChunk, decryptBuffer, encryptAssetChunk } from "./crypto.js";
 
 const MAGIC = Buffer.from("NOEMA-ASSET-V1", "ascii");
 const VERSION = 1;
 const HEADER_SIZE = 64;
 const DEFAULT_CHUNK_SIZE = 1024 * 1024;
 const CHUNK_OVERHEAD = 12 + 16;
+const LEGACY_CHUNK_OVERHEAD = Buffer.byteLength("NOEMA-FILE-V1\0") + 12 + 16;
 const ROOT_NAMES = Object.freeze(["uploads", "inspirations", "buildingsites", "link-thumbnails"]);
 
 function assertSafeSize(value) {
@@ -41,6 +42,15 @@ function parseHeader(buffer) {
 
 function chunkAad(info, index) {
   return Buffer.from(`noema:private-asset:v${info.version}:${info.assetId.toString("hex")}:${info.size}:${info.chunkSize}:${index}`, "utf8");
+}
+
+function chunkLayout(info) {
+  const chunkCount = info.size ? Math.ceil(info.size / info.chunkSize) : 0;
+  if (!chunkCount) return { overhead: CHUNK_OVERHEAD, legacy: false };
+  const overheadBytes = info.physicalSize - HEADER_SIZE - info.size;
+  if (overheadBytes === chunkCount * CHUNK_OVERHEAD) return { overhead: CHUNK_OVERHEAD, legacy: false };
+  if (overheadBytes === chunkCount * LEGACY_CHUNK_OVERHEAD) return { overhead: LEGACY_CHUNK_OVERHEAD, legacy: true };
+  throw new Error("Private asset physical size does not match a supported chunk layout.");
 }
 
 async function readExact(handle, length, position) {
@@ -161,16 +171,19 @@ async function forEachPlainChunk(filePath, { start = 0, end = null } = {}, callb
       }
       return info;
     }
+
+    const layout = chunkLayout(info);
     const startChunk = Math.floor(safeStart / info.chunkSize);
     const endChunk = Math.floor(safeEnd / info.chunkSize);
     for (let index = startChunk; index <= endChunk; index += 1) {
       const chunkPlainStart = index * info.chunkSize;
       const plainLength = Math.min(info.chunkSize, size - chunkPlainStart);
-      const encryptedLength = plainLength + CHUNK_OVERHEAD;
-      const encryptedOffset = HEADER_SIZE + index * (info.chunkSize + CHUNK_OVERHEAD);
+      const encryptedLength = plainLength + layout.overhead;
+      const encryptedOffset = HEADER_SIZE + index * (info.chunkSize + layout.overhead);
       const encrypted = await readExact(handle, encryptedLength, encryptedOffset);
       let plain;
-      try { plain = decryptAssetChunk(encrypted, chunkAad(info, index)); } catch { throw new Error("Private asset could not be decrypted or was modified."); }
+      try { plain = layout.legacy ? decryptBuffer(encrypted, chunkAad(info, index)) : decryptAssetChunk(encrypted, chunkAad(info, index)); }
+      catch { throw new Error("Private asset could not be decrypted or was modified."); }
       if (plain.length !== plainLength) throw new Error("Private asset chunk has an invalid length.");
       const from = index === startChunk ? safeStart - chunkPlainStart : 0;
       const to = index === endChunk ? safeEnd - chunkPlainStart + 1 : plain.length;
