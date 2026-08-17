@@ -2,10 +2,13 @@
 
 All notable public changes are documented here.
 
-## Unreleased
+## [0.3.1] — 2026-08-17
 
 ### Added
 
+- Complete public Contacts module with route, UI, categories, favorites, search and CRUD API.
+- Files folder support across the public HTTP/API layer, including folder listing and CRUD routes.
+- Links thumbnail capability endpoint so the UI can fail closed when isolated thumbnail rendering is unavailable.
 - Public README screenshot gallery generated automatically from neutral demo data in a clean checkout.
 - Security/recovery CI coverage for secret scanning, deterministic SPDX SBOM generation and container vulnerability scanning.
 - Regression coverage for legacy-auth removal, Service Worker cache isolation, recurring-task idempotency and DST transition days.
@@ -13,24 +16,28 @@ All notable public changes are documented here.
 
 ### Changed
 
-- `src/security-gateway.js` is now the single browser authentication/authorization authority.
+- `src/security-gateway.js` is the single browser authentication/authorization authority.
+- The gateway now handles CORS preflight before browser authentication/rate limiting, forces API/OpenAPI/MCP/private-data responses to `no-store`, and applies short-lived caching only to source-controlled static assets.
 - Legacy inner browser authentication was removed from `src/server.js`, including HTTP Basic challenge handling, old HMAC-style UI sessions, duplicate `/login`/`/logout` handling and the duplicate login limiter.
-- The Service Worker now caches only an explicit list of source-controlled static shell assets. API, Files, uploads, galleries, private media, thumbnails and backups are network-only.
-- Service Worker cache versioning now removes historical Noema caches during activation.
+- The Service Worker caches only an explicit list of source-controlled static shell assets. API, Files, uploads, galleries, private media, thumbnails and backups are network-only.
+- Service Worker cache versioning removes historical Noema caches during activation.
 - Browser-based Links thumbnail generation is disabled in the standard Noema process/container until it can run in a separately isolated renderer with strict network controls.
+- Links UI checks renderer capability before exposing thumbnail generation and includes the generic label-selection workflow.
 - Chromium is no longer included in the standard Docker runtime image.
 - Docker build/test credentials are isolated from deployment secrets and npm/corepack/yarn are removed from the final runtime image.
 - Persistent-volume ownership recovery no longer relies on a stale one-time marker; restored trees are rechecked before dropping privileges.
-- Calendar day-bound calculations now resolve each local midnight independently, correctly representing 23-hour and 25-hour DST transition days.
-- Public documentation was refreshed to match the current authentication, cache, encryption, Docker and thumbnail-renderer boundaries.
+- Calendar day-bound calculations resolve each local midnight independently, correctly representing 23-hour and 25-hour DST transition days.
 - Files storage supports bounded-memory raw uploads, authenticated chunk encryption and HTTP Range downloads while retaining legacy base64 compatibility.
-- New `NOEMA-ASSET-V1` writes use compact AES-GCM chunks while readers remain compatible with the earlier chunk envelope.
-- SQLite collection storage now supports nested-safe immediate transactions, batched upsert/delete operations and an in-memory collection cache.
+- New private-asset writes use compact AES-GCM chunks while readers remain compatible with the earlier chunk envelope.
+- SQLite collection storage supports nested-safe immediate transactions, batched upsert/delete operations and an in-memory collection cache.
+- Public documentation and neutral screenshots were refreshed to match the final standalone 0.3.x reference application.
 
 ### Security
 
 - Noema no longer emits `WWW-Authenticate` for UI/API access and no longer relies on an inner HTTP Basic compatibility layer.
 - The outer security gateway owns opaque server-side sessions and logout revocation.
+- Forwarded client addresses are ignored unless the immediate peer is configured as a trusted proxy; suspicious untrusted forwarded headers are logged once per peer in production.
+- API rate limiting is keyed by authenticated session, bearer/share identity or client IP instead of collapsing all reverse-proxied traffic into one bucket.
 - Old Service Worker caches that may have been created by broader runtime-caching logic are deleted on activation of the static-only worker.
 - Private/API responses are explicitly excluded from browser Cache Storage by path and response cache policy.
 - Automatic Chromium rendering of user-controlled URLs fails closed in the main container rather than relying on incomplete application-level browser isolation.
