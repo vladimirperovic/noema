@@ -5,6 +5,7 @@ import { installGalleryDownloads } from "./gallery-downloads.js";
 import { installLinkThumbnails } from "./link-thumbnails.js";
 import { installPrivateAssetGateway } from "./private-asset-gateway.js";
 import { installSecurityGateway } from "./security-gateway.js";
+import { prepareRuntimeDataRoot } from "./runtime-data-root.js";
 import { closeStore } from "./store/todos.js";
 import { closeNotes } from "./store/notes.js";
 import { closeDocuments } from "./store/documents.js";
@@ -20,6 +21,7 @@ import { initCrypto } from "./store/crypto.js";
 import { migrateAllPrivateAssets } from "./store/private-assets.js";
 
 async function main() {
+  prepareRuntimeDataRoot();
   initCrypto({ masterPassword: config.UI_PASSWORD, legacyPassword: config.ENCRYPTION_KEY });
 
   // Never encrypt legacy plaintext assets with an unverified installation key.
