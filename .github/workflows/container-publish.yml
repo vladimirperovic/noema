@@ -2,6 +2,8 @@ name: Publish container image
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -31,7 +33,7 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             version="${GITHUB_REF_NAME#v}"
           else
-            version="$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")"
+            version=""
           fi
           {
             echo "image=$image"
@@ -49,16 +51,20 @@ jobs:
           set -euo pipefail
           docker build \
             --build-arg SOURCE_COMMIT="$GITHUB_SHA" \
-            --tag "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" \
             --tag "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha_tag }}" \
             .
+          if [[ -n "${{ steps.meta.outputs.version }}" ]]; then
+            docker tag "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha_tag }}" "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+          fi
 
-      - name: Push immutable image tags
+      - name: Push immutable commit image
         shell: bash
-        run: |
-          set -euo pipefail
-          docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
-          docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha_tag }}"
+        run: docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha_tag }}"
+
+      - name: Push release version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
 
       - name: Publish latest for release tags
         if: github.ref_type == 'tag'
