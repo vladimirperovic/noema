@@ -28,7 +28,8 @@
       .noema-links-switch{display:inline-flex;padding:3px;border:1px solid var(--ink-line);border-radius:8px;background:var(--paper-2)}
       .noema-links-switch button{height:30px;padding:0 .7rem;border:0;border-radius:6px;background:transparent;color:var(--ink-3);font:600 .65rem var(--font-mono,monospace);cursor:pointer}
       .noema-links-switch button.active{background:var(--paper-3);color:var(--beacon-2);box-shadow:0 1px 8px rgba(0,0,0,.08)}
-
+      .filter-pill.noema-add-label-selected{border-color:var(--signal,#4a7a5e)!important;background:color-mix(in srgb,var(--signal,#4a7a5e) 13%,transparent)!important;color:var(--signal,#4a7a5e)!important;box-shadow:0 0 0 2px color-mix(in srgb,var(--signal,#4a7a5e) 12%,transparent)}
+      .noema-link-label-hint{padding:.15rem 1.5rem 0;color:var(--ink-4,#9b958a);font:.64rem var(--font-mono,monospace);letter-spacing:.02em}
       html[data-noema-links-view="cards"] #cards{grid-template-columns:repeat(var(--noema-link-columns,4),minmax(0,1fr))!important;align-items:stretch}
       html[data-noema-links-view="cards"] #cards .card{min-width:0;height:100%}
       html[data-noema-links-view="cards"] #cards .card-body{min-height:150px}
@@ -38,7 +39,6 @@
       #cards .card-meta{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       #cards .card-thumb{background:linear-gradient(145deg,var(--paper-2),var(--paper-3))}
       #cards .card-thumb img{width:100%;height:100%;object-fit:cover}
-
       html[data-noema-links-view="table"] #cards{display:block!important;padding:.75rem 1.5rem 1.5rem!important}
       html[data-noema-links-view="table"] #cards .group-header{margin:.8rem 0 .35rem}
       html[data-noema-links-view="table"] #cards .card{display:grid!important;grid-template-columns:170px minmax(0,1fr);min-height:112px;margin-bottom:.55rem;border-radius:12px;overflow:hidden;transform:none!important}
@@ -49,7 +49,6 @@
       html[data-noema-links-view="table"] #cards .card-desc{grid-area:desc;min-height:0!important;max-height:1.4em!important;-webkit-line-clamp:1!important}
       html[data-noema-links-view="table"] #cards .card-foot{grid-area:foot;justify-content:flex-end;margin:0!important;padding:0!important;flex-wrap:nowrap}
       html[data-noema-links-view="table"] #cards .card-read{margin-left:0}
-
       @media(max-width:900px){html[data-noema-links-view="cards"] #cards{grid-template-columns:repeat(3,minmax(0,1fr))!important}.noema-links-viewspacer{display:none}}
       @media(max-width:680px){html[data-noema-links-view="cards"] #cards{grid-template-columns:repeat(2,minmax(0,1fr))!important}.noema-links-viewbar{padding-left:1rem;padding-right:1rem}.noema-links-density{order:3;width:100%}.noema-links-density input{flex:1}.noema-links-thumb-status{display:none}html[data-noema-links-view="table"] #cards .card{grid-template-columns:104px minmax(0,1fr)}html[data-noema-links-view="table"] #cards .card-thumb{height:104px}html[data-noema-links-view="table"] #cards .card-body{display:flex!important;flex-direction:column;align-items:stretch;justify-content:center;gap:.25rem}html[data-noema-links-view="table"] #cards .card-meta{text-align:left}html[data-noema-links-view="table"] #cards .card-desc{display:none!important}html[data-noema-links-view="table"] #cards .card-foot{justify-content:flex-start}}
     `;
@@ -73,7 +72,7 @@
   }
 
   async function api(path, options = {}) {
-    const response = await fetch(path, { headers: { Accept: "application/json", ...(options.body ? { "Content-Type": "application/json" } : {}) }, ...options });
+    const response = await fetch(path, { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json", ...(options.body ? { "Content-Type": "application/json" } : {}) }, ...options });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.ok === false) throw new Error(data.error || `HTTP ${response.status}`);
     return data;
@@ -82,8 +81,7 @@
   async function thumbnailState() {
     const data = await api("/api/links");
     const links = Array.isArray(data.links) ? data.links : [];
-    const missing = links.filter((link) => !String(link.image || "").trim());
-    return { links, missing };
+    return { links, missing: links.filter((link) => !String(link.image || "").trim()) };
   }
 
   function updateButton(button, status, missingCount) {
@@ -119,12 +117,8 @@
       for (const link of targets) {
         button.querySelector("span").textContent = `Generating ${done + 1}/${targets.length}`;
         status.textContent = link.domain || link.title || "thumbnail";
-        try {
-          await api(`/api/links/${encodeURIComponent(link.id)}/thumbnail`, { method: "POST" });
-        } catch (error) {
-          failed += 1;
-          console.warn("Noema thumbnail:", link.url, error.message);
-        }
+        try { await api(`/api/links/${encodeURIComponent(link.id)}/thumbnail`, { method: "POST" }); }
+        catch (error) { failed += 1; console.warn("Noema thumbnail:", link.url, error.message); }
         done += 1;
       }
       status.textContent = failed ? `${done - failed} generated · ${failed} failed` : `${done} generated`;
@@ -139,51 +133,92 @@
     }
   }
 
+  async function initializeThumbnailAction(button, status) {
+    try {
+      const capability = await api("/api/links/thumbnail-status");
+      if (!capability.enabled) {
+        button.hidden = true;
+        status.hidden = true;
+        return;
+      }
+      await refreshThumbnailState(button, status);
+    } catch (error) {
+      button.hidden = true;
+      status.hidden = true;
+      console.warn("Noema thumbnail capability:", error.message);
+    }
+  }
+
   function installToolbar() {
     if (document.getElementById("noemaLinksViewbar")) return true;
     const toolbar = document.getElementById("toolbar");
     if (!toolbar) return false;
-
     const bar = document.createElement("div");
     bar.id = "noemaLinksViewbar";
     bar.className = "noema-links-viewbar";
     bar.innerHTML = `
       <button class="noema-links-generate" id="noemaGenerateThumbnails" type="button" title="Generiše lokalni screenshot samo za linkove koji nemaju sliku.">
-        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="15" rx="2"/><path d="m7 15 3-3 3 3 2-2 2 2M8 8h.01"/></svg>
-        <span>Generate thumbnails</span>
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="15" rx="2"/><path d="m7 15 3-3 3 3 2-2 2 2M8 8h.01"/></svg><span>Generate thumbnails</span>
       </button>
       <span class="noema-links-thumb-status" id="noemaThumbnailStatus">provjeravam…</span>
       <span class="noema-links-viewspacer"></span>
-      <label class="noema-links-density" title="Broj kartica u jednom redu">
-        <span>Cards per row</span>
-        <input id="noemaLinksColumns" type="range" min="3" max="6" step="1" value="4">
-        <b id="noemaLinksColumnValue">4</b>
-      </label>
-      <div class="noema-links-switch" aria-label="Links view">
-        <button type="button" data-noema-links-view="cards">▦ Cards</button>
-        <button type="button" data-noema-links-view="table">☷ Table</button>
-      </div>`;
+      <label class="noema-links-density"><span>Cards per row</span><input id="noemaLinksColumns" type="range" min="3" max="6" step="1" value="4"><b id="noemaLinksColumnValue">4</b></label>
+      <div class="noema-links-switch" aria-label="Links view"><button type="button" data-noema-links-view="cards">▦ Cards</button><button type="button" data-noema-links-view="table">☷ Table</button></div>`;
     toolbar.parentNode.insertBefore(bar, toolbar);
-
     const slider = document.getElementById("noemaLinksColumns");
     slider.addEventListener("input", () => setColumns(slider.value));
     document.querySelectorAll("[data-noema-links-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.noemaLinksView)));
-
     const generate = document.getElementById("noemaGenerateThumbnails");
     const status = document.getElementById("noemaThumbnailStatus");
     generate.addEventListener("click", () => generateMissing(generate, status));
-    refreshThumbnailState(generate, status);
+    initializeThumbnailAction(generate, status);
+    return true;
+  }
+
+  function installLabelPicker() {
+    if (document.documentElement.dataset.noemaLinkLabelPicker === "1") return true;
+    const form = document.getElementById("addForm");
+    const urlInput = document.getElementById("urlInput");
+    const titleInput = document.getElementById("titleInput");
+    const labelInput = document.getElementById("labelInput");
+    const filterBar = document.getElementById("filterBar");
+    if (!form || !urlInput || !titleInput || !labelInput || !filterBar) return false;
+    document.documentElement.dataset.noemaLinkLabelPicker = "1";
+    labelInput.placeholder = "Nova labela (opciono)";
+    const hint = document.createElement("div");
+    hint.className = "noema-link-label-hint";
+    hint.textContent = "Za postojeću labelu samo klikni jednu ispod dok dodaješ link.";
+    form.insertAdjacentElement("afterend", hint);
+    const hasDraft = () => Boolean(urlInput.value.trim() || titleInput.value.trim() || labelInput.value.trim());
+    const sync = () => {
+      const selected = labelInput.value.trim().toLowerCase();
+      filterBar.querySelectorAll(".filter-pill[data-label]").forEach((button) => button.classList.toggle("noema-add-label-selected", Boolean(selected) && String(button.dataset.label || "").toLowerCase() === selected));
+    };
+    labelInput.addEventListener("input", sync);
+    filterBar.addEventListener("click", (event) => {
+      const button = event.target.closest(".filter-pill[data-label]");
+      const label = String(button?.dataset.label || "").trim();
+      if (!button || !label || !hasDraft()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      labelInput.value = label;
+      labelInput.dispatchEvent(new Event("input", { bubbles: true }));
+      labelInput.focus({ preventScroll: true });
+    }, true);
+    new MutationObserver(sync).observe(filterBar, { childList: true, subtree: true });
+    sync();
     return true;
   }
 
   installStyles();
   setColumns(savedColumns);
   setView(savedView);
-
   let attempts = 0;
   const boot = () => {
     attempts += 1;
-    if (installToolbar()) return;
+    const toolbarReady = installToolbar();
+    const labelReady = installLabelPicker();
+    if (toolbarReady && labelReady) return;
     if (attempts < 60) setTimeout(boot, 100);
   };
   boot();
