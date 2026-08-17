@@ -19,6 +19,7 @@ const PUBLIC_UNAUTHENTICATED_PATHS = new Set([
   "/favicon.svg",
   "/noema-i18n.js",
 ]);
+const CACHEABLE_STATIC_ASSET = /\.(?:css|js|mjs|svg|png|jpe?g|webp|gif|ico|woff2?)$/i;
 
 function isPublicUnauthenticatedPath(pathname) {
   return PUBLIC_UNAUTHENTICATED_PATHS.has(pathname) || pathname.startsWith("/api/tools/");
@@ -26,6 +27,8 @@ function isPublicUnauthenticatedPath(pathname) {
 
 function isPrivateDataPath(pathname) {
   return pathname.startsWith("/api/")
+    || pathname === "/openapi.json"
+    || pathname === "/mcp"
     || pathname.startsWith("/uploads/")
     || pathname.startsWith("/files/")
     || pathname.startsWith("/file/")
@@ -46,6 +49,16 @@ function forceNoStore(res) {
   };
 }
 
+function cacheStaticAsset(res, pathname) {
+  if (!CACHEABLE_STATIC_ASSET.test(pathname) || pathname === "/sw.js" || pathname === "/manifest.json") return;
+  const originalWriteHead = res.writeHead.bind(res);
+  res.writeHead = (statusCode, statusMessageOrHeaders, maybeHeaders) => {
+    const cache = (headers = {}) => ({ ...headers, "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" });
+    if (typeof statusMessageOrHeaders === "string") return originalWriteHead(statusCode, statusMessageOrHeaders, cache(maybeHeaders));
+    return originalWriteHead(statusCode, cache(statusMessageOrHeaders));
+  };
+}
+
 function redirectToLogin(res, req) {
   const login = new URL("/login", config.PUBLIC_BASE_URL);
   login.searchParams.set("next", String(req.url || "/"));
@@ -60,9 +73,16 @@ export function installSecurityGateway(server) {
   server.removeAllListeners("request");
   server.on("request", async (req, res) => {
     setSecurityHeaders(res);
+
+    if (req.method === "OPTIONS") {
+      await original(req, res);
+      return;
+    }
+
     const url = new URL(req.url, config.PUBLIC_BASE_URL);
     const pathname = url.pathname;
     if (isPrivateDataPath(pathname)) forceNoStore(res);
+    else cacheStaticAsset(res, pathname);
 
     if (String(req.headers.authorization || "").startsWith("Basic ")) delete req.headers.authorization;
 

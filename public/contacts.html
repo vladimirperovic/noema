@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Noema — Contacts</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="description" content="Noema directory of trusted contractors, craftsmen and suppliers.">
+  <script>
+    (()=>{try{const m=localStorage.getItem("noema-theme-manual"),h=new Date().getHours();document.documentElement.setAttribute("data-theme",m==="dark"||m==="light"?m:(h>=19||h<7?"dark":"light"))}catch{}})();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500&family=JetBrains+Mono:wght@400;500;600&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/contacts.css">
+</head>
+<body>
+  <div id="shell"><div id="shell-inner">
+    <main class="wrap">
+      <div class="top"><a class="back" href="/">← Noema</a><h1>Contacts</h1><div></div></div>
+      <header class="hero">
+        <div><span class="eyebrow">Network</span><h2>Trusted contacts</h2><p>Contractors, craftsmen, suppliers and collaborators in one searchable directory.</p></div>
+        <button id="newContactBtn" class="btn primary" type="button">+ New contact</button>
+      </header>
+      <section class="toolbar" aria-label="Search and filters">
+        <div class="search-wrap"><input id="search" type="search" placeholder="Name, company, trade, city, phone, tag…"></div>
+        <button id="favoritesOnly" class="filter-btn" type="button" aria-pressed="false">★ Favorites</button>
+      </section>
+      <nav id="categoryBar" class="category-bar" aria-label="Categories"></nav>
+      <section id="directory" class="directory"></section>
+      <div id="emptyState" class="empty hidden"><span class="empty-mark">+</span><strong>No contacts.</strong><p>Add a contact or change the search.</p></div>
+    </main>
+  </div></div>
+  <dialog id="contactView" class="contact-dialog">
+    <article class="contact-sheet">
+      <button id="viewClose" class="dialog-close" type="button" aria-label="Close">×</button>
+      <header class="contact-head"><div id="viewAvatar" class="contact-avatar large"></div><div><span id="viewCategory" class="detail-category"></span><h2 id="viewName"></h2><p id="viewCompany" class="detail-company"></p><div id="viewTags" class="tags"></div></div><button id="favoriteToggle" class="favorite-toggle" type="button" aria-label="Favorite">☆</button></header>
+      <div id="viewQuick" class="quick-actions"></div><dl id="viewDetails" class="detail-list"></dl>
+      <section id="workSection" class="work-section hidden"><div class="section-head"><span>References</span><small id="workCount"></small></div><div id="workGrid" class="work-grid"></div></section>
+      <section id="notesSection" class="notes-section hidden"><div class="section-head"><span>Note</span></div><p id="viewNotes"></p></section>
+      <footer class="view-footer"><button id="deleteContactBtn" class="btn danger" type="button">Delete</button><span></span><button id="editContactBtn" class="btn" type="button">Edit</button></footer>
+    </article>
+  </dialog>
+  <dialog id="contactEditor" class="editor-dialog">
+    <form id="contactForm" class="editor-sheet">
+      <header class="editor-head"><div><span class="eyebrow">Contacts</span><h2 id="editorTitle">New contact</h2></div><button id="editorClose" class="dialog-close" type="button" aria-label="Close">×</button></header>
+      <div class="form-grid">
+        <label><span>Category *</span><input id="category" class="control" list="categorySuggestions" required></label><label><span>Name</span><input id="name" class="control"></label><label><span>Company</span><input id="company" class="control"></label><label><span>Role / specialty</span><input id="role" class="control"></label><label><span>Phone</span><input id="phone" class="control" inputmode="tel"></label><label><span>Second phone</span><input id="phone2" class="control" inputmode="tel"></label><label><span>Email</span><input id="email" class="control" type="email"></label><label><span>Website</span><input id="website" class="control" type="url" placeholder="https://"></label><label><span>City</span><input id="city" class="control"></label><label><span>Address</span><input id="address" class="control"></label><label class="wide"><span>Tags</span><input id="tags" class="control"></label><label class="wide"><span>Work image URLs, one per line</span><textarea id="workImages" class="control area"></textarea></label><label class="wide"><span>Note</span><textarea id="notes" class="control area tall"></textarea></label><label class="check wide"><input id="favorite" type="checkbox"><span>Favorite</span></label>
+      </div>
+      <datalist id="categorySuggestions"><option value="Contractors"><option value="Electricians"><option value="Carpenters"><option value="Plumbers"><option value="Painters"><option value="Suppliers"><option value="Other"></datalist>
+      <div id="formError" class="form-error"></div><footer class="editor-footer"><span></span><button id="cancelEdit" class="btn" type="button">Cancel</button><button class="btn primary" type="submit">Save</button></footer>
+    </form>
+  </dialog>
+  <div id="toast" class="toast hidden"></div>
+<script src="/contacts.js"></script>
+<script src="/noema-header-footer.js"></script>
+</body>
+</html>

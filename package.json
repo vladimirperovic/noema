@@ -1,6 +1,6 @@
 {
   "name": "noema",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A secure, self-hosted personal workspace for tasks, notes, documents, links, files, galleries, MCP and OpenAPI integrations.",
   "license": "MIT",
   "author": "Vladimir Perović",
