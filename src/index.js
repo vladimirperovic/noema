@@ -3,6 +3,7 @@ import { createServer } from "./server.js";
 import { installBuildingSiteEnhancements } from "./buildingsite-enhancements.js";
 import { installFileLibrary } from "./file-library.js";
 import { installStreamingFileLibrary } from "./streaming-file-library.js";
+import { installContactLibrary } from "./contact-library.js";
 import { installGalleryDownloads } from "./gallery-downloads.js";
 import { installLinkThumbnails } from "./link-thumbnails.js";
 import { installPrivateAssetGateway } from "./private-asset-gateway.js";
@@ -15,6 +16,7 @@ import { closeLinks } from "./store/links.js";
 import { closeInspirations } from "./store/inspirations.js";
 import { closeBuildingSites } from "./store/buildingsites.js";
 import { closeFiles } from "./store/files.js";
+import { closeContacts } from "./store/contacts.js";
 import { closeSessions } from "./store/sessions.js";
 import { closeGalleryShares } from "./store/share-tokens.js";
 import { closeSystem } from "./store/system.js";
@@ -31,10 +33,12 @@ async function main() {
   const server = installSecurityGateway(
     installPrivateAssetGateway(
       installGalleryDownloads(
-        installStreamingFileLibrary(
-          installFileLibrary(
-            installBuildingSiteEnhancements(
-              installLinkThumbnails(createServer()),
+        installContactLibrary(
+          installStreamingFileLibrary(
+            installFileLibrary(
+              installBuildingSiteEnhancements(
+                installLinkThumbnails(createServer()),
+              ),
             ),
           ),
         ),
@@ -54,7 +58,7 @@ async function main() {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`[noema] received ${signal}, shutting down...`);
-    closeStore(); closeNotes(); closeDocuments(); closeLinks(); closeInspirations(); closeBuildingSites(); closeFiles(); closeSessions(); closeGalleryShares(); closeSystem(); closeDatabase();
+    closeStore(); closeNotes(); closeDocuments(); closeLinks(); closeInspirations(); closeBuildingSites(); closeFiles(); closeContacts(); closeSessions(); closeGalleryShares(); closeSystem(); closeDatabase();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(1), 10_000).unref();
   };
