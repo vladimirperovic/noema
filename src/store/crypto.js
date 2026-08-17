@@ -5,12 +5,14 @@ import { config } from "../config.js";
 
 const DATA_DIR = config.DATA_DIR;
 const KEY_FILE = path.join(DATA_DIR, "master.key");
-const WRAPPED_PREFIX = "v3:wrapped:";
 const BINARY_MAGIC = Buffer.from("NOEMA-FILE-V1\0", "utf8");
 const BINARY_IV_BYTES = 12;
 const BINARY_TAG_BYTES = 16;
+const KEY_WRAP_AAD = Buffer.from("noema-master-key-v3", "utf8");
+const WRAPPED_PREFIX = "v3:wrapped:";
 
 let ENCRYPTION_KEY = Buffer.alloc(0);
+let KEY_MODE = "uninitialized";
 
 function normalizePassword(value) {
   return typeof value === "string" && value ? value : null;
@@ -18,16 +20,6 @@ function normalizePassword(value) {
 
 function uniquePasswords(...values) {
   return [...new Set(values.map(normalizePassword).filter(Boolean))];
-}
-
-function requireKey() {
-  if (ENCRYPTION_KEY.length !== 32) throw new Error("Crypto is not initialized");
-  return ENCRYPTION_KEY;
-}
-
-function aadBuffer(value) {
-  if (!value) return Buffer.alloc(0);
-  return Buffer.isBuffer(value) ? value : Buffer.from(String(value), "utf8");
 }
 
 function atomicWriteKey(value) {
@@ -42,59 +34,48 @@ function atomicWriteKey(value) {
   }
 }
 
-function wrapDataKey(dataKey, password) {
+function wrappedKeyPayload(dataKey, password) {
   const secret = normalizePassword(password);
-  if (!secret) throw new Error("[noema] Master password is required to protect the encryption key.");
-  if (!Buffer.isBuffer(dataKey) || dataKey.length !== 32) throw new Error("[noema] Invalid installation encryption key.");
-
+  if (!secret) throw new Error("[noema] Master password is required to protect the data key.");
+  if (!Buffer.isBuffer(dataKey) || dataKey.length !== 32) throw new Error("[noema] Invalid installation data key.");
   const salt = crypto.randomBytes(16);
-  const iv = crypto.randomBytes(12);
   const wrappingKey = crypto.scryptSync(secret, salt, 32);
+  const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", wrappingKey, iv);
-  const ciphertext = Buffer.concat([cipher.update(dataKey), cipher.final()]);
+  cipher.setAAD(KEY_WRAP_AAD);
+  const encrypted = Buffer.concat([cipher.update(dataKey), cipher.final()]);
   const tag = cipher.getAuthTag();
-  return `${WRAPPED_PREFIX}${salt.toString("hex")}:${iv.toString("hex")}:${tag.toString("hex")}:${ciphertext.toString("hex")}`;
+  return `${WRAPPED_PREFIX}${salt.toString("hex")}:${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString("hex")}`;
 }
 
-function unwrapDataKey(raw, password) {
-  const secret = normalizePassword(password);
-  if (!secret) throw new Error("[noema] data/master.key requires the Noema master password.");
-  const parts = raw.split(":");
-  if (parts.length !== 6 || parts[0] !== "v3" || parts[1] !== "wrapped") {
-    throw new Error("[noema] Invalid wrapped master.key format.");
-  }
+function persistWrappedKey(dataKey, password) {
+  atomicWriteKey(wrappedKeyPayload(dataKey, password));
+  KEY_MODE = "wrapped";
+}
 
+function unwrapKey(raw, password) {
+  const secret = normalizePassword(password);
+  if (!secret) throw new Error("[noema] master.key requires the Noema master password.");
+  const parts = raw.split(":");
+  if (parts.length !== 6 || parts[0] !== "v3" || parts[1] !== "wrapped") return null;
   try {
     const salt = Buffer.from(parts[2], "hex");
     const iv = Buffer.from(parts[3], "hex");
     const tag = Buffer.from(parts[4], "hex");
-    const ciphertext = Buffer.from(parts[5], "hex");
-    if (salt.length !== 16 || iv.length !== 12 || tag.length !== 16 || ciphertext.length !== 32) throw new Error("invalid lengths");
+    const encrypted = Buffer.from(parts[5], "hex");
+    if (salt.length !== 16 || iv.length !== 12 || tag.length !== 16 || encrypted.length !== 32) throw new Error("invalid wrapped key lengths");
     const wrappingKey = crypto.scryptSync(secret, salt, 32);
     const decipher = crypto.createDecipheriv("aes-256-gcm", wrappingKey, iv);
+    decipher.setAAD(KEY_WRAP_AAD);
     decipher.setAuthTag(tag);
-    const key = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-    if (key.length !== 32) throw new Error("invalid key length");
+    const key = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    if (key.length !== 32) throw new Error("Invalid master key length.");
     return key;
   } catch {
-    throw new Error("[noema] Master password does not unlock data/master.key.");
+    throw new Error("[noema] Master password does not unlock wrapped master.key.");
   }
 }
 
-/**
- * Initialize the installation encryption key.
- *
- * Current format:
- *   v3:wrapped:<salt>:<iv>:<tag>:<ciphertext>
- *
- * The actual random 256-bit data-encryption key is wrapped with a key derived
- * from the same master password used for the browser login. This keeps the UX
- * to one password and lets the login password be changed/re-wrapped without
- * re-encrypting every record or file metadata entry.
- *
- * Legacy formats remain readable so an existing installation can migrate on
- * the first successful login without touching encrypted application data.
- */
 export function initCrypto(options = {}) {
   let masterPassword = null;
   let legacyPassword = null;
@@ -110,26 +91,25 @@ export function initCrypto(options = {}) {
   if (existsSync(KEY_FILE)) {
     const raw = readFileSync(KEY_FILE, "utf8").trim();
     if (loadExistingKey(raw, { masterPassword, legacyPassword })) return;
-    throw new Error(
-      "[noema] data/master.key is invalid or does not match the configured master password. " +
-        "The key file will not be overwritten automatically.",
-    );
+    throw new Error("[noema] data/master.key is invalid or does not match configuration. The key will not be overwritten automatically.");
   }
 
   mkdirSync(DATA_DIR, { recursive: true });
   if (masterPassword) {
     ENCRYPTION_KEY = crypto.randomBytes(32);
-    atomicWriteKey(wrapDataKey(ENCRYPTION_KEY, masterPassword));
-    console.log("[noema] Generated installation data key protected by the Noema master password.");
+    persistWrappedKey(ENCRYPTION_KEY, masterPassword);
+    console.log("[noema] Generated random data key protected by the Noema master password.");
   } else if (legacyPassword) {
     const salt = crypto.randomBytes(16);
     ENCRYPTION_KEY = crypto.scryptSync(legacyPassword, salt, 32);
+    KEY_MODE = "derived";
     atomicWriteKey(`v2:salt:${salt.toString("hex")}`);
-    console.log("[noema] Master key derived from legacy ENCRYPTION_KEY. Sign in once with UI_PASSWORD to migrate to one-password mode.");
+    console.log("[noema] Data key derived from legacy ENCRYPTION_KEY; sign in once to migrate to one-password mode.");
   } else {
     ENCRYPTION_KEY = crypto.randomBytes(32);
+    KEY_MODE = "local";
     atomicWriteKey(`v2:key:${ENCRYPTION_KEY.toString("hex")}`);
-    console.log("[noema] Generated local installation key. Configure UI_PASSWORD for password-protected key storage.");
+    console.log("[noema] Generated local data key. Configure UI_PASSWORD to protect it with the master password.");
   }
 }
 
@@ -140,28 +120,28 @@ function loadExistingKey(raw, { masterPassword, legacyPassword }) {
     let lastError = null;
     for (const password of candidates) {
       try {
-        ENCRYPTION_KEY = unwrapDataKey(raw, password);
+        ENCRYPTION_KEY = unwrapKey(raw, password);
+        KEY_MODE = "wrapped";
         return true;
-      } catch (error) {
-        lastError = error;
-      }
+      } catch (error) { lastError = error; }
     }
-    throw lastError || new Error("[noema] Master password does not unlock data/master.key.");
+    throw lastError || new Error("[noema] No configured password unlocks data/master.key.");
   }
 
   if (raw.startsWith("v2:salt:")) {
     const password = uniquePasswords(legacyPassword, config.ENCRYPTION_KEY, masterPassword, config.UI_PASSWORD)[0];
-    if (!password) {
-      throw new Error("[noema] Legacy master.key requires ENCRYPTION_KEY or UI_PASSWORD for one-time migration.");
-    }
+    if (!password) throw new Error("[noema] Legacy master.key requires ENCRYPTION_KEY or UI_PASSWORD for migration.");
     const salt = Buffer.from(raw.slice("v2:salt:".length), "hex");
     ENCRYPTION_KEY = crypto.scryptSync(password, salt, 32);
+    KEY_MODE = "derived";
     return true;
   }
 
   if (raw.startsWith("v2:key:")) {
     ENCRYPTION_KEY = Buffer.from(raw.slice("v2:key:".length), "hex");
-    return ENCRYPTION_KEY.length === 32;
+    if (ENCRYPTION_KEY.length !== 32) return false;
+    KEY_MODE = "local";
+    return true;
   }
 
   const parts = raw.split(":");
@@ -171,17 +151,18 @@ function loadExistingKey(raw, { masterPassword, legacyPassword }) {
     const candidate = uniquePasswords(legacyPassword, config.ENCRYPTION_KEY, masterPassword, config.UI_PASSWORD)[0];
     if (candidate) {
       const derived = crypto.scryptSync(candidate, salt, 32);
-      if (!derived.equals(storedKey)) throw new Error("[noema] Configured password does not match the legacy master.key.");
+      if (!derived.equals(storedKey)) throw new Error("[noema] Configured password does not match legacy master.key.");
     }
     ENCRYPTION_KEY = storedKey;
+    KEY_MODE = "local";
     return ENCRYPTION_KEY.length === 32;
   }
 
   if (/^[0-9a-f]{64}$/i.test(raw)) {
     ENCRYPTION_KEY = Buffer.from(raw, "hex");
+    KEY_MODE = "local";
     return true;
   }
-
   return false;
 }
 
@@ -189,25 +170,38 @@ export function protectCryptoWithPassword(password) {
   const secret = normalizePassword(password);
   if (!secret) throw new Error("[noema] A master password is required.");
   if (ENCRYPTION_KEY.length !== 32) throw new Error("[noema] Crypto is not initialized.");
-
   if (existsSync(KEY_FILE)) {
     const raw = readFileSync(KEY_FILE, "utf8").trim();
     if (raw.startsWith(WRAPPED_PREFIX)) {
       try {
-        const unwrapped = unwrapDataKey(raw, secret);
-        if (!unwrapped.equals(ENCRYPTION_KEY)) throw new Error("[noema] Master password unlocked a different installation key.");
+        const key = unwrapKey(raw, secret);
+        if (!key.equals(ENCRYPTION_KEY)) throw new Error("[noema] Master password unlocked a different data key.");
+        KEY_MODE = "wrapped";
         return false;
       } catch {
-        atomicWriteKey(wrapDataKey(ENCRYPTION_KEY, secret));
-        console.log("[noema] Re-wrapped legacy v3 master.key with the Noema master password.");
+        persistWrappedKey(ENCRYPTION_KEY, secret);
+        console.log("[noema] Legacy v3 master.key re-wrapped with UI_PASSWORD.");
         return true;
       }
     }
   }
-
-  atomicWriteKey(wrapDataKey(ENCRYPTION_KEY, secret));
-  console.log("[noema] Migrated master.key to one-password mode; ENCRYPTION_KEY is no longer needed after restart.");
+  persistWrappedKey(ENCRYPTION_KEY, secret);
+  console.log("[noema] master.key migrated to one-password mode; ENCRYPTION_KEY is no longer needed after restart.");
   return true;
+}
+
+function requireKey() {
+  if (ENCRYPTION_KEY.length !== 32) throw new Error("Crypto is not initialized");
+  return ENCRYPTION_KEY;
+}
+
+function aadBuffer(value) {
+  if (!value) return Buffer.alloc(0);
+  return Buffer.isBuffer(value) ? value : Buffer.from(String(value), "utf8");
+}
+
+export function cryptoStatus() {
+  return Object.freeze({ initialized: ENCRYPTION_KEY.length === 32, algorithm: "AES-256-GCM", externallyDerived: KEY_MODE === "derived" || KEY_MODE === "wrapped", keyMode: KEY_MODE });
 }
 
 export function encryptData(text) {
@@ -222,11 +216,9 @@ export function encryptData(text) {
 export function decryptData(encryptedStr) {
   const parts = encryptedStr.split(":");
   if (parts.length !== 3) throw new Error("Invalid encrypted data format");
-
   const iv = Buffer.from(parts[0], "hex");
   const authTag = Buffer.from(parts[1], "hex");
   const encryptedText = parts[2];
-
   const decipher = crypto.createDecipheriv("aes-256-gcm", requireKey(), iv);
   decipher.setAuthTag(authTag);
   let decrypted = decipher.update(encryptedText, "hex", "utf8");
@@ -234,10 +226,6 @@ export function decryptData(encryptedStr) {
   return decrypted;
 }
 
-/**
- * Versioned binary AES-256-GCM container used by the Files module and as the
- * authenticated primitive for larger chunked private assets.
- */
 export function encryptBuffer(value, associatedData = "") {
   const input = Buffer.isBuffer(value) ? value : Buffer.from(value);
   const iv = crypto.randomBytes(BINARY_IV_BYTES);
@@ -245,13 +233,13 @@ export function encryptBuffer(value, associatedData = "") {
   const aad = aadBuffer(associatedData);
   if (aad.length) cipher.setAAD(aad);
   const encrypted = Buffer.concat([cipher.update(input), cipher.final()]);
-  return Buffer.concat([BINARY_MAGIC, iv, cipher.getAuthTag(), encrypted]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([BINARY_MAGIC, iv, tag, encrypted]);
 }
 
 export function isEncryptedBuffer(value) {
   const input = Buffer.isBuffer(value) ? value : Buffer.from(value || []);
-  return input.length >= BINARY_MAGIC.length + BINARY_IV_BYTES + BINARY_TAG_BYTES
-    && input.subarray(0, BINARY_MAGIC.length).equals(BINARY_MAGIC);
+  return input.length >= BINARY_MAGIC.length + BINARY_IV_BYTES + BINARY_TAG_BYTES && input.subarray(0, BINARY_MAGIC.length).equals(BINARY_MAGIC);
 }
 
 export function decryptBuffer(value, associatedData = "") {
@@ -270,9 +258,31 @@ export function decryptBuffer(value, associatedData = "") {
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 }
 
+export function encryptAssetChunk(value, associatedData = "") {
+  const input = Buffer.isBuffer(value) ? value : Buffer.from(value);
+  const iv = crypto.randomBytes(BINARY_IV_BYTES);
+  const cipher = crypto.createCipheriv("aes-256-gcm", requireKey(), iv);
+  const aad = aadBuffer(associatedData);
+  if (aad.length) cipher.setAAD(aad);
+  const ciphertext = Buffer.concat([cipher.update(input), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), ciphertext]);
+}
+
+export function decryptAssetChunk(value, associatedData = "") {
+  const input = Buffer.isBuffer(value) ? value : Buffer.from(value || []);
+  if (input.length < BINARY_IV_BYTES + BINARY_TAG_BYTES) throw new Error("Private asset chunk is invalid.");
+  const iv = input.subarray(0, BINARY_IV_BYTES);
+  const tag = input.subarray(BINARY_IV_BYTES, BINARY_IV_BYTES + BINARY_TAG_BYTES);
+  const ciphertext = input.subarray(BINARY_IV_BYTES + BINARY_TAG_BYTES);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", requireKey(), iv);
+  const aad = aadBuffer(associatedData);
+  if (aad.length) decipher.setAAD(aad);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+}
+
 export function readEncryptedJson(filePath, defaultValue = [], { throwOnError = false } = {}) {
   if (!existsSync(filePath)) return defaultValue;
-
   try {
     const raw = readFileSync(filePath, "utf8").trim();
     if (raw.startsWith("[") || raw.startsWith("{")) return JSON.parse(raw);
